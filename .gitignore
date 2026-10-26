@@ -1,43 +1,70 @@
 # Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
 
-# dependencies
+# --- JS / Node ---
 node_modules/
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+*.tsbuildinfo
 
-# Expo
+# --- Expo / React Native ---
 .expo/
 dist/
 web-build/
 expo-env.d.ts
-
-# Native
+.metro-health-check*
+# Generated native projects (Continuous Native Generation) — never commit or hand-edit.
+apps/mobile/ios/
+apps/mobile/android/
 .kotlin/
 *.orig.*
+
+# Signing material. A leaked key cannot be rotated without a store resubmission.
 *.jks
 *.p8
 *.p12
 *.key
 *.mobileprovision
-
-# Metro
-.metro-health-check*
-
-# debug
-npm-debug.*
-yarn-debug.*
-yarn-error.*
-
-# macOS
-.DS_Store
 *.pem
 
-# local env files
-.env*.local
+# --- Python ---
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+coverage.xml
+htmlcov/
 
-# typescript
-*.tsbuildinfo
+# --- Terraform ---
+.terraform/
+*.tfstate
+*.tfstate.*
+# Variable files routinely hold project ids and secrets.
+*.tfvars
+!example.tfvars
+.terraform.lock.hcl
+
+# --- Secrets and local config ---
+# Nothing holding a credential may be tracked (§18).
+.env
+.env.*
+!.env.example
+*-service-account.json
+*-credentials.json
+gha-creds-*.json
+
+# --- Local data ---
+*.sqlite
+*.sqlite3
+*.db
+
+# --- Editors / OS ---
+.DS_Store
+Thumbs.db
 
 example
-
-# generated native folders
-/ios
-/android
