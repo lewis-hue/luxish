@@ -130,6 +130,29 @@ jobs:
       - name: Compose file is valid
         run: docker compose -f infra/docker-compose.yml config --quiet
 
+  terraform:
+    name: Terraform — format and validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.9.8'
+
+      - name: Format
+        run: terraform fmt -check -recursive
+        working-directory: infra/terraform
+
+      - name: Validate
+        # The authoring machine has no terraform CLI, so this job is the first
+        # place the configuration is checked at all. `-backend=false` validates
+        # syntax and provider schemas without needing GCP credentials.
+        run: |
+          terraform init -backend=false
+          terraform validate
+        working-directory: infra/terraform
+
   secrets:
     name: No committed credentials
     runs-on: ubuntu-latest
