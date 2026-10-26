@@ -1,0 +1,83 @@
+# Local development stack. Not a production topology — see infra/terraform for that.
+#
+# Ports are offset into the 55xxx range so this stack never collides with another
+# project's Postgres/Redis/Keycloak already running on the standard ports.
+
+name: atelier
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: atelier
+      POSTGRES_PASSWORD: atelier
+      POSTGRES_DB: atelier
+    ports:
+      - '55432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U atelier -d atelier']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    # Bounded memory with LRU eviction, matching how the API treats Redis: a cache
+    # and a rate-limit store, never a system of record.
+    command: >
+      redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru --save ""
+    ports:
+      - '55379:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # Keycloak >= 26.8.1 is a floor, not a preference: 26.8.1 fixed 22 CVEs, three of
+  # them in identity brokering (CVE-2026-82968 wrong-account linking,
+  # CVE-2026-15943 masked-secret reuse, CVE-2026-18569 forged logout tokens).
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.8.1
+    # `start-dev` is development only — it forces local caches. Production uses
+    # `start` with a real hostname and proxy configuration.
+    # `--import-realm` is a CLI flag; there is no KC_IMPORT_REALM env var.
+    command: ['start-dev', '--import-realm']
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: atelier
+      KC_DB_PASSWORD: atelier
+      KC_HEALTH_ENABLED: 'true'
+      # Placeholders referenced by atelier-realm.json, so no secret is committed.
+      ATELIER_API_CLIENT_SECRET: local-dev-only-not-a-real-secret
+      GOOGLE_CLIENT_ID: unset
+      GOOGLE_CLIENT_SECRET: unset
+    ports:
+      - '55080:8080'
+      - '55000:9000' # management port: /health/ready lives here, not on 8080
+    volumes:
+      # The file MUST be named <realm-name>-realm.json or the import is skipped.
+      # Subdirectories are ignored.
+      - ./keycloak/import:/opt/keycloak/data/import:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          "exec 3<>/dev/tcp/localhost/9000 && echo -e 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && cat <&3 | grep -q '\"status\": \"UP\"'",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 40s
+
+volumes:
+  pgdata:
