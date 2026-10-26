@@ -55,9 +55,10 @@ testpaths = ["tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 filterwarnings = ["error::DeprecationWarning:app.*"]
-addopts = "-m 'not postgres'"
+addopts = "-m 'not postgres and not live'"
 markers = [
   "postgres: requires a live PostgreSQL 16 server (set ATELIER_TEST_PG_URL); excluded by default",
+  "live: makes real, billable calls to the Meta Model API (set MODEL_API_KEY); excluded by default",
 ]
 
 [tool.ruff]
