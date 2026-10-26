@@ -9,7 +9,7 @@
     "packages/*"
   ],
   "engines": {
-    "node": ">=22.13.0"
+    "node": ">=22.13.0 <23 || >=24.3.0 <25 || >=26"
   },
   "scripts": {
     "mobile": "npm run -w @fashion/mobile start",
