@@ -1,0 +1,118 @@
+"""Auth routes.
+
+Thin by design (ADR-003): no business rule lives here. Keycloak owns sign-in,
+so there is no password, code, or social endpoint in this service — only
+verification, session bookkeeping, and revocation.
+"""
+
+from __future__ import annotations
+
+import logging
+
+from fastapi import APIRouter, Request, Response, status
+
+from app.deps import AuthDep, SessionDep, SettingsDep, VerifierDep
+from app.domain import auth as auth_domain
+from app.errors import Unauthenticated
+from app.schemas.auth import (
+    IdentityLinkConfirmRequest,
+    IdentityLinkConfirmResponse,
+    MeResponse,
+    SessionResponse,
+)
+from app.security.keycloak import TokenRejected
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+@router.post("/session", response_model=SessionResponse)
+async def create_session(ctx: AuthDep) -> SessionResponse:
+    """Exchange a verified Keycloak token for local session state.
+
+    Idempotent: presenting a token for an already-provisioned ``sub`` returns
+    the same user. The response carries no credential — the client already holds
+    the only one that exists.
+    """
+    return SessionResponse(
+        user_id=ctx.user.id,
+        email=ctx.user.email,
+        email_verified=ctx.user.email_verified,
+        session_id=ctx.session.id if ctx.session else None,
+        expires_at=ctx.session.expires_at if ctx.session else ctx.claims.expires_at,
+    )
+
+
+@router.get("/me", response_model=MeResponse)
+async def me(ctx: AuthDep) -> MeResponse:
+    return MeResponse(
+        user_id=ctx.user.id,
+        email=ctx.user.email,
+        email_verified=ctx.user.email_verified,
+        display_name=ctx.user.display_name,
+    )
+
+
+@router.delete("/session", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_session(ctx: AuthDep, db: SessionDep) -> Response:
+    await auth_domain.revoke_current_session(db, ctx)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/identity/link", response_model=IdentityLinkConfirmResponse)
+async def confirm_identity_link(
+    payload: IdentityLinkConfirmRequest, ctx: AuthDep, db: SessionDep
+) -> IdentityLinkConfirmResponse:
+    identity = await auth_domain.confirm_identity_link(
+        db, actor=ctx, challenge_id=payload.link_challenge_id
+    )
+    return IdentityLinkConfirmResponse(
+        identity_id=identity.id, provider=identity.provider, user_id=identity.user_id
+    )
+
+
+@router.post("/backchannel-logout", status_code=status.HTTP_204_NO_CONTENT)
+async def backchannel_logout(
+    request: Request, db: SessionDep, verifier: VerifierDep, settings: SettingsDep
+) -> Response:
+    """OIDC back-channel logout.
+
+    Unauthenticated by design — the logout token *is* the authentication, and it
+    is verified exactly like an access token plus the required logout event.
+    """
+    raw = (await request.body()).decode("utf-8", errors="replace").strip()
+    if not raw:
+        raise Unauthenticated("A logout token is required.")
+    if raw.startswith("logout_token="):  # form-encoded variant
+        from urllib.parse import parse_qs
+
+        raw = (parse_qs(raw).get("logout_token") or [""])[0].strip()
+    try:
+        claims = await verifier.verify_logout_token(raw)
+    except TokenRejected as exc:
+        logger.info("logout token rejected", extra={"reason": exc.reason})
+        raise Unauthenticated("The logout token was not accepted.") from exc
+
+    revoked = await auth_domain.apply_backchannel_logout(db, claims)
+    logger.info("backchannel logout applied", extra={"sessions_revoked": revoked})
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+account_router = APIRouter(tags=["auth"])
+
+
+@account_router.delete("/account", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_account(ctx: AuthDep, db: SessionDep) -> Response:
+    """Delete the account. Idempotent, and revokes every session."""
+    await auth_domain.delete_account(db, user_id=ctx.user_id)
+    if ctx.claims.jti:
+        await auth_domain.record_revoked_token(
+            db,
+            jti=ctx.claims.jti,
+            user_id=ctx.user_id,
+            expires_at=ctx.claims.expires_at,
+            reason="account_deleted",
+        )
+    await db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

@@ -1,43 +1,29 @@
 {
-  "name": "fashion",
-  "version": "1.0.0",
-  "main": "expo-router/entry",
-  "dependencies": {
-    "@expo/ui": "~58.0.23",
-    "expo": "~58.0.19",
-    "expo-constants": "~58.0.13",
-    "expo-device": "~58.0.5",
-    "expo-font": "~58.0.10",
-    "expo-glass-effect": "~58.0.5",
-    "expo-image": "~58.0.17",
-    "expo-linking": "~58.0.14",
-    "expo-router": "~58.0.26",
-    "expo-splash-screen": "~58.0.11",
-    "expo-status-bar": "~58.0.4",
-    "expo-symbols": "~58.0.4",
-    "expo-system-ui": "~58.0.6",
-    "expo-web-browser": "~58.0.6",
-    "react": "19.3.0",
-    "react-dom": "19.3.0",
-    "react-native": "0.88.0",
-    "react-native-gesture-handler": "~3.3.0",
-    "react-native-reanimated": "4.7.1",
-    "react-native-safe-area-context": "~5.10.1",
-    "react-native-screens": "~4.30.0",
-    "react-native-web": "~0.21.4",
-    "react-native-worklets": "0.13.0"
-  },
-  "devDependencies": {
-    "@types/react": "~19.3.0",
-    "typescript": "~6.0.3"
+  "name": "fashion-ecosystem",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Mobile fashion discovery, wardrobe, styling, shopping and community ecosystem (working name: Atelier)",
+  "license": "SEE LICENSE IN LICENSE",
+  "workspaces": [
+    "apps/mobile",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=22.13.0"
   },
   "scripts": {
-    "start": "expo start",
-    "reset-project": "node ./scripts/reset-project.js",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
-    "web": "expo start --web",
-    "lint": "expo lint"
-  },
-  "private": true
+    "mobile": "npm run -w @fashion/mobile start",
+    "mobile:android": "npm run -w @fashion/mobile android",
+    "mobile:ios": "npm run -w @fashion/mobile ios",
+    "mobile:web": "npm run -w @fashion/mobile web",
+    "typecheck": "npm run -w @fashion/mobile typecheck",
+    "lint": "npm run -w @fashion/mobile lint",
+    "test": "npm run -w @fashion/mobile test",
+    "contracts:generate": "npm run -w @fashion/contracts generate",
+    "api": "cd services/api && uvicorn app.main:app --reload --port 8000",
+    "api:test": "cd services/api && pytest -q",
+    "api:migrate": "cd services/api && alembic upgrade head",
+    "dev:up": "docker compose -f infra/docker-compose.yml up -d",
+    "dev:down": "docker compose -f infra/docker-compose.yml down"
+  }
 }
