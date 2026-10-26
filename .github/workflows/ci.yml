@@ -1,0 +1,146 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  # A new push supersedes an in-flight run on the same ref.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Node 24.3+ LTS. React Native 0.88 / Expo SDK 58 require 22.13+, 24.3+ or 26+ and
+  # explicitly do not support odd-numbered releases — 25 is unsupported (ADR-014).
+  NODE_VERSION: '24'
+  PYTHON_VERSION: '3.12'
+
+jobs:
+  mobile:
+    name: Mobile — lint, typecheck, test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install workspace dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm run test -- --ci
+
+      - name: Expo config and dependency health
+        # Catches an unresolvable app.config.ts and SDK-incompatible package
+        # versions, which neither tsc nor eslint sees.
+        run: |
+          npx expo config --type public > /dev/null
+          npx expo-doctor
+        working-directory: apps/mobile
+
+  api:
+    name: API — lint, test, migrations
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: atelier
+          POSTGRES_PASSWORD: atelier
+          POSTGRES_DB: atelier_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U atelier -d atelier_test"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+
+    env:
+      # CI is the only place the postgres-marked tests can run — they cover native
+      # enums, JSONB, and real SELECT ... FOR UPDATE SKIP LOCKED concurrency, none of
+      # which SQLite can exercise.
+      ATELIER_TEST_PG_URL: postgresql+asyncpg://atelier:atelier@localhost:5432/atelier_test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install
+        run: pip install -e '.[dev]'
+        working-directory: services/api
+
+      - name: Lint
+        run: ruff check app tests alembic
+        working-directory: services/api
+
+      - name: Tests (including postgres-marked)
+        run: pytest -q -m 'not postgres'
+        working-directory: services/api
+
+      - name: Postgres-specific tests
+        run: pytest -q -m postgres
+        working-directory: services/api
+
+      - name: Migrations apply and reverse cleanly
+        # A migration that cannot be rolled back is a migration we cannot deploy
+        # safely, so both directions are exercised against real Postgres.
+        run: |
+          alembic -x url="$ATELIER_TEST_PG_URL" upgrade head
+          alembic -x url="$ATELIER_TEST_PG_URL" downgrade base
+          alembic -x url="$ATELIER_TEST_PG_URL" upgrade head
+        working-directory: services/api
+
+  cross-cutting:
+    name: Infra and realm invariants
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - run: pip install pytest pyyaml
+
+      - name: Keycloak realm security controls
+        # The realm carries the account-takeover invariant and is editable without a
+        # code review, so it is regression-tested like code.
+        run: pytest tests -q
+
+      - name: Compose file is valid
+        run: docker compose -f infra/docker-compose.yml config --quiet
+
+  secrets:
+    name: No committed credentials
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Scan for credential-shaped strings
+        run: python scripts/check_no_committed_secrets.py
