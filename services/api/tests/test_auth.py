@@ -228,7 +228,7 @@ async def test_alg_none_is_rejected(client: httpx.AsyncClient, tokens: Any) -> N
     "overrides",
     [
         {"iss": "https://id.evil.test/realms/atelier"},
-        {"aud": ["someone-else"]},
+        {"aud": ["someone-else"]},  # wrong, as opposed to absent
         {"azp": "another-client"},
         {"exp": int((datetime.now(UTC) - timedelta(minutes=10)).timestamp())},
         {"nbf": int((datetime.now(UTC) + timedelta(minutes=10)).timestamp())},
@@ -401,3 +401,166 @@ def test_no_bearer_material_is_stored_in_the_sessions_table() -> None:
     assert "token" not in columns
     assert "token_hash" not in columns
     assert "keycloak_sid" in columns
+
+
+# --------------------------------------------------------------------------- #
+# `aud` is optional (Keycloak omits it without an Audience mapper)
+# --------------------------------------------------------------------------- #
+async def test_a_token_without_an_aud_claim_is_accepted(
+    client: httpx.AsyncClient, tokens: Any
+) -> None:
+    """Keycloak does not add the requesting client to `aud` by default, so an
+    absent claim must not be a rejection."""
+    token = tokens.token(sub="kc-no-aud", aud=None)
+    r = await client.post("/v1/auth/session", headers={"Authorization": f"Bearer {token}"})
+    assert r.status_code == 200, r.text
+
+
+async def test_aud_is_checked_when_present_and_configured(verifier: Any, tokens: Any) -> None:
+    with pytest.raises(TokenRejected) as exc:
+        await verifier.verify(tokens.token(sub="kc-aud-bad", aud=["someone-else"]))
+    assert exc.value.reason == "bad_audience"
+
+
+async def test_aud_is_ignored_when_no_audience_is_configured(
+    verifier_without_audience: Any, tokens: Any
+) -> None:
+    claims = await verifier_without_audience.verify(
+        tokens.token(sub="kc-aud-skip", aud=["whatever", "account"])
+    )
+    assert claims.subject == "kc-aud-skip"
+
+
+async def test_a_missing_aud_is_fine_when_no_audience_is_configured(
+    verifier_without_audience: Any, tokens: Any
+) -> None:
+    claims = await verifier_without_audience.verify(tokens.token(sub="kc-aud-none", aud=None))
+    assert claims.subject == "kc-aud-none"
+
+
+async def test_azp_remains_the_primary_client_binding(verifier: Any, tokens: Any) -> None:
+    """`azp` is always present, so it — not `aud` — is what binds the client."""
+    with pytest.raises(TokenRejected) as exc:
+        await verifier.verify(tokens.token(sub="kc-azp", aud=None, azp="another-client"))
+    assert exc.value.reason == "unexpected_authorised_party"
+
+
+# --------------------------------------------------------------------------- #
+# email claims are optional (a realm can drop the `email` client scope)
+# --------------------------------------------------------------------------- #
+async def test_a_token_without_email_claims_provisions_an_unverified_user(
+    client: httpx.AsyncClient, db: AsyncSession, tokens: Any
+) -> None:
+    token = tokens.token(sub="kc-no-email", email=None, email_verified=None)
+    r = await client.post("/v1/auth/session", headers={"Authorization": f"Bearer {token}"})
+    assert r.status_code == 200, r.text
+    assert r.json()["email"] is None
+    assert r.json()["email_verified"] is False
+
+
+async def test_a_missing_email_verified_claim_is_treated_as_unverified(
+    verifier: Any, tokens: Any
+) -> None:
+    claims = await verifier.verify(
+        tokens.token(sub="kc-ev-absent", email="x@example.com", email_verified=None)
+    )
+    assert claims.email_verified is False
+    assert claims.has_usable_email is False
+
+
+async def test_an_unverified_email_claim_cannot_adopt_an_account_even_without_aud(
+    client: httpx.AsyncClient, db: AsyncSession, tokens: Any
+) -> None:
+    existing = await make_user(db, email="noaud@example.com", email_verified=True)
+    token = tokens.token(
+        sub="kc-noaud-merge", aud=None, email="noaud@example.com", email_verified=False
+    )
+    r = await client.post("/v1/auth/session", headers={"Authorization": f"Bearer {token}"})
+    assert r.status_code == 409
+    assert r.json()["code"] == "identity_link_required"
+    assert await count_identities(db, existing.id) == 0
+
+
+# --------------------------------------------------------------------------- #
+# back-channel logout: signature mandatory, sid optional, sub fallback
+# --------------------------------------------------------------------------- #
+async def _post_logout(client: httpx.AsyncClient, token: str) -> httpx.Response:
+    return await client.post(
+        "/v1/auth/backchannel-logout",
+        content=token,
+        headers={"Content-Type": "application/jwt"},
+    )
+
+
+async def test_backchannel_logout_rejects_alg_none(
+    client: httpx.AsyncClient, tokens: Any
+) -> None:
+    """CVE-2026-18569: an unsigned forged logout token must never be accepted."""
+    r = await _post_logout(client, tokens.logout_token(sid="sid-none", alg="none"))
+    assert r.status_code == 401
+
+
+async def test_backchannel_logout_rejects_hs256_signed_with_the_public_key(
+    client: httpx.AsyncClient, tokens: Any
+) -> None:
+    r = await _post_logout(client, tokens.logout_token(sid="sid-hs", alg="HS256"))
+    assert r.status_code == 401
+
+
+async def test_backchannel_logout_rejects_a_wrong_audience(
+    client: httpx.AsyncClient, tokens: Any
+) -> None:
+    """Keycloak addresses the logout token to our client id."""
+    r = await _post_logout(client, tokens.logout_token(sid="sid-aud", aud="another-client"))
+    assert r.status_code == 401
+
+
+async def test_backchannel_logout_rejects_a_token_without_aud(
+    client: httpx.AsyncClient, tokens: Any
+) -> None:
+    r = await _post_logout(client, tokens.logout_token(sid="sid-noaud", aud=None))
+    assert r.status_code == 401
+
+
+async def test_backchannel_logout_rejects_a_stale_long_lived_token(
+    client: httpx.AsyncClient, tokens: Any
+) -> None:
+    """A logout notification lives about two minutes, not a day."""
+    r = await _post_logout(client, tokens.logout_token(sid="sid-old", lifetime_minutes=600))
+    assert r.status_code == 401
+
+
+async def test_backchannel_logout_without_sid_revokes_every_session_of_the_sub(
+    client: httpx.AsyncClient, db: AsyncSession, tokens: Any
+) -> None:
+    """`sid` is only present when the client requires it, so `sub` is the
+    fallback — and it must revoke every device."""
+    phone = {"Authorization": f"Bearer {tokens.token(sub='kc-subonly', jti='j-p', sid='s-p')}"}
+    tablet = {"Authorization": f"Bearer {tokens.token(sub='kc-subonly', jti='j-t', sid='s-t')}"}
+    assert (await client.post("/v1/auth/session", headers=phone)).status_code == 200
+    assert (await client.post("/v1/auth/session", headers=tablet)).status_code == 200
+
+    logout = await _post_logout(client, tokens.logout_token(sid=None, sub="kc-subonly"))
+    assert logout.status_code == 204, logout.text
+
+    assert (await client.get("/v1/auth/me", headers=phone)).status_code == 401
+    assert (await client.get("/v1/auth/me", headers=tablet)).status_code == 401
+    sessions = (
+        await db.scalars(select(Session).where(Session.keycloak_sid.in_(["s-p", "s-t"])))
+    ).all()
+    assert sessions and all(s.revoked_at is not None for s in sessions)
+
+
+async def test_backchannel_logout_with_neither_sid_nor_sub_is_a_400(
+    client: httpx.AsyncClient, tokens: Any
+) -> None:
+    r = await _post_logout(client, tokens.logout_token(sid=None, sub=None))
+    assert r.status_code == 400
+    assert r.json()["code"] == "invalid_logout_token"
+
+
+async def test_backchannel_logout_for_an_unknown_subject_is_a_noop_204(
+    client: httpx.AsyncClient, tokens: Any
+) -> None:
+    r = await _post_logout(client, tokens.logout_token(sid=None, sub="kc-never-seen"))
+    assert r.status_code == 204

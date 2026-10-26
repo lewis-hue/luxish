@@ -25,23 +25,24 @@ os.environ.setdefault("ATELIER_KEYCLOAK_ISSUER", "https://id.atelier.test/realms
 os.environ.setdefault("ATELIER_KEYCLOAK_AUDIENCE", "atelier-api")
 os.environ.setdefault("ATELIER_KEYCLOAK_CLIENT_ID", "atelier-mobile")
 
-import base64  # noqa: E402
-import hashlib  # noqa: E402
-import hmac  # noqa: E402
-import json  # noqa: E402
+import base64
+import hashlib
+import hmac
+import json
 
-import httpx  # noqa: E402
-import jwt  # noqa: E402
-import pytest  # noqa: E402
-from cryptography.hazmat.primitives import serialization  # noqa: E402
-from cryptography.hazmat.primitives.asymmetric import rsa  # noqa: E402
-from sqlalchemy.ext.asyncio import AsyncSession  # noqa: E402
+import httpx
+import jwt
+import pytest
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import Settings, get_settings  # noqa: E402
-from app.db.base import Base  # noqa: E402
-from app import models as _models  # noqa: E402,F401  (registers tables)
-from app.db.session import build_engine, session_factory  # noqa: E402
-from app.security.keycloak import JwksCache, TokenVerifier  # noqa: E402
+from app import models as _models  # noqa: F401  (registers tables)
+from app.config import Settings, get_settings
+from app.db.base import Base
+from app.db.session import build_engine, session_factory
+from app.security.keycloak import JwksCache, TokenVerifier
+
 
 def _b64(raw: bytes) -> bytes:
     return base64.urlsafe_b64encode(raw).rstrip(b"=")
@@ -146,21 +147,38 @@ class TokenFactory:
         key = self.other_private if kid == OTHER_KID else self.private
         return jwt.encode(claims, key=key, algorithm=alg, headers={"kid": kid})
 
-    def logout_token(self, *, sid: str, **overrides: Any) -> str:
+    def logout_token(
+        self,
+        *,
+        sid: str | None = None,
+        alg: str = "RS256",
+        lifetime_minutes: int = 2,
+        **overrides: Any,
+    ) -> str:
+        """A Keycloak back-channel logout token.
+
+        ``aud`` is the client id, which is what the server actually sends, and
+        ``sid`` is optional because Keycloak only includes it when the client
+        has "Backchannel logout session required" switched on.
+        """
         now = datetime.now(UTC)
         claims: dict[str, Any] = {
             "iss": ISSUER,
-            "aud": AUDIENCE,
+            "aud": CLIENT_ID,
             "sub": overrides.pop("sub", "kc-sub-logout"),
             "sid": sid,
             "jti": uuid.uuid4().hex,
             "iat": int(now.timestamp()),
-            "exp": int((now + timedelta(minutes=2)).timestamp()),
+            "exp": int((now + timedelta(minutes=lifetime_minutes)).timestamp()),
             "events": {"http://schemas.openid.net/event/backchannel-logout": {}},
         }
         claims.update(overrides)
         claims = {k: v for k, v in claims.items() if v is not None}
-        return jwt.encode(claims, key=self.private, algorithm="RS256", headers={"kid": KID})
+        if alg == "none":
+            return jwt.encode(claims, key="", algorithm="none", headers={"kid": KID})
+        if alg.startswith("HS"):
+            return _hmac_jws(claims, secret=self.public_pem(), alg=alg, kid=KID)
+        return jwt.encode(claims, key=self.private, algorithm=alg, headers={"kid": KID})
 
 
 @pytest.fixture(scope="session")
@@ -197,6 +215,24 @@ def verifier(tokens: TokenFactory, settings: Settings) -> TokenVerifier:
     )
     v.test_fetch_calls = calls  # type: ignore[attr-defined]
     return v
+
+
+@pytest.fixture
+def verifier_without_audience(tokens: TokenFactory, settings: Settings) -> TokenVerifier:
+    """Keycloak populates `aud` only with an Audience mapper, so an unset
+    expected audience is the default deployment, not an edge case."""
+
+    async def fetch_jwks() -> dict[str, Any]:
+        return tokens.jwks()
+
+    return TokenVerifier(
+        issuer=settings.keycloak_issuer,
+        audience=None,
+        client_id=settings.keycloak_client_id,
+        jwks=JwksCache(settings.keycloak_jwks_url, ttl_seconds=300, fetcher=fetch_jwks),
+        leeway_seconds=settings.jwt_leeway_seconds,
+        allowed_algorithms=settings.allowed_signing_algorithms,
+    )
 
 
 # --------------------------------------------------------------------------- #

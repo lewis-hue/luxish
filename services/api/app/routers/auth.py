@@ -13,14 +13,14 @@ from fastapi import APIRouter, Request, Response, status
 
 from app.deps import AuthDep, SessionDep, SettingsDep, VerifierDep
 from app.domain import auth as auth_domain
-from app.errors import Unauthenticated
+from app.errors import ApiError, Unauthenticated
 from app.schemas.auth import (
     IdentityLinkConfirmRequest,
     IdentityLinkConfirmResponse,
     MeResponse,
     SessionResponse,
 )
-from app.security.keycloak import TokenRejected
+from app.security.keycloak import LogoutTokenIncomplete, TokenRejected
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +90,14 @@ async def backchannel_logout(
         raw = (parse_qs(raw).get("logout_token") or [""])[0].strip()
     try:
         claims = await verifier.verify_logout_token(raw)
+    except LogoutTokenIncomplete as exc:
+        # Authentic sender, unusable message: this is a bad request, not a
+        # failed authentication.
+        raise ApiError(
+            "The logout token names neither a session nor a subject.",
+            status_code=400,
+            code="invalid_logout_token",
+        ) from exc
     except TokenRejected as exc:
         logger.info("logout token rejected", extra={"reason": exc.reason})
         raise Unauthenticated("The logout token was not accepted.") from exc

@@ -58,8 +58,8 @@ class TimestampMixin:
 
 
 __all__ = [
-    "Base",
     "JSONB",
+    "Base",
     "TimestampMixin",
     "UTCDateTime",
     "named_enum",

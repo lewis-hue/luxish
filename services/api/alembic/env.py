@@ -11,9 +11,9 @@ import asyncio
 import os
 from logging.config import fileConfig
 
-from alembic import context
 from sqlalchemy.ext.asyncio import create_async_engine
 
+from alembic import context
 from app import models  # noqa: F401  (registers every table on Base.metadata)
 from app.db.base import Base
 
@@ -22,7 +22,9 @@ config = context.config
 if config.config_file_name is not None and not context.config.attributes.get("skip_logging"):
     try:
         fileConfig(config.config_file_name, disable_existing_loggers=False)
-    except Exception:  # pragma: no cover - logging config is not load-bearing
+    except Exception:  # noqa: BLE001, S110 - logging config is not load-bearing
+        # A migration must still run when the logging section is absent or
+        # malformed; the alternative is an unmigratable database.
         pass
 
 target_metadata = Base.metadata
@@ -31,10 +33,12 @@ target_metadata = Base.metadata
 def resolve_url() -> str:
     overrides = context.get_x_argument(as_dictionary=True)
     url = (
+        # Most explicit first: `-x url=...`, then an explicitly configured
+        # option, then the environment the service itself runs against.
         overrides.get("url")
+        or config.get_main_option("sqlalchemy.url")
         or os.environ.get("ATELIER_ALEMBIC_URL")
         or os.environ.get("ATELIER_DATABASE_URL")
-        or config.get_main_option("sqlalchemy.url")
     )
     if not url:
         raise RuntimeError(

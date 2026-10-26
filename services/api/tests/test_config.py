@@ -37,7 +37,6 @@ def test_every_required_input_is_supplied_by_the_environment() -> None:
         "meta_api_key",
         "gcs_bucket",
         "keycloak_issuer",
-        "keycloak_audience",
         "keycloak_client_id",
     ):
         assert Settings.model_fields[name].is_required(), name
@@ -67,8 +66,16 @@ def test_settings_reads_the_atelier_prefix(monkeypatch: pytest.MonkeyPatch) -> N
 
 
 def test_keycloak_settings_are_required_and_have_no_defaults() -> None:
-    for name in ("keycloak_issuer", "keycloak_audience", "keycloak_client_id"):
+    for name in ("keycloak_issuer", "keycloak_client_id"):
         assert Settings.model_fields[name].is_required(), name
+
+
+def test_keycloak_audience_is_optional_because_keycloak_omits_aud() -> None:
+    """Keycloak does not add the requesting client to `aud` without an Audience
+    protocol mapper, so requiring it here would 401 every real token."""
+    field = Settings.model_fields["keycloak_audience"]
+    assert not field.is_required()
+    assert field.default is None
 
 
 def test_jwks_url_is_derived_from_the_issuer(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -87,3 +94,16 @@ def test_hmac_algorithms_are_not_acceptable() -> None:
     algs = Settings.model_fields["allowed_signing_algorithms"].default
     assert all(not a.startswith("HS") for a in algs)
     assert "none" not in algs
+
+
+def test_the_jwks_url_has_no_auth_prefix(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The `/auth` path prefix was removed in Keycloak 17."""
+    _clear(monkeypatch)
+    monkeypatch.setenv("ATELIER_DATABASE_URL", "postgresql+asyncpg://u:p@h/db")
+    monkeypatch.setenv("ATELIER_META_API_KEY", "LLM_abc")
+    monkeypatch.setenv("ATELIER_GCS_BUCKET", "bucket")
+    monkeypatch.setenv("ATELIER_KEYCLOAK_ISSUER", "https://id.test/realms/atelier")
+    monkeypatch.setenv("ATELIER_KEYCLOAK_CLIENT_ID", "atelier-mobile")
+    url = Settings(_env_file=None).keycloak_jwks_url
+    assert "/auth/" not in url
+    assert url.endswith("/realms/atelier/protocol/openid-connect/certs")

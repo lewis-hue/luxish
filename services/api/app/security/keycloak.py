@@ -1,10 +1,10 @@
-"""Keycloak token verification.
+"""Keycloak token verification (Keycloak >= 26.8.1).
 
 This service **verifies** tokens; it never issues them. Keycloak is the identity
 provider and brokers the social providers (Google now, Apple later), so the only
 credential this service ever sees is a realm-signed JWT.
 
-Three properties are load-bearing:
+Four properties are load-bearing:
 
 1. **Algorithm confusion is refused before any key is loaded.** ``alg: none`` and
    every HMAC algorithm are rejected outright — otherwise a public key fetched
@@ -15,6 +15,20 @@ Three properties are load-bearing:
    ``jwt.decode``'s verified output, never from the unverified payload. Only the
    header's ``alg``/``kid`` are read first, and they are used solely to *reject*
    or to select a key.
+4. **A back-channel logout token is verified exactly as strictly** - signature,
+   issuer, audience, freshness, and the required logout event. CVE-2026-18569
+   was precisely this check being skippable; it is not optional here.
+
+Two Keycloak facts shape the audience and session handling:
+
+* ``aud`` is **not** populated by default. Keycloak does not add the requesting
+  client to an access token audience; that needs an Audience protocol mapper on
+  the realm. So ``aud`` is verified only when the claim is present *and* an
+  expected audience is configured. ``azp`` - always present - is the primary
+  client binding.
+* ``sid`` is **not** always present on a logout token. The server sets it only
+  when the client has "Backchannel logout session required" switched on, and
+  that defaults to false, so revocation falls back to ``sub``.
 """
 
 from __future__ import annotations
@@ -31,6 +45,10 @@ import jwt
 
 BACKCHANNEL_LOGOUT_EVENT = "http://schemas.openid.net/event/backchannel-logout"
 
+#: A logout token is minted for immediate delivery (Keycloak gives it about two
+#: minutes). Anything long-lived is not a fresh logout notification.
+MAX_LOGOUT_TOKEN_LIFETIME_SECONDS = 600
+
 #: Only asymmetric algorithms whose public half lives in the JWKS.
 DEFAULT_ALLOWED_ALGORITHMS: tuple[str, ...] = ("RS256", "ES256")
 
@@ -43,6 +61,14 @@ class TokenRejected(Exception):
     def __init__(self, reason: str, message: str | None = None) -> None:
         self.reason = reason
         super().__init__(message or reason)
+
+
+class LogoutTokenIncomplete(TokenRejected):
+    """A validly signed logout token that names no session and no subject.
+
+    Distinct from a rejection: the sender is authentic and the signature is
+    good, but the message is unusable - so the caller answers 400, not 401.
+    """
 
 
 @dataclass(frozen=True, slots=True)
@@ -149,7 +175,7 @@ class TokenVerifier:
         self,
         *,
         issuer: str,
-        audience: str,
+        audience: str | None,
         client_id: str,
         jwks: JwksCache,
         leeway_seconds: int = 10,
@@ -180,11 +206,48 @@ class TokenVerifier:
             raise TokenRejected("algorithm_not_allowed", f"alg={algorithm!r} is not accepted")
         return header
 
+    @staticmethod
+    def _audience_values(payload: Mapping[str, Any]) -> list[str]:
+        raw = payload.get("aud")
+        if raw is None:
+            return []
+        if isinstance(raw, str):
+            return [raw]
+        if isinstance(raw, (list, tuple)):
+            return [value for value in raw if isinstance(value, str)]
+        raise TokenRejected("invalid", "aud must be a string or a list of strings")
+
+    def _check_audience(
+        self,
+        payload: Mapping[str, Any],
+        *,
+        accepted: Sequence[str],
+        require_claim: bool,
+    ) -> None:
+        """Verify ``aud`` when there is something to verify it against.
+
+        Keycloak omits the requesting client from ``aud`` unless an Audience
+        mapper is configured, so on an access token an absent claim is normal
+        and is not a failure. A logout token does carry ``aud``, and there the
+        claim is required.
+        """
+        present = self._audience_values(payload)
+        if not accepted:
+            return
+        if not present:
+            if require_claim:
+                raise TokenRejected("missing_claim", "aud is required on this token")
+            return
+        if not set(present) & set(accepted):
+            raise TokenRejected(
+                "bad_audience",
+                f"aud={present!r} includes none of {list(accepted)!r}",
+            )
+
     async def _decode(
         self,
         token: str,
         *,
-        audiences: Sequence[str],
         required: Sequence[str],
     ) -> dict[str, Any]:
         header = self._header(token)
@@ -194,7 +257,6 @@ class TokenVerifier:
                 token,
                 key=key,
                 algorithms=list(self.allowed_algorithms),
-                audience=list(audiences),
                 issuer=self.issuer,
                 leeway=self.leeway,
                 options={
@@ -203,7 +265,10 @@ class TokenVerifier:
                     "verify_exp": True,
                     "verify_nbf": True,
                     "verify_iat": True,
-                    "verify_aud": True,
+                    # Checked by _check_audience instead: an absent claim is
+                    # normal on a Keycloak access token, which PyJWT's own
+                    # audience handling cannot express.
+                    "verify_aud": False,
                     "verify_iss": True,
                 },
             )
@@ -226,8 +291,14 @@ class TokenVerifier:
     async def verify(self, token: str) -> TokenClaims:
         payload = await self._decode(
             token,
-            audiences=[self.audience],
-            required=("exp", "iat", "iss", "aud", "sub"),
+            # `aud` is deliberately absent from the required set - see the module
+            # docstring. `sub` comes from the default `basic` client scope.
+            required=("exp", "iat", "iss", "sub"),
+        )
+        self._check_audience(
+            payload,
+            accepted=[self.audience] if self.audience else [],
+            require_claim=False,
         )
         if payload.get("azp") != self.client_id:
             raise TokenRejected(
@@ -255,13 +326,22 @@ class TokenVerifier:
         """Verify an OIDC back-channel logout token (RFC-style, OIDC BCL 1.0).
 
         Keycloak addresses the logout token to the client that receives it, so
-        either our audience or our client id is acceptable here.
+        our client id - or a configured audience - is what ``aud`` must contain.
+        The signature is mandatory: CVE-2026-18569 was exactly this check being
+        skippable.
         """
         payload = await self._decode(
-            token,
-            audiences=[self.audience, self.client_id],
-            required=("exp", "iat", "iss", "aud", "events"),
+            token, required=("exp", "iat", "iss", "aud", "events")
         )
+        accepted = [self.client_id] + ([self.audience] if self.audience else [])
+        self._check_audience(payload, accepted=accepted, require_claim=True)
+        lifetime = int(payload["exp"]) - int(payload["iat"])
+        if lifetime > MAX_LOGOUT_TOKEN_LIFETIME_SECONDS:
+            raise TokenRejected(
+                "logout_token_not_fresh",
+                f"logout token lifetime {lifetime}s exceeds "
+                f"{MAX_LOGOUT_TOKEN_LIFETIME_SECONDS}s",
+            )
         events = payload.get("events")
         if not isinstance(events, dict) or BACKCHANNEL_LOGOUT_EVENT not in events:
             raise TokenRejected("not_a_logout_token", "events lacks the backchannel-logout member")
@@ -272,7 +352,11 @@ class TokenVerifier:
         sid = payload.get("sid") if isinstance(payload.get("sid"), str) else None
         subject = payload.get("sub") if isinstance(payload.get("sub"), str) else None
         if not sid and not subject:
-            raise TokenRejected("not_a_logout_token", "logout token needs sid or sub")
+            # Authentic but unusable. `sub` is always present on a real Keycloak
+            # logout token; `sid` only when the client requires it.
+            raise LogoutTokenIncomplete(
+                "no_sid_or_sub", "a logout token must name a session or a subject"
+            )
         return LogoutClaims(
             subject=subject,
             sid=sid,
@@ -284,8 +368,10 @@ class TokenVerifier:
 __all__ = [
     "BACKCHANNEL_LOGOUT_EVENT",
     "DEFAULT_ALLOWED_ALGORITHMS",
+    "MAX_LOGOUT_TOKEN_LIFETIME_SECONDS",
     "JwksCache",
     "LogoutClaims",
+    "LogoutTokenIncomplete",
     "TokenClaims",
     "TokenRejected",
     "TokenVerifier",

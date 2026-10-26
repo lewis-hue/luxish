@@ -1,3 +1,79 @@
-from fastapi import APIRouter
+"""Wardrobe routes.
 
-router = APIRouter()
+Thin by design: this module builds no queries. It constructs a
+:class:`~app.domain.wardrobe.GarmentRepository` bound to the authenticated user
+and delegates, which is what makes owner scoping impossible to forget.
+"""
+
+from __future__ import annotations
+
+import uuid
+
+from fastapi import APIRouter, Query, Response, status
+
+from app.deps import AuthDep, SessionDep
+from app.domain.wardrobe import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, GarmentRepository
+from app.schemas.wardrobe import GarmentCreate, GarmentOut, GarmentPage, GarmentPatch
+
+router = APIRouter(prefix="/wardrobe", tags=["wardrobe"])
+
+
+def _repo(db: SessionDep, ctx: AuthDep) -> GarmentRepository:
+    return GarmentRepository(db, user_id=ctx.user_id)
+
+
+@router.get("/garments", response_model=GarmentPage)
+async def list_garments(
+    db: SessionDep,
+    ctx: AuthDep,
+    cursor: str | None = Query(default=None),
+    category: str | None = Query(default=None, max_length=64),
+    availability: str | None = Query(default=None, max_length=32),
+    limit: int = Query(default=DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
+) -> GarmentPage:
+    page = await _repo(db, ctx).list(
+        cursor=cursor, category=category, availability=availability, limit=limit
+    )
+    return GarmentPage(
+        items=[GarmentOut.model_validate(item) for item in page.items],
+        next_cursor=page.next_cursor,
+    )
+
+
+@router.post("/garments", response_model=GarmentOut, status_code=status.HTTP_201_CREATED)
+async def create_garment(payload: GarmentCreate, db: SessionDep, ctx: AuthDep) -> GarmentOut:
+    garment = await _repo(db, ctx).create(
+        name=payload.name,
+        category=payload.category,
+        media_asset_id=payload.media_asset_id,
+        confirmed_attributes=payload.confirmed_attributes,
+        availability=payload.availability,
+    )
+    return GarmentOut.model_validate(garment)
+
+
+@router.get("/garments/{garment_id}", response_model=GarmentOut)
+async def read_garment(garment_id: uuid.UUID, db: SessionDep, ctx: AuthDep) -> GarmentOut:
+    return GarmentOut.model_validate(await _repo(db, ctx).require(garment_id))
+
+
+@router.patch("/garments/{garment_id}", response_model=GarmentOut)
+async def correct_garment(
+    garment_id: uuid.UUID, payload: GarmentPatch, db: SessionDep, ctx: AuthDep
+) -> GarmentOut:
+    """Record a user correction. Confirmed attributes always win on read."""
+    fields = payload.model_dump(exclude_unset=True)
+    garment = await _repo(db, ctx).apply_correction(
+        garment_id,
+        confirmed_attributes=fields.get("confirmed_attributes"),
+        name=fields.get("name"),
+        category=fields.get("category"),
+        availability=fields.get("availability"),
+    )
+    return GarmentOut.model_validate(garment)
+
+
+@router.delete("/garments/{garment_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_garment(garment_id: uuid.UUID, db: SessionDep, ctx: AuthDep) -> Response:
+    await _repo(db, ctx).soft_delete(garment_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

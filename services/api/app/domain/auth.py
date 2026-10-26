@@ -338,15 +338,15 @@ async def delete_account(db: AsyncSession, *, user_id: uuid.UUID) -> None:
 
 
 __all__ = [
-    "AuthContext",
-    "IdentityLinkRequired",
     "KEYCLOAK_PROVIDER",
     "ApiError",
+    "AuthContext",
+    "IdentityLinkRequired",
     "apply_backchannel_logout",
-    "record_revoked_token",
     "authenticate",
     "confirm_identity_link",
     "delete_account",
+    "record_revoked_token",
     "revoke_current_session",
     "revoke_session_by_sid",
 ]

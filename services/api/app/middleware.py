@@ -67,7 +67,7 @@ def normalise_request_id(raw: str | None) -> str:
 class RedactionFilter(logging.Filter):
     """Drops sensitive keys and raw image bytes before anything is formatted."""
 
-    def filter(self, record: logging.LogRecord) -> bool:  # noqa: A003
+    def filter(self, record: logging.LogRecord) -> bool:
         dropped: list[str] = []
         for key in list(record.__dict__):
             if key in _STANDARD_RECORD_FIELDS:
@@ -102,7 +102,7 @@ def _scrub(value: Any, dropped: list[str], depth: int) -> Any:
 class JsonLogFormatter(logging.Formatter):
     """One JSON object per line, with request-scoped context attached."""
 
-    def format(self, record: logging.LogRecord) -> str:  # noqa: A003
+    def format(self, record: logging.LogRecord) -> str:
         payload: dict[str, Any] = {
             "ts": self.formatTime(record, "%Y-%m-%dT%H:%M:%S%z"),
             "level": record.levelname,

@@ -24,7 +24,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
         try:
             await dispose_engine()
-        except Exception:  # pragma: no cover - shutdown is best effort
+        except Exception:  # noqa: BLE001, S110 - shutdown must not raise
+            # Nothing useful can be done if the pool is already gone, and a
+            # raise here would mask the real reason the process is stopping.
             pass
 
     app = FastAPI(
