@@ -1,0 +1,115 @@
+# Dubai — hot desert. The governing constraint is the gap between outdoor heat
+# and aggressive indoor cooling, which is a different problem from Mombasa's
+# humidity.
+geography: Dubai
+geography_key: dubai
+granularity: city
+country_key: united-arab-emirates
+aliases:
+  - Dubai, UAE
+  - Dubai, United Arab Emirates
+profiles:
+  - source_slug: mall-assortment-survey
+    version: 1
+    review_date: 2026-09-18
+    reviewer: mall retail assortment reviewer, Dubai, 2026-09
+    confidence: 0.5
+    source_provenance: >-
+      Compiled from publicly visible mall retail assortments and from the dress
+      requirements that hotels, malls and office towers publish themselves.
+      Desk-assembled; no licensed dataset, publication or individual is cited.
+      Venue-stated requirements are recorded as written and are not generalised
+      beyond the venues that state them.
+    notes: >-
+      Outdoor heat and indoor air conditioning pull in opposite directions, so
+      a removable layer is useful in the hottest months rather than the
+      coolest. Published venue requirements vary and should be read per venue,
+      never inferred.
+    occasions:
+      - occasion: casual
+        suggests:
+          - lightweight trousers
+          - cotton shirt
+          - loose tee
+          - loafers
+        avoid:
+          - heavy denim
+        note: A light layer for indoor cooling, not for the weather.
+      - occasion: office
+        suggests:
+          - lightweight suit
+          - long-sleeve shirt
+          - leather loafers
+        avoid:
+          - shorts
+        note: Indoor-only dressing; the walk between buildings is short.
+      - occasion: outdoor_daytime
+        suggests:
+          - loose long sleeve
+          - wide-brim hat
+          - lightweight trousers
+          - breathable sneakers
+        avoid:
+          - dark heavy fabric
+        note: Covered and loose beats bare in direct desert sun.
+      - occasion: formal_evening
+        suggests:
+          - lightweight suit
+          - dress shirt
+          - polished shoes
+        avoid:
+          - heavy topcoat
+    seasonality:
+      - name: extreme_heat
+        months: [6, 7, 8, 9]
+        guidance: >-
+          Sustained extreme heat; time outdoors is minimised and dressing is
+          effectively for air-conditioned interiors.
+        layers:
+          - light indoor layer
+        avoid:
+          - dark heavy fabric
+      - name: warm
+        months: [4, 5, 10, 11]
+        guidance: Hot but tolerable outdoors for short periods.
+        layers:
+          - loose long sleeve
+      - name: mild
+        months: [12, 1, 2, 3]
+        guidance: >-
+          The one genuinely pleasant window; evenings are cool enough for a
+          real layer.
+        layers:
+          - light jacket
+    styling_examples:
+      - Lightweight trousers, a cotton shirt and loafers, with a thin knit kept
+        for the inside of a cooled building.
+      - A loose long-sleeve shirt and a wide-brim hat for the short walk across
+        an open plaza in August.
+    variants:
+      - kind: international
+        name: international and visiting
+        description: >-
+          A very large visiting and internationally mobile population means
+          multiple wardrobes coexist with no single dominant one. Treat the
+          mainstream profile as one option among several.
+        suggests:
+          - lightweight suit
+          - loose long sleeve
+      - kind: alternative
+        name: alternative and streetwear leaning
+        description: >-
+          Oversized silhouettes, graphic prints and chunky sneakers, adapted to
+          the heat through fabric weight rather than coverage.
+        suggests:
+          - oversized tee
+          - chunky sneakers
+      - kind: practice
+        name: venue-stated requirements
+        description: >-
+          Some venues publish a specific covered-shoulder or knee-length
+          requirement. Where a venue states one it is applied as written; where
+          it states nothing, nothing is assumed.
+        suggests:
+          - covering overshirt
+        note: Read per venue. Never inferred from the place name.

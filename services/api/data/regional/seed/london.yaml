@@ -1,0 +1,115 @@
+# London — temperate oceanic. Mild and changeable; the problem is a day that
+# contains three different kinds of weather.
+geography: London
+geography_key: london
+granularity: city
+country_key: united-kingdom
+aliases:
+  - London, UK
+  - London, United Kingdom
+  - Greater London
+profiles:
+  - source_slug: high-street-assortment-survey
+    version: 1
+    review_date: 2026-09-12
+    reviewer: shop-floor staff review, London, 2026-09
+    confidence: 0.7
+    source_provenance: >-
+      Compiled from publicly visible high-street and department-store
+      assortments across several boroughs over one season, plus published
+      national climate normals for month boundaries. The largest sample of the
+      seeded set, which is why it scores highest; still desk-assembled, and no
+      licensed dataset, publication or individual is cited.
+    notes: >-
+      Rain is frequent but light, so a packable layer beats a heavy one.
+      Transport is largely underground and warm, which penalises bulk.
+    occasions:
+      - occasion: casual
+        suggests:
+          - dark jeans
+          - crew knit
+          - light trench
+          - leather trainers
+        avoid:
+          - unlined linen
+        note: A packable layer that survives the train carriage.
+      - occasion: office
+        suggests:
+          - wool trousers
+          - oxford shirt
+          - unstructured blazer
+          - derby shoes
+        avoid:
+          - shorts
+        note: Blazer-without-tie is the common middle register.
+      - occasion: outdoor_daytime
+        suggests:
+          - waterproof jacket
+          - mid-weight knit
+          - sturdy boots
+        avoid:
+          - suede shoes
+      - occasion: formal_evening
+        suggests:
+          - dark suit
+          - dress shirt
+          - overcoat
+          - leather dress shoes
+        avoid:
+          - trainers
+      - occasion: wedding_guest
+        suggests:
+          - mid-weight suit
+          - patterned shirt
+          - leather loafers
+        note: Plan for an indoor reception and a cold walk between venues.
+    seasonality:
+      - name: winter
+        months: [12, 1, 2]
+        guidance: Cold, damp and dark rather than severe; an overcoat does most of it.
+        layers:
+          - overcoat
+          - mid-weight knit
+        avoid:
+          - suede shoes
+      - name: spring
+        months: [3, 4, 5]
+        guidance: Highly changeable; expect two seasons in one afternoon.
+        layers:
+          - light trench
+      - name: summer
+        months: [6, 7, 8]
+        guidance: Mild with short warm spells; indoor cooling is uncommon.
+        layers:
+          - light overshirt
+      - name: autumn
+        months: [9, 10, 11]
+        guidance: Cooling and wet; the waterproof layer returns.
+        layers:
+          - waterproof jacket
+          - mid-weight knit
+    styling_examples:
+      - Dark jeans, a crew knit and a light trench that folds into a bag when
+        the train gets warm.
+      - Wool trousers, an oxford shirt and an unstructured blazer with no tie.
+      - A dark suit under an overcoat for an evening that includes a walk.
+    variants:
+      - kind: alternative
+        name: alternative and subculture scenes
+        description: >-
+          Several long-established and well-documented alternative scenes with
+          their own complete wardrobes. The mainstream profile is one register
+          in a city with many, not the baseline the others deviate from.
+        suggests:
+          - heavy boots
+          - layered black
+          - statement outerwear
+      - kind: international
+        name: international and visiting
+        description: >-
+          One of the most internationally mixed wardrobes anywhere; many
+          residents dress to conventions formed elsewhere and that is simply
+          normal here.
+        suggests:
+          - mid-weight suit
+          - waterproof jacket

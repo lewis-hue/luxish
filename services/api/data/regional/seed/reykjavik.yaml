@@ -1,0 +1,117 @@
+# Reykjavik — subpolar oceanic. Wind and wet, not deep cold; the opposite
+# problem from both Kenyan cities and from Sapporo.
+geography: Reykjavik
+geography_key: reykjavik
+granularity: city
+country_key: iceland
+aliases:
+  - Reykjavík
+  - Reykjavik, Iceland
+profiles:
+  - source_slug: outdoor-apparel-assortment-survey
+    version: 1
+    review_date: 2026-09-20
+    reviewer: outdoor-apparel specialist review, Reykjavik, 2026-09
+    confidence: 0.45
+    source_provenance: >-
+      Compiled from publicly visible retail assortments in central Reykjavik,
+      weighted towards the technical-outerwear shops that dominate them, plus
+      published national climate normals for month boundaries. Assembled at a
+      distance on a small sample and scored low for that reason; no
+      publication, dataset or individual is cited.
+    notes: >-
+      Wind, not temperature, decides whether an outfit works. Mid-summer
+      daytime highs sit close to Nairobi's night-time lows.
+    occasions:
+      - occasion: casual
+        suggests:
+          - wool base layer
+          - fleece mid-layer
+          - windproof shell
+          - waterproof boots
+        avoid:
+          - open sandals
+          - unlined cotton jacket
+        note: An umbrella is close to useless; a hood is not.
+      - occasion: office
+        suggests:
+          - wool trousers
+          - merino knit
+          - insulated overcoat
+          - leather boots
+        avoid:
+          - linen suit
+        note: Indoor heating is generous, so the outer layer comes straight off.
+      - occasion: outdoor_daytime
+        suggests:
+          - waterproof shell
+          - insulated mid-layer
+          - wool socks
+          - hiking boots
+        avoid:
+          - cotton base layer
+      - occasion: formal_evening
+        suggests:
+          - dark wool suit
+          - heavy overcoat
+          - leather dress boots
+        avoid:
+          - thin dress shoes
+    seasonality:
+      - name: winter
+        months: [11, 12, 1, 2, 3]
+        guidance: >-
+          Dark, wet and persistently windy rather than extremely cold; traction
+          and wind resistance matter more than insulation thickness.
+        layers:
+          - wool base layer
+          - insulated overcoat
+          - waterproof boots
+        avoid:
+          - thin dress shoes
+      - name: spring
+        months: [4, 5]
+        guidance: Lengthening days, still cold and changeable hour to hour.
+        layers:
+          - fleece mid-layer
+          - windproof shell
+      - name: summer
+        months: [6, 7, 8]
+        guidance: >-
+          Mild, very long days; a shell stays necessary and bare arms are
+          unusual outdoors.
+        layers:
+          - light wool knit
+          - windproof shell
+      - name: autumn
+        months: [9, 10]
+        guidance: Cooling and increasingly wet; the shell goes back on daily.
+        layers:
+          - fleece mid-layer
+          - waterproof shell
+    styling_examples:
+      - A wool base layer under a fleece with a windproof shell over the top,
+        all three removable indoors.
+      - Wool trousers and a merino knit under an insulated overcoat for an
+        office day in February.
+      - A dark wool suit with a heavy overcoat and dress boots, because thin
+        soles do not survive the walk.
+    variants:
+      - kind: alternative
+        name: alternative and music-scene leaning
+        description: >-
+          A long-standing independent music scene with its own look: layered
+          black, oversized knitwear, heavy boots. Technical outerwear is worn
+          over it rather than instead of it.
+        suggests:
+          - oversized knit
+          - layered black
+          - heavy boots
+      - kind: international
+        name: international and visiting
+        description: >-
+          Visitors routinely arrive underdressed for wind and overdressed for
+          cold. The useful correction is a shell, not more insulation.
+        suggests:
+          - windproof shell
+          - waterproof boots

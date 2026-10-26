@@ -21,6 +21,14 @@ dependencies = [
   # Keycloak-issued RS256/ES256 access tokens are verified against the realm
   # JWKS; we never issue tokens ourselves.
   "pyjwt[crypto]>=2.9,<3",
+  # The Meta Model API is OpenAI-protocol-compatible and has no first-party
+  # SDK, so it is called through this client with base_url pointed at
+  # https://api.meta.ai/v1 (ADR-007). Imported lazily inside the adapter.
+  "openai>=1.54",
+  # Team-wide usage reservations are a single server-side EVAL; the in-memory
+  # store in app/providers/base.py implements the same interface, so no test
+  # and no single-process dev box needs a live Redis.
+  "redis>=5.0,<7",
 ]
 
 [project.optional-dependencies]
@@ -55,3 +63,21 @@ markers = [
 [tool.ruff]
 target-version = "py312"
 line-length = 100
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI's dependency markers are *meant* to be evaluated in argument defaults —
+# that is the framework's declaration syntax, not the mutable-default bug B008
+# exists to catch. Without this, B008 fires inconsistently: it flagged
+# `date: datetime.date | None = Query(...)` while allowing the identical pattern
+# under a plain `str | None` annotation, which is a confusing rule to live with.
+extend-immutable-calls = [
+  "fastapi.Body",
+  "fastapi.Cookie",
+  "fastapi.Depends",
+  "fastapi.File",
+  "fastapi.Form",
+  "fastapi.Header",
+  "fastapi.Path",
+  "fastapi.Query",
+  "fastapi.Security",
+]

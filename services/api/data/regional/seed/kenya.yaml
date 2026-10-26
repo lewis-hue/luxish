@@ -1,0 +1,82 @@
+# Kenya — country granularity, and deliberately the weakest profile in the set.
+#
+# It exists so that a place with no city profile still gets *something* with an
+# honest confidence attached, rather than a silent empty answer. It is only
+# consulted when no finer profile matches, and its confidence says plainly that
+# a national generalisation across highland, coastal, arid and lakeside
+# climates is a weak instrument.
+geography: Kenya
+geography_key: kenya
+granularity: country
+country_key: kenya
+aliases:
+  - Republic of Kenya
+profiles:
+  - source_slug: national-generalisation
+    version: 1
+    review_date: 2026-10-10
+    reviewer: regional editorial reviewer, East Africa, 2026-10
+    confidence: 0.3
+    source_provenance: >-
+      Generalised from the two city profiles in this seed set plus published
+      national climate normals. It is an interpolation, not a survey: nobody
+      reviewed assortments nationally, and the confidence is set low to say so.
+      No licensed dataset, publication or individual is cited.
+    notes: >-
+      Kenya spans highland, coastal, arid and lakeside climates that need
+      genuinely different wardrobes. Treat this as a placeholder until a
+      city-level or region-level profile exists for the place in question, and
+      prefer asking the user over leaning on it.
+    occasions:
+      - occasion: casual
+        suggests:
+          - cotton tee
+          - light trousers
+          - light overshirt
+        avoid:
+          - heavy coat
+        note: >-
+          Deliberately generic. A coastal day and a highland evening are not
+          the same problem and this entry cannot tell them apart.
+      - occasion: office
+        suggests:
+          - tailored trousers
+          - long-sleeve shirt
+          - leather shoes
+        avoid:
+          - shorts
+        note: Jacket expectations vary sharply by city; none is assumed here.
+      - occasion: formal_evening
+        suggests:
+          - dark suit
+          - leather dress shoes
+        note: An outer layer may or may not be needed depending on altitude.
+    seasonality:
+      - name: year_round
+        months: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+        guidance: >-
+          Not resolvable nationally. Rainfall and temperature patterns differ
+          by region, so no month boundary is claimed; a single undifferentiated
+          period is the honest representation.
+        layers:
+          - light overshirt
+    styling_examples:
+      - A cotton tee with light trousers and an overshirt that can come off,
+        chosen because it is wrong in the fewest places.
+    variants:
+      - kind: practice
+        name: coverage gap
+        description: >-
+          This profile is a fallback and knows it. Where a city or region
+          profile exists it is used instead; where none does, the correct next
+          step is to ask the user about their own setting rather than to lean
+          harder on a national average.
+        note: Low confidence is the signal, not a defect to be smoothed over.
+      - kind: international
+        name: international and visiting
+        description: >-
+          Visitors arriving from a single climate commonly plan one wardrobe
+          for a trip that crosses several. Layer count, not fabric, is usually
+          the gap.
+        suggests:
+          - light overshirt

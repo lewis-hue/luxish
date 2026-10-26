@@ -1,0 +1,100 @@
+# Singapore — equatorial. No seasons in the temperate sense; the year is shaped
+# by monsoon periods, and the daily problem is humidity plus heavy indoor
+# cooling.
+geography: Singapore
+geography_key: singapore
+granularity: city
+country_key: singapore
+aliases:
+  - Singapore City
+  - Republic of Singapore
+profiles:
+  - source_slug: tropical-tailoring-survey
+    version: 1
+    review_date: 2026-09-22
+    reviewer: tropical-climate tailoring reviewer, Singapore, 2026-09
+    confidence: 0.55
+    source_provenance: >-
+      Compiled from publicly visible retail and tailoring assortments in the
+      central business district and Orchard area, plus the dress requirements
+      that office buildings and restaurants publish themselves. Desk-assembled;
+      no licensed dataset, publication or individual is cited.
+    notes: >-
+      Temperature barely moves across the year, so a seasonality block that
+      names four seasons would be wrong here. The real variable is rainfall
+      intensity and indoor cooling.
+    occasions:
+      - occasion: casual
+        suggests:
+          - linen shirt
+          - cotton shorts
+          - breathable sneakers
+        avoid:
+          - heavy denim
+          - synthetic base layer
+      - occasion: office
+        suggests:
+          - tropical-weight trousers
+          - long-sleeve shirt
+          - thin knit
+          - loafers
+        avoid:
+          - wool suit
+        note: >-
+          The thin knit is for the air conditioning, not the climate; offices
+          run genuinely cold.
+      - occasion: outdoor_daytime
+        suggests:
+          - loose long sleeve
+          - quick-drying trousers
+          - compact umbrella
+        avoid:
+          - closed leather shoes
+      - occasion: formal_evening
+        suggests:
+          - tropical-weight suit
+          - dress shirt
+          - leather loafers
+        avoid:
+          - heavy topcoat
+    seasonality:
+      - name: northeast_monsoon
+        months: [12, 1, 2, 3]
+        guidance: Wettest and slightly cooler; prolonged heavy rain is routine.
+        layers:
+          - quick-drying overshirt
+          - compact umbrella
+      - name: inter_monsoon
+        months: [4, 5, 10, 11]
+        guidance: >-
+          Hottest and least predictable; sudden intense afternoon
+          thunderstorms.
+        layers:
+          - compact umbrella
+      - name: southwest_monsoon
+        months: [6, 7, 8, 9]
+        guidance: Drier and hazier, still fully humid.
+        layers:
+          - thin knit
+    styling_examples:
+      - A linen shirt with cotton shorts and breathable sneakers for a
+        non-working day.
+      - Tropical-weight trousers and a long-sleeve shirt with a thin knit kept
+        at the desk for the air conditioning.
+    variants:
+      - kind: international
+        name: international and visiting
+        description: >-
+          A highly internationally mixed working population; several wardrobe
+          conventions operate side by side in the same building.
+        suggests:
+          - tropical-weight suit
+          - long-sleeve shirt
+      - kind: alternative
+        name: alternative and streetwear leaning
+        description: >-
+          Oversized tees, technical shorts and chunky sneakers, with the heat
+          handled through fabric weight.
+        suggests:
+          - oversized tee
+          - technical shorts

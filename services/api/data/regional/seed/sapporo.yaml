@@ -1,0 +1,113 @@
+# Sapporo — humid continental with very heavy snowfall. Deep cold and snow
+# depth, which is a different problem again from Reykjavik's wind and wet.
+geography: Sapporo
+geography_key: sapporo
+granularity: city
+country_key: japan
+aliases:
+  - Sapporo, Japan
+  - Sapporo, Hokkaido
+profiles:
+  - source_slug: cold-weather-assortment-survey
+    version: 1
+    review_date: 2026-09-25
+    reviewer: cold-weather layering reviewer, Hokkaido, 2026-09
+    confidence: 0.45
+    source_provenance: >-
+      Compiled from publicly visible department-store and outdoor-retail
+      assortments in central Sapporo and from published municipal snowfall
+      normals for month boundaries. Assembled at a distance on a small sample
+      and scored low for that reason; no licensed dataset, publication or
+      individual is cited.
+    notes: >-
+      Snow depth and underfoot conditions drive footwear choice for roughly a
+      third of the year, and an extensive underground walkway network means
+      outer layers come on and off repeatedly in a single trip.
+    occasions:
+      - occasion: casual
+        suggests:
+          - thermal base layer
+          - heavy knit
+          - insulated parka
+          - snow boots
+        avoid:
+          - leather soles
+          - unlined jacket
+        note: Grip matters as much as warmth on packed snow.
+      - occasion: office
+        suggests:
+          - wool trousers
+          - fine knit
+          - wool overcoat
+          - rubber-soled dress shoes
+        avoid:
+          - thin leather soles
+        note: Indoor heating is strong; the coat is removed on arrival.
+      - occasion: outdoor_daytime
+        suggests:
+          - insulated shell
+          - thermal mid-layer
+          - wool socks
+          - waterproof snow boots
+        avoid:
+          - cotton base layer
+      - occasion: formal_evening
+        suggests:
+          - dark wool suit
+          - heavy overcoat
+          - rubber-soled dress shoes
+        avoid:
+          - thin dress shoes
+    seasonality:
+      - name: deep_winter
+        months: [12, 1, 2, 3]
+        guidance: >-
+          Sustained sub-zero temperatures with heavy, frequent snowfall;
+          footwear and traction decide whether an outfit is wearable at all.
+        layers:
+          - thermal base layer
+          - insulated parka
+          - snow boots
+        avoid:
+          - leather soles
+      - name: thaw
+        months: [4, 5]
+        guidance: Melting snow and wet ground; waterproofing matters more than warmth.
+        layers:
+          - waterproof shell
+          - waterproof boots
+      - name: summer
+        months: [6, 7, 8]
+        guidance: >-
+          Genuinely warm and comfortable, far milder than the rest of Japan;
+          the one period with no layering requirement.
+        layers:
+          - light overshirt
+      - name: autumn
+        months: [9, 10, 11]
+        guidance: Rapid cooling with early snow possible by late November.
+        layers:
+          - mid-weight knit
+          - insulated shell
+    styling_examples:
+      - A thermal base layer under a heavy knit and an insulated parka, with
+        snow boots rather than any leather sole.
+      - Wool trousers and a fine knit under a wool overcoat, removed inside the
+        underground walkway network.
+    variants:
+      - kind: alternative
+        name: alternative and street scenes
+        description: >-
+          Distinct local street-style registers that treat the layering problem
+          as a design opportunity rather than a constraint.
+        suggests:
+          - layered outerwear
+          - statement knit
+      - kind: international
+        name: international and visiting
+        description: >-
+          Visitors arriving for snow season are commonly equipped for cold but
+          not for walking on packed snow; footwear is the gap worth closing.
+        suggests:
+          - snow boots
+          - insulated shell

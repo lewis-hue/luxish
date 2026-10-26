@@ -1,7 +1,7 @@
 """external: social link references with attribution
 
 Revision ID: 0007_external
-Revises: 0003_jobs
+Revises: 0006_regional
 Create Date: 2026-10-26
 
 Task 10 (ADR-009). A reference is a canonical URL, a platform, an author handle
@@ -9,9 +9,10 @@ when the URL carries one, and when the user handed it to us. There is no column
 for media bytes, because no code downloads platform-hosted media;
 ``media_downloaded`` is a queryable assertion of that.
 
-Numbering follows the plan, so 0004-0006 (AI, stylist, regional) are reserved
-for Tasks 7-9 and will be inserted as a later chain once those land. This
-revision therefore follows 0003_jobs today.
+Numbering follows the plan, so this revision stays last and each earlier task's
+migration is inserted ahead of it as it lands: the chain currently reads
+0003 → 0004_ai → 0006_regional → 0007_external, with 0005 (stylist) reserved
+for Task 8.
 """
 
 from __future__ import annotations
@@ -24,7 +25,7 @@ from sqlalchemy.dialects import postgresql
 from alembic import op
 
 revision: str = "0007_external"
-down_revision: str | None = "0003_jobs"
+down_revision: str | None = "0006_regional"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

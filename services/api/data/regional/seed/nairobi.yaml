@@ -1,0 +1,204 @@
+# Nairobi — highland tropical. Two reviewed sources are seeded here, and they
+# disagree about office dress. That disagreement is the point: both are stored
+# with their own confidence and the conflict is reported rather than resolved.
+geography: Nairobi
+geography_key: nairobi
+granularity: city
+country_key: kenya
+aliases:
+  - Nairobi, Kenya
+  - Nairobi County
+profiles:
+  - source_slug: retail-assortment-survey
+    version: 1
+    review_date: 2026-10-01
+    reviewer: local stylist review, Nairobi, 2026-10
+    confidence: 0.55
+    source_provenance: >-
+      Compiled from a walkthrough survey of publicly visible retail assortments
+      and window displays in the central business district, Westlands and
+      Karen, cross-checked against the dress codes that venues publish
+      themselves. Desk-assembled; no licensed dataset and no named publication
+      is being cited.
+    notes: >-
+      Nairobi sits at roughly 1,800 m, so evenings are markedly cooler than the
+      equatorial latitude suggests. A layer is the single most useful item.
+    occasions:
+      - occasion: casual
+        suggests:
+          - dark jeans
+          - plain tee
+          - light overshirt
+          - canvas sneakers
+        avoid:
+          - heavy coat
+        note: A light second layer carries almost every day here.
+      - occasion: office
+        suggests:
+          - tailored trousers
+          - long-sleeve shirt
+          - light blazer
+          - leather loafers
+        avoid:
+          - shorts
+          - flip-flops
+        note: A blazer reads as close to default in the corporate band.
+      - occasion: outdoor_daytime
+        suggests:
+          - chinos
+          - breathable long sleeve
+          - wide-brim hat
+          - trail shoes
+        avoid:
+          - open sandals
+        note: Equatorial sun at altitude is stronger than the temperature implies.
+    seasonality:
+      - name: hot_dry
+        months: [1, 2, 3]
+        guidance: Warmest and driest stretch; days are bright, evenings still cool.
+        layers:
+          - light overshirt
+        avoid:
+          - wool coat
+      - name: long_rains
+        months: [4, 5]
+        guidance: Heaviest rain of the year, often in short intense bursts.
+        layers:
+          - packable rain shell
+          - water-resistant shoes
+      - name: cool_dry
+        months: [6, 7, 8]
+        guidance: Coolest, greyest months; mornings and evenings need real warmth.
+        layers:
+          - light knit
+          - unlined jacket
+      - name: warm_dry
+        months: [9, 10]
+        guidance: Warming up again, mostly clear.
+        layers:
+          - light overshirt
+      - name: short_rains
+        months: [11, 12]
+        guidance: Shorter, more scattered rain than April and May.
+        layers:
+          - packable rain shell
+    styling_examples:
+      - Dark jeans, plain tee and a light overshirt tied at the waist until the
+        evening cools.
+      - Tailored trousers with a long-sleeve shirt and an unstructured blazer
+        carried rather than worn until late afternoon.
+      - Chinos, a breathable long sleeve and a wide-brim hat for a daytime
+        walk at altitude.
+    variants:
+      - kind: alternative
+        name: alternative and rock-leaning scene
+        description: >-
+          A visible alternative music scene with its own uniform: band tees,
+          heavy boots, layered black, silver hardware. It is not a minority
+          footnote to the mainstream profile — it is a parallel one.
+        suggests:
+          - band tee
+          - heavy boots
+          - layered black
+        note: Guidance above should never be applied as a dress code.
+      - kind: international
+        name: international and visiting
+        description: >-
+          Visitors and returning residents commonly keep the silhouette they
+          arrived with and adapt only the outer layer. Styling should meet them
+          there rather than restyling them wholesale.
+        suggests:
+          - lightweight chinos
+          - breathable sneakers
+          - packable shell
+      - kind: practice
+        name: secondhand-market led
+        description: >-
+          Mixed-era pieces sourced from the city's large secondhand clothing
+          markets and restyled rather than worn as found. This describes a
+          sourcing and styling idiom only; it carries no claim whatsoever about
+          any wearer.
+        suggests:
+          - mixed-era denim
+          - reworked shirt
+
+  - source_slug: venue-dress-code-review
+    version: 1
+    review_date: 2026-10-05
+    reviewer: hospitality venue reviewer, Nairobi, 2026-10
+    confidence: 0.45
+    source_provenance: >-
+      Assembled only from dress requirements that restaurants, members' clubs
+      and office buildings state publicly themselves, plus the stated policy of
+      a small number of co-working operators. Narrower than the assortment
+      survey and deliberately scored lower; nothing here is attributed to a
+      publication or an individual.
+    notes: >-
+      Disagrees with the assortment survey about office wear. Both readings are
+      defensible for different parts of the same city, which is why neither is
+      discarded.
+    occasions:
+      - occasion: office
+        suggests:
+          - tailored trousers
+          - short-sleeve shirt
+          - knitted polo
+          - leather loafers
+        avoid:
+          - shorts
+        note: >-
+          Several technology and non-profit offices treat a blazer as
+          overdressed; a knitted polo is accepted at the same desks.
+      - occasion: formal_evening
+        suggests:
+          - dark suit
+          - leather dress shoes
+          - light topcoat
+        avoid:
+          - sportswear
+        note: Evenings run cool enough that a topcoat is not decorative.
+      - occasion: wedding_guest
+        suggests:
+          - lightweight suit
+          - patterned shirt
+          - polished loafers
+        note: Daytime ceremonies and cool evening receptions in one outfit.
+    seasonality:
+      - name: hot_dry
+        months: [1, 2, 3]
+        guidance: Warm bright days, cool evenings.
+        layers:
+          - light overshirt
+      - name: long_rains
+        months: [4, 5]
+        guidance: Expect to arrive wet; plan the shoes first.
+        layers:
+          - water-resistant shoes
+      - name: cool_dry
+        months: [6, 7, 8]
+        guidance: Evening events need a real outer layer.
+        layers:
+          - light topcoat
+      - name: warm_dry
+        months: [9, 10]
+        guidance: Mild and mostly dry.
+        layers:
+          - light overshirt
+      - name: short_rains
+        months: [11, 12]
+        guidance: Scattered showers around otherwise warm days.
+        layers:
+          - packable rain shell
+    styling_examples:
+      - A knitted polo with tailored trousers for a Westlands desk, swapped for
+        a shirt only when the day ends at a formal dinner.
+      - A dark suit with a light topcoat for an evening that starts at eight.
+    variants:
+      - kind: mainstream
+        name: stated-policy band
+        description: >-
+          Covers only venues that publish a requirement. Workplaces and venues
+          that state nothing are out of scope for this source, and that gap is
+          the main reason for its lower confidence.
+        suggests:
+          - tailored trousers

@@ -1,0 +1,112 @@
+# Mombasa — hot, humid coastal tropical. A genuinely different problem from
+# Nairobi 480 km inland: heat plus humidity, not heat plus altitude.
+geography: Mombasa
+geography_key: mombasa
+granularity: city
+country_key: kenya
+aliases:
+  - Mombasa, Kenya
+  - Mombasa County
+profiles:
+  - source_slug: coastal-assortment-survey
+    version: 1
+    review_date: 2026-10-02
+    reviewer: coastal retail buyer review, Mombasa, 2026-10
+    confidence: 0.5
+    source_provenance: >-
+      Compiled from publicly visible retail assortments in Mombasa Island and
+      Nyali and from the dress requirements that beachfront hotels state
+      themselves. Desk-assembled on a thinner sample than the Nairobi survey
+      and scored lower accordingly; no licensed dataset, publication or
+      individual is cited.
+    notes: >-
+      Humidity, not temperature, is the governing constraint. Fabric choice
+      matters more here than layer count, and synthetics that work inland do
+      not work on the coast.
+    occasions:
+      - occasion: casual
+        suggests:
+          - shorts
+          - linen shirt
+          - cotton tee
+          - leather sandals
+        avoid:
+          - heavy denim
+          - synthetic base layer
+        note: Breathable natural fabric does more work than any cut here.
+      - occasion: office
+        suggests:
+          - lightweight trousers
+          - short-sleeve shirt
+          - loafers
+        avoid:
+          - wool suit
+          - light blazer
+        note: >-
+          A jacket is widely treated as unnecessary; an inland office rule
+          applied here reads as a mistake rather than as formality.
+      - occasion: outdoor_daytime
+        suggests:
+          - swim shorts
+          - linen overshirt
+          - wide-brim hat
+          - rubber sandals
+        avoid:
+          - closed leather shoes
+      - occasion: formal_evening
+        suggests:
+          - linen suit
+          - open-collar shirt
+          - woven loafers
+        avoid:
+          - heavy topcoat
+        note: Evenings stay warm; an outer layer is rarely worn.
+    seasonality:
+      - name: hot_humid
+        months: [1, 2, 3]
+        guidance: Hottest and most humid stretch of the year.
+        layers:
+          - linen overshirt
+        avoid:
+          - heavy denim
+      - name: long_rains
+        months: [4, 5, 6]
+        guidance: Heaviest rain, still hot; drying time is the real problem.
+        layers:
+          - quick-drying overshirt
+          - rubber sandals
+      - name: cooler_dry
+        months: [7, 8, 9]
+        guidance: The coolest and least humid window, and the easiest to dress for.
+        layers:
+          - linen overshirt
+      - name: short_rains
+        months: [10, 11, 12]
+        guidance: Scattered heavy showers between hot bright days.
+        layers:
+          - quick-drying overshirt
+    styling_examples:
+      - Shorts, a linen shirt worn open over a cotton tee, leather sandals.
+      - Lightweight trousers with a short-sleeve shirt for an office day, no
+        jacket carried.
+      - A linen suit with an open collar for an evening that stays warm.
+    variants:
+      - kind: alternative
+        name: alternative and skate-leaning scene
+        description: >-
+          Oversized tees, board shorts, graphic prints and skate shoes read as
+          their own thing rather than as a looser version of the mainstream
+          profile.
+        suggests:
+          - oversized tee
+          - board shorts
+          - skate shoes
+      - kind: international
+        name: international and visiting
+        description: >-
+          A large share of coastal styling is set by visitors adapting an
+          inland or overseas wardrobe. The adaptation that actually matters is
+          fabric, not silhouette.
+        suggests:
+          - linen shirt
+          - quick-drying trousers

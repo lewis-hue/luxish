@@ -20,7 +20,16 @@ from alembic import command
 
 API_ROOT = Path(__file__).resolve().parents[1]
 
-EXPECTED_ORDER = ["0001_core", "0002_wardrobe", "0003_jobs", "0007_external"]
+# 0005 is intentionally unused: it was reserved for the stylist task, which has not
+# landed. The chain must stay linear with a single head.
+EXPECTED_ORDER = [
+    "0001_core",
+    "0002_wardrobe",
+    "0003_jobs",
+    "0004_ai",
+    "0006_regional",
+    "0007_external",
+]
 
 
 def _config(url: str) -> Config:
@@ -111,7 +120,8 @@ def test_upgrade_head_then_downgrade_base_on_postgres() -> None:
             leftovers = conn.execute(
                 sa.text("SELECT typname FROM pg_type WHERE typname IN "
                         "('identity_provider','consent_kind','garment_availability',"
-                        "'media_asset_status','job_state','social_platform')")
+                        "'media_asset_status','job_state','social_platform',"
+                        "'regional_granularity')")
             ).scalars().all()
         assert leftovers == [], f"enum types left behind: {leftovers}"
     finally:

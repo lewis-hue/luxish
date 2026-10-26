@@ -7,6 +7,7 @@ schema. One module per domain (ADR-003).
 
 from __future__ import annotations
 
+from app.models.ai_run import AIRun
 from app.models.consent import Consent
 from app.models.external_reference import ExternalReference
 from app.models.garment import Collection, CollectionGarment, Garment
@@ -14,11 +15,15 @@ from app.models.identity import ExternalIdentity, IdentityLinkChallenge
 from app.models.job import Job
 from app.models.media_asset import MediaAsset, MediaDerivative
 from app.models.preference import Preference
+from app.models.provider_connection import ProviderConnection
+from app.models.regional_profile import RegionalStyleProfile
 from app.models.session import RevokedToken, Session
 from app.models.tombstone import Tombstone
+from app.models.usage import UsageReservation
 from app.models.user import User
 
 __all__ = [
+    "AIRun",
     "Collection",
     "CollectionGarment",
     "Consent",
@@ -30,8 +35,11 @@ __all__ = [
     "MediaAsset",
     "MediaDerivative",
     "Preference",
+    "ProviderConnection",
+    "RegionalStyleProfile",
     "RevokedToken",
     "Session",
     "Tombstone",
+    "UsageReservation",
     "User",
 ]

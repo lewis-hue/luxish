@@ -49,9 +49,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
 
 def _install_routers(app: FastAPI) -> None:
-    from app.routers import auth, social_import, uploads, wardrobe
+    from app.routers import auth, regional, social_import, uploads, wardrobe
 
-    for module in (auth, uploads, wardrobe, social_import):
+    for module in (auth, uploads, wardrobe, social_import, regional):
         app.include_router(module.router, prefix=API_PREFIX)
     # DELETE /v1/account sits outside the /auth prefix.
     app.include_router(auth.account_router, prefix=API_PREFIX)
