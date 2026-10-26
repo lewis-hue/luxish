@@ -29,11 +29,48 @@ terraform plan  -var-file=dev.tfvars
 terraform apply -var-file=dev.tfvars
 ```
 
-Secrets are created **empty** on purpose, so no credential enters Terraform state:
+Externally issued secrets are created **empty** and populated out of band:
 
 ```bash
 printf '%s' "$MODEL_API_KEY" | gcloud secrets versions add atelier-dev-model-api-key --data-file=-
 ```
+
+**Be precise about what that does and does not buy.** The Meta key, the Google OAuth
+secret and the Keycloak client secret never enter Terraform state. The two *database*
+passwords do, because Terraform generates them — `random_password` results are stored
+in state by definition. So:
+
+- the state bucket is a secret store: private, versioned, encrypted, access-controlled;
+- what the Secret Manager indirection buys is that the credential is no longer in a
+  Cloud Run revision's environment, where anyone with `run.viewer` could read it.
+
+### Required bootstrap: revoke cross-database CONNECT
+
+Separate roles and separate databases are **not** isolation on their own. In
+PostgreSQL every role can `CONNECT` to every database by default, via `PUBLIC`. Until
+the following runs, the Keycloak role can reach the application database — which is
+precisely what the split exists to prevent.
+
+Terraform cannot do this: it would need a `postgres` provider with a route to the
+private IP, which CI does not have. Run it once per environment, from a host inside
+the VPC (Cloud SQL Studio or a bastion):
+
+```sql
+REVOKE CONNECT ON DATABASE atelier  FROM PUBLIC;
+REVOKE CONNECT ON DATABASE keycloak FROM PUBLIC;
+GRANT  CONNECT ON DATABASE atelier  TO atelier;
+GRANT  CONNECT ON DATABASE keycloak TO keycloak;
+```
+
+Verify it took effect by confirming the Keycloak role cannot reach the app database:
+
+```sql
+-- as the keycloak role; must fail with "permission denied for database atelier"
+\c atelier
+```
+
+**Until this is run, treat database separation as convention rather than
+enforcement.** It is tracked in `docs/ROADMAP.md`.
 
 ## Decisions worth knowing before you change something
 
@@ -53,9 +90,18 @@ processing, and so each can be paused independently during an incident. `reconci
 is deliberately capped at 2 instances — financial writes must be serialised, not
 parallelised.
 
-**Distinct service accounts per deployable.** Only the API holds
-`serviceAccountTokenCreator`, because only the API mints signed upload URLs. Workers
-read and write objects but never sign on a user's behalf.
+**Distinct service accounts per deployable**, and the token-creator grant is scoped
+to the API's **own** service account rather than the project. Signing a URL needs
+only self-impersonation; a project-level grant would let the API impersonate every
+service account in the project — including the workers' and Keycloak's — which is a
+privilege-escalation path straight out of the API container.
+
+**Secret access is per service account, per secret.** Cloud Run cannot read a secret
+it has no `secretAccessor` grant for, and a missing grant surfaces as an opaque
+start-up failure, so each grant is explicit in `local.secret_access`.
+
+**One database role per consumer.** The app and Keycloak do not share credentials; see
+the bootstrap step above for the part Terraform cannot enforce.
 
 **Worker concurrency is 1.** Concurrency per instance would let one slow job delay
 unrelated ones and make progress reporting inaccurate.

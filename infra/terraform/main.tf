@@ -169,15 +169,32 @@ resource "google_sql_database" "keycloak" {
   instance = google_sql_database_instance.main.name
 }
 
+# One role per consumer. A separate database is not isolation on its own: in
+# PostgreSQL every role can CONNECT to every database by default, so sharing a role
+# between the app and Keycloak would mean a Keycloak compromise reaching application
+# tables — exactly what the separate databases above exist to prevent.
+#
+# `special = false` because some drivers mishandle percent-escaping in a DSN.
 resource "random_password" "db_app" {
   length  = 32
-  special = false # some drivers mishandle URL-escaping in a DSN
+  special = false
+}
+
+resource "random_password" "db_keycloak" {
+  length  = 32
+  special = false
 }
 
 resource "google_sql_user" "app" {
   name     = var.app_name
   instance = google_sql_database_instance.main.name
   password = random_password.db_app.result
+}
+
+resource "google_sql_user" "keycloak" {
+  name     = "keycloak"
+  instance = google_sql_database_instance.main.name
+  password = random_password.db_keycloak.result
 }
 
 # --- Object storage ----------------------------------------------------------
@@ -264,6 +281,7 @@ resource "google_cloud_tasks_queue" "work" {
 resource "google_secret_manager_secret" "app" {
   for_each = toset([
     "database-url",
+    "keycloak-db-password",
     "model-api-key",
     "keycloak-api-client-secret",
     "google-oauth-client-id",
@@ -306,12 +324,17 @@ resource "google_project_iam_member" "sql_client" {
   member  = "serviceAccount:${each.value}"
 }
 
-# Only the API mints signed upload URLs, so only the API needs the token-creator
-# role — the workers read and write objects but never sign on a user's behalf.
-resource "google_project_iam_member" "api_token_creator" {
-  project = var.project_id
-  role    = "roles/iam.serviceAccountTokenCreator"
-  member  = "serviceAccount:${google_service_account.api.email}"
+# Only the API mints signed upload URLs, so only the API needs to create tokens —
+# the workers read and write objects but never sign on a user's behalf.
+#
+# Scoped to the API's OWN service account, not the project. A project-level grant of
+# serviceAccountTokenCreator would let the API impersonate every service account in
+# the project, including the workers' and Keycloak's, which is a privilege-escalation
+# path out of the API container. Signing a URL only requires self-impersonation.
+resource "google_service_account_iam_member" "api_self_sign" {
+  service_account_id = google_service_account.api.name
+  role               = "roles/iam.serviceAccountTokenCreator"
+  member             = "serviceAccount:${google_service_account.api.email}"
 }
 
 resource "google_storage_bucket_iam_member" "private_media" {
@@ -339,4 +362,47 @@ resource "google_artifact_registry_repository" "main" {
   }
 
   depends_on = [google_project_service.required]
+}
+
+# Terraform generates the database credentials, so it writes them to Secret Manager
+# itself; the externally issued ones (Meta key, Google OAuth secret, Keycloak client
+# secret) stay empty containers populated out of band.
+#
+# Being precise about the consequence: a Terraform-generated password necessarily
+# exists in Terraform state. The state bucket must therefore be private, versioned
+# and encrypted, and treated as a secret store in its own right. What this does buy
+# is that the credential is no longer in a Cloud Run revision's environment, where
+# anyone with run.viewer could read it.
+resource "google_secret_manager_secret_version" "database_url" {
+  secret      = google_secret_manager_secret.app["database-url"].id
+  secret_data = "postgresql+asyncpg://${google_sql_user.app.name}:${random_password.db_app.result}@${google_sql_database_instance.main.private_ip_address}:5432/${google_sql_database.app.name}"
+}
+
+resource "google_secret_manager_secret_version" "keycloak_db_password" {
+  secret      = google_secret_manager_secret.app["keycloak-db-password"].id
+  secret_data = random_password.db_keycloak.result
+}
+
+# Cloud Run cannot read a secret it has no grant for, and a missing grant surfaces
+# as a start-up failure rather than anything diagnostic. Each service account gets
+# accessor only on the secrets it actually mounts.
+locals {
+  secret_access = {
+    "api:database-url"                = { secret = "database-url", sa = google_service_account.api.email }
+    "api:model-api-key"               = { secret = "model-api-key", sa = google_service_account.api.email }
+    "api:keycloak-api-client-secret"  = { secret = "keycloak-api-client-secret", sa = google_service_account.api.email }
+    "worker:database-url"             = { secret = "database-url", sa = google_service_account.worker.email }
+    "worker:model-api-key"            = { secret = "model-api-key", sa = google_service_account.worker.email }
+    "keycloak:keycloak-db-password"   = { secret = "keycloak-db-password", sa = google_service_account.keycloak.email }
+    "keycloak:google-oauth-client-id" = { secret = "google-oauth-client-id", sa = google_service_account.keycloak.email }
+    "keycloak:google-oauth-secret"    = { secret = "google-oauth-client-secret", sa = google_service_account.keycloak.email }
+  }
+}
+
+resource "google_secret_manager_secret_iam_member" "accessor" {
+  for_each = local.secret_access
+
+  secret_id = google_secret_manager_secret.app[each.value.secret].secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${each.value.sa}"
 }

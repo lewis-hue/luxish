@@ -7,9 +7,18 @@
  */
 
 locals {
-  # Shared by every service so a connection string is never duplicated.
-  db_env = {
-    DATABASE_URL = "postgresql+asyncpg://${google_sql_user.app.name}:${random_password.db_app.result}@${google_sql_database_instance.main.private_ip_address}:5432/${google_sql_database.app.name}"
+  # Secrets the API and workers mount. DATABASE_URL is NOT a plaintext env value:
+  # a Cloud Run revision's environment is readable by anyone with run.viewer, and a
+  # database DSN there is a credential sitting in deployment metadata.
+  app_secret_env = {
+    DATABASE_URL              = "database-url"
+    MODEL_API_KEY             = "model-api-key"
+    ATELIER_API_CLIENT_SECRET = "keycloak-api-client-secret"
+  }
+
+  worker_secret_env = {
+    DATABASE_URL  = "database-url"
+    MODEL_API_KEY = "model-api-key"
   }
 
   common_env = {
@@ -61,7 +70,7 @@ resource "google_cloud_run_v2_service" "api" {
       }
 
       dynamic "env" {
-        for_each = merge(local.db_env, local.common_env)
+        for_each = local.common_env
         content {
           name  = env.key
           value = env.value
@@ -69,15 +78,12 @@ resource "google_cloud_run_v2_service" "api" {
       }
 
       dynamic "env" {
-        for_each = {
-          MODEL_API_KEY             = "model-api-key"
-          ATELIER_API_CLIENT_SECRET = "keycloak-api-client-secret"
-        }
+        for_each = local.app_secret_env
         content {
           name = env.key
           value_source {
             secret_key_ref {
-              secret  = google_secret_manager_secret.app["${env.value}"].secret_id
+              secret  = google_secret_manager_secret.app[env.value].secret_id
               version = "latest"
             }
           }
@@ -151,7 +157,7 @@ resource "google_cloud_run_v2_service" "worker" {
       }
 
       dynamic "env" {
-        for_each = merge(local.db_env, local.common_env, { WORKER_QUEUE = each.key })
+        for_each = merge(local.common_env, { WORKER_QUEUE = each.key })
         content {
           name  = env.key
           value = env.value
@@ -159,12 +165,12 @@ resource "google_cloud_run_v2_service" "worker" {
       }
 
       dynamic "env" {
-        for_each = { MODEL_API_KEY = "model-api-key" }
+        for_each = local.worker_secret_env
         content {
           name = env.key
           value_source {
             secret_key_ref {
-              secret  = google_secret_manager_secret.app["${env.value}"].secret_id
+              secret  = google_secret_manager_secret.app[env.value].secret_id
               version = "latest"
             }
           }
@@ -240,12 +246,24 @@ resource "google_cloud_run_v2_service" "keycloak" {
         cpu_idle = false
       }
 
+      # Keycloak's own database role, not the application's. Sharing one would mean
+      # a Keycloak compromise reaching application tables, since in PostgreSQL every
+      # role can CONNECT to every database by default.
+      env {
+        name = "KC_DB_PASSWORD"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.app["keycloak-db-password"].secret_id
+            version = "latest"
+          }
+        }
+      }
+
       dynamic "env" {
         for_each = {
           KC_DB          = "postgres"
           KC_DB_URL      = "jdbc:postgresql://${google_sql_database_instance.main.private_ip_address}:5432/${google_sql_database.keycloak.name}"
-          KC_DB_USERNAME = google_sql_user.app.name
-          KC_DB_PASSWORD = random_password.db_app.result
+          KC_DB_USERNAME = google_sql_user.keycloak.name
 
           KC_HOSTNAME       = var.keycloak_public_url
           KC_HTTP_ENABLED   = "true"
