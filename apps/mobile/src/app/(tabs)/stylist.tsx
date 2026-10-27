@@ -1,3 +1,4 @@
+import { useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { TextInput, View } from 'react-native';
 
@@ -17,6 +18,7 @@ import {
   toneColor,
 } from '@/constants/theme';
 import { useFavouriteGarments } from '@/features/discover/saved';
+import { lookById, ownedCount } from '@/features/discover/looks';
 import { DRESS_CODES } from '@/features/taxonomy';
 import { useWardrobe } from '@/features/wardrobe/store';
 import { useScheme } from '@/hooks/use-theme';
@@ -55,7 +57,17 @@ export default function StylistScreen() {
   const colors = Colors[useScheme()];
   const favourites = useFavouriteGarments();
   const wardrobe = useWardrobe(favourites.values);
-  const [request, setRequest] = useState('');
+
+  // Arriving from a look carries it as the subject of the question. Read
+  // straight into the initial state rather than synced from an effect: an
+  // effect would render the empty field first and then replace it, which
+  // flashes.
+  const { look: lookId } = useLocalSearchParams<{ look?: string }>();
+  const subject = lookId ? lookById(lookId) : undefined;
+
+  const [request, setRequest] = useState(
+    subject ? `Something like ${subject.title}` : '',
+  );
   const [dressCode, setDressCode] = useState<string | null>(null);
   const [run, setRun] = useState<RunState>({ status: 'idle' });
 
@@ -120,6 +132,30 @@ export default function StylistScreen() {
           {favourites.count > 0 ? `, ${favourites.count} loved` : ''}
         </ThemedText>
       </View>
+
+      {subject ? (
+        <View
+          style={{
+            gap: Spacing.one,
+            padding: Spacing.three,
+            borderRadius: Radius.md,
+            borderCurve: 'continuous',
+            borderWidth: 1,
+            borderColor: colors.borderStrong,
+            marginBottom: Spacing.four,
+          }}>
+          <Label>Asking about</Label>
+          <ThemedText type="small" style={{ fontSize: FontSize.subhead }}>
+            {subject.title}
+          </ThemedText>
+          <ThemedText
+            type="small"
+            themeColor="textSecondary"
+            style={{ fontSize: FontSize.caption }}>
+            {subject.pieces.length} pieces, {ownedCount(subject)} in your wardrobe
+          </ThemedText>
+        </View>
+      ) : null}
 
       <View style={{ gap: Spacing.three }}>
         <Label>What is the occasion</Label>

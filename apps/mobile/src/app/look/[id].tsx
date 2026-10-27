@@ -215,7 +215,14 @@ export default function LookDetailScreen() {
               label="Ask the stylist"
               onPress={() => {
                 void recordInteraction(look.id, 'ask_stylist', look.aesthetics);
-                router.push('/(tabs)/stylist');
+                // Carry the look through. Navigating bare makes the user
+                // describe the outfit they were looking at a second ago,
+                // which is the kind of small forgetfulness that makes an app
+                // feel like a set of unrelated screens.
+                router.push({
+                  pathname: '/(tabs)/stylist',
+                  params: { look: look.id },
+                });
               }}
             />
           </View>

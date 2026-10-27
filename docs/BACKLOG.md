@@ -39,10 +39,13 @@ connection.
       now drive the stylist's thinking state, held back 400ms so a fast result
       never flashes a placeholder. `SkeletonGrid` stays unused until a grid
       loads over the network (A5).
-- [ ] **A4. No sign-in screen.** The PKCE flow, token storage and refresh are
-      implemented. There is no UI to trigger them, so the app has never signed
-      anybody in. Needs a sign-in screen with "Continue with Google", and a
-      signed-out state on Profile.
+- [x] **A4. No sign-in screen.** `app/sign-in.tsx` leads with Continue with
+      Google and keeps an email route secondary, because offering exactly one
+      identity provider locks out anyone without that account. No guest mode:
+      the app is a personal wardrobe, so signed-out would be an empty shell.
+      Profile now opens its Account section with the signed-in state and a
+      Sign in / Sign out row. Cancelling the browser is treated as a decision,
+      not an error.
 - [ ] **A5. Wardrobe is local-only.** Photos save to on-device storage and
       never reach the API, so auto-categorisation and background removal are
       unreachable from the app despite both being implemented and tested
@@ -50,10 +53,11 @@ connection.
 
 ## B. Requested features not yet present
 
-- [ ] **B1. "Ask the stylist about this look" loses the look.** The button
-      navigates to the Stylist tab and drops the context, so the user has to
-      describe the outfit they were just looking at. It should carry the look
-      in and show it as the subject of the question.
+- [x] **B1. "Ask the stylist about this look" loses the look.** The look id
+      now travels as a route param. The Stylist opens with an "Asking about"
+      card naming the look and how many of its pieces are already owned, and
+      the request field is pre-filled. Read into initial state rather than
+      synced from an effect, which would render empty and then flash.
 - [ ] **B2. Favourites do not reach the model.** Hearting a garment is stored
       locally. The request was that favourites inform styling; nothing sends
       them, and the stylist has no idea what the user loves.
@@ -119,6 +123,8 @@ Moved here as items complete, newest first.
 
 ### 2026-10-28
 
+- **A4** sign-in screen, Google first, with the signed-in state on Profile.
+- **B1** the stylist now knows which look you asked about.
 - **A2** semantic colours now carry meaning on four screens, never by colour alone.
 - **A3** skeletons render for the first time, in the stylist's thinking state.
 - **C1** animations extended to the look detail, Profile and Stylist.

@@ -1,8 +1,10 @@
 import * as WebBrowser from 'expo-web-browser';
+import { router } from 'expo-router';
 import { View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { MotionPressable } from '@/components/ui/motion';
+import { useAuth } from '@/features/auth/session';
 import { Screen } from '@/components/ui/screen';
 import { useApiHealth } from '@/api/queries/health';
 import { BRAND } from '@/branding';
@@ -14,6 +16,7 @@ import {
   Radius,
   Spacing,
   TapTarget,
+  toneColor,
 } from '@/constants/theme';
 import {
   CHATGPT_STATE_COPY,
@@ -31,6 +34,7 @@ import { useScheme } from '@/hooks/use-theme';
  */
 export default function ProfileScreen() {
   const colors = Colors[useScheme()];
+  const auth = useAuth();
 
   // Ships `unavailable`: commercial Sign in with ChatGPT is waitlist-gated, so no
   // other state is reachable yet (ADR-008).
@@ -99,6 +103,40 @@ export default function ProfileScreen() {
       </Section>
 
       <Section title="Account">
+        {/* The state is the first row, because "am I signed in" is the
+            question this section exists to answer and burying it under
+            settings makes people hunt for it. */}
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: Spacing.two,
+            minHeight: TapTarget,
+            paddingHorizontal: Spacing.three,
+            borderBottomWidth: 1,
+            borderBottomColor: colors.border,
+          }}>
+          <View
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: Radius.full,
+              backgroundColor: toneColor(
+                colors,
+                auth.status === 'signedIn' ? 'success' : 'muted',
+              ),
+            }}
+          />
+          <ThemedText type="small" style={{ flex: 1 }}>
+            {auth.status === 'signedIn' ? 'Signed in' : 'Not signed in'}
+          </ThemedText>
+        </View>
+
+        {auth.status === 'signedIn' ? (
+          <LinkRow label="Sign out" onPress={() => void auth.signOut()} />
+        ) : (
+          <LinkRow label="Sign in" onPress={() => router.push('/sign-in')} />
+        )}
         <LinkRow label="Delete account" onPress={() => open(BRAND.urls.accountDeletion)} />
         <LinkRow label="Export my data" phase="Phase D" />
         <LinkRow label="Creator tools" phase="Phase D" />
