@@ -3,7 +3,9 @@ import { Pressable, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { Screen } from '@/components/ui/screen';
+import { useApiHealth } from '@/api/queries/health';
 import { BRAND } from '@/branding';
+import { API_BASE_URL } from '@/api/client';
 import { Colors, Fonts, Radius, Spacing } from '@/constants/theme';
 import {
   CHATGPT_STATE_COPY,
@@ -26,6 +28,10 @@ export default function ProfileScreen() {
   // other state is reachable yet (ADR-008).
   const chatGptState: ChatGptConnectionState = 'unavailable';
 
+  // Distinguishes "backend unreachable" from "not signed in" — the two look
+  // identical in a feed that fails to load, and that is most of local debugging.
+  const health = useApiHealth();
+
   const open = (url: string) => WebBrowser.openBrowserAsync(url);
 
   return (
@@ -38,6 +44,20 @@ export default function ProfileScreen() {
           Not signed in. Browsing works without an account.
         </ThemedText>
       </View>
+
+      <Section title="Connection">
+        <Row
+          label="Backend"
+          value={
+            health.isPending ? 'Checking…' : health.data?.reachable ? 'Connected' : 'Unreachable'
+          }
+          detail={
+            health.data?.reachable
+              ? `${health.data.baseUrl} — environment "${health.data.environment}"`
+              : (health.data?.problem ?? `Trying ${API_BASE_URL}`)
+          }
+        />
+      </Section>
 
       <Section title="AI">
         <Row

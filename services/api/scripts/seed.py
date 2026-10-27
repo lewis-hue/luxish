@@ -19,13 +19,23 @@ from __future__ import annotations
 import argparse
 import asyncio
 import sys
+from pathlib import Path
 
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+# The service root, so this runs as a plain script from any directory. pytest gets
+# this from `pythonpath` in pyproject.toml; a direct `python scripts/seed.py` does
+# not.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from sqlalchemy.ext.asyncio import (  # noqa: E402
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
 # Importing the model registry is what puts every table on Base.metadata.
-import app.models  # noqa: F401
-from app.config import get_settings
-from app.domain import regional
+import app.models  # noqa: E402, F401
+from app.config import get_settings  # noqa: E402
+from app.domain import regional  # noqa: E402
 
 SEED_SETS = ("regional",)
 

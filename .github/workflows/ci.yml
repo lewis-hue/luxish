@@ -41,6 +41,14 @@ jobs:
       - name: Unit tests
         run: npm run test -- --ci
 
+      - name: API contract has not drifted
+        # schema.d.ts is generated from the committed openapi.json. If a backend
+        # change lands without regenerating the client, the app would compile
+        # against a contract the server no longer serves — so a diff fails here.
+        run: |
+          npm run generate -w @fashion/contracts
+          git diff --exit-code packages/contracts/src/schema.d.ts
+
       - name: Expo config and dependency health
         # Catches an unresolvable app.config.ts and SDK-incompatible package
         # versions, which neither tsc nor eslint sees.

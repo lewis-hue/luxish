@@ -1,0 +1,1727 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Atelier API",
+    "description": "Wardrobe, stylist, shopping and community backend.",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/healthz": {
+      "get": {
+        "tags": [
+          "ops"
+        ],
+        "summary": "Healthz",
+        "description": "Liveness. Deliberately touches no dependency.",
+        "operationId": "healthz_healthz_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Healthz Healthz Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/session": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Create Session",
+        "description": "Exchange a verified Keycloak token for local session state.\n\nIdempotent: presenting a token for an already-provisioned ``sub`` returns\nthe same user. The response carries no credential \u2014 the client already holds\nthe only one that exists.",
+        "operationId": "create_session_v1_auth_session_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Delete Session",
+        "operationId": "delete_session_v1_auth_session_delete",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        }
+      }
+    },
+    "/v1/auth/me": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Me",
+        "operationId": "me_v1_auth_me_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/identity/link": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Confirm Identity Link",
+        "operationId": "confirm_identity_link_v1_auth_identity_link_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IdentityLinkConfirmRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdentityLinkConfirmResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/backchannel-logout": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Backchannel Logout",
+        "description": "OIDC back-channel logout.\n\nUnauthenticated by design \u2014 the logout token *is* the authentication, and it\nis verified exactly like an access token plus the required logout event.",
+        "operationId": "backchannel_logout_v1_auth_backchannel_logout_post",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        }
+      }
+    },
+    "/v1/uploads/authorize": {
+      "post": {
+        "tags": [
+          "uploads"
+        ],
+        "summary": "Authorize",
+        "description": "Authorise one upload: short-lived, capped, and owner-bound.",
+        "operationId": "authorize_v1_uploads_authorize_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UploadAuthorizeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadAuthorizeResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/wardrobe/garments": {
+      "get": {
+        "tags": [
+          "wardrobe"
+        ],
+        "summary": "List Garments",
+        "operationId": "list_garments_v1_wardrobe_garments_get",
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 64
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Category"
+            }
+          },
+          {
+            "name": "availability",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 32
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Availability"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GarmentPage"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "wardrobe"
+        ],
+        "summary": "Create Garment",
+        "operationId": "create_garment_v1_wardrobe_garments_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GarmentCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GarmentOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/wardrobe/garments/{garment_id}": {
+      "get": {
+        "tags": [
+          "wardrobe"
+        ],
+        "summary": "Read Garment",
+        "operationId": "read_garment_v1_wardrobe_garments__garment_id__get",
+        "parameters": [
+          {
+            "name": "garment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Garment Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GarmentOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "wardrobe"
+        ],
+        "summary": "Correct Garment",
+        "description": "Record a user correction. Confirmed attributes always win on read.",
+        "operationId": "correct_garment_v1_wardrobe_garments__garment_id__patch",
+        "parameters": [
+          {
+            "name": "garment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Garment Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GarmentPatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GarmentOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "wardrobe"
+        ],
+        "summary": "Delete Garment",
+        "operationId": "delete_garment_v1_wardrobe_garments__garment_id__delete",
+        "parameters": [
+          {
+            "name": "garment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Garment Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/social/references": {
+      "post": {
+        "tags": [
+          "social"
+        ],
+        "summary": "Create Reference",
+        "description": "Store a pasted link with attribution, and report what we can do with it.",
+        "operationId": "create_reference_v1_social_references_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReferenceCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReferenceResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/social/references/{reference_id}": {
+      "get": {
+        "tags": [
+          "social"
+        ],
+        "summary": "Read Reference",
+        "operationId": "read_reference_v1_social_references__reference_id__get",
+        "parameters": [
+          {
+            "name": "reference_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Reference Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReferenceResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/regional/context": {
+      "get": {
+        "tags": [
+          "regional"
+        ],
+        "summary": "Read Regional Context",
+        "operationId": "read_regional_context_v1_regional_context_get",
+        "parameters": [
+          {
+            "name": "place",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 160
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A place name the user typed, e.g. 'Nairobi'. Omit it when the user has declined location \u2014 the response is still usable.",
+              "title": "Place"
+            },
+            "description": "A place name the user typed, e.g. 'Nairobi'. Omit it when the user has declined location \u2014 the response is still usable."
+          },
+          {
+            "name": "date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Date being styled for. Defaults to today; a travel date changes the resolved season.",
+              "title": "Date"
+            },
+            "description": "Date being styled for. Defaults to today; a travel date changes the resolved season."
+          },
+          {
+            "name": "occasion",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 64
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Occasion"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegionalContextResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/account": {
+      "delete": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Delete Account",
+        "description": "Delete the account. Idempotent, and revokes every session.",
+        "operationId": "delete_account_v1_account_delete",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "GarmentCreate": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "media_asset_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Media Asset Id"
+          },
+          "confirmed_attributes": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Confirmed Attributes"
+          },
+          "availability": {
+            "type": "string",
+            "enum": [
+              "available",
+              "laundry",
+              "unavailable",
+              "archived"
+            ],
+            "title": "Availability",
+            "default": "available"
+          }
+        },
+        "type": "object",
+        "title": "GarmentCreate"
+      },
+      "GarmentOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "availability": {
+            "type": "string",
+            "enum": [
+              "available",
+              "laundry",
+              "unavailable",
+              "archived"
+            ],
+            "title": "Availability"
+          },
+          "media_asset_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Media Asset Id"
+          },
+          "confirmed_attributes": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Confirmed Attributes"
+          },
+          "inferred_attributes": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Inferred Attributes"
+          },
+          "inference_confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inference Confidence"
+          },
+          "inference_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inference Version"
+          },
+          "effective_attributes": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Effective Attributes"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "category",
+          "availability",
+          "media_asset_id",
+          "confirmed_attributes",
+          "inferred_attributes",
+          "inference_confidence",
+          "inference_version",
+          "effective_attributes",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "GarmentOut"
+      },
+      "GarmentPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/GarmentOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "GarmentPage"
+      },
+      "GarmentPatch": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "availability": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "available",
+                  "laundry",
+                  "unavailable",
+                  "archived"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Availability"
+          },
+          "confirmed_attributes": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmed Attributes"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "GarmentPatch",
+        "description": "A correction. Attributes merge per key; an explicit null clears a key."
+      },
+      "GuidanceConflictView": {
+        "properties": {
+          "occasion": {
+            "type": "string",
+            "title": "Occasion"
+          },
+          "left_source": {
+            "type": "string",
+            "title": "Left Source"
+          },
+          "right_source": {
+            "type": "string",
+            "title": "Right Source"
+          },
+          "left_suggests": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Left Suggests"
+          },
+          "right_suggests": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Right Suggests"
+          },
+          "note": {
+            "type": "string",
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "occasion",
+          "left_source",
+          "right_source",
+          "left_suggests",
+          "right_suggests",
+          "note"
+        ],
+        "title": "GuidanceConflictView",
+        "description": "Two reviewed sources disagreeing. Reported, never silently resolved."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "IdentityLinkConfirmRequest": {
+        "properties": {
+          "link_challenge_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Link Challenge Id",
+            "description": "From the 409 identity_link_required response."
+          }
+        },
+        "type": "object",
+        "required": [
+          "link_challenge_id"
+        ],
+        "title": "IdentityLinkConfirmRequest"
+      },
+      "IdentityLinkConfirmResponse": {
+        "properties": {
+          "identity_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Identity Id"
+          },
+          "provider": {
+            "type": "string",
+            "title": "Provider"
+          },
+          "user_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "User Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "identity_id",
+          "provider",
+          "user_id"
+        ],
+        "title": "IdentityLinkConfirmResponse"
+      },
+      "MeResponse": {
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "User Id"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "email_verified": {
+            "type": "boolean",
+            "title": "Email Verified",
+            "default": false
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_id"
+        ],
+        "title": "MeResponse"
+      },
+      "OccasionGuidanceView": {
+        "properties": {
+          "occasion": {
+            "type": "string",
+            "title": "Occasion"
+          },
+          "suggests": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Suggests"
+          },
+          "avoid": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Avoid"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "occasion",
+          "suggests"
+        ],
+        "title": "OccasionGuidanceView"
+      },
+      "PlatformCapability": {
+        "properties": {
+          "can_embed": {
+            "type": "boolean",
+            "title": "Can Embed"
+          },
+          "can_read_metadata": {
+            "type": "boolean",
+            "title": "Can Read Metadata"
+          },
+          "can_access_media": {
+            "type": "boolean",
+            "title": "Can Access Media"
+          },
+          "can_analyse": {
+            "type": "boolean",
+            "title": "Can Analyse"
+          },
+          "can_store": {
+            "type": "boolean",
+            "title": "Can Store"
+          },
+          "authorised_now": {
+            "type": "boolean",
+            "title": "Authorised Now"
+          }
+        },
+        "type": "object",
+        "required": [
+          "can_embed",
+          "can_read_metadata",
+          "can_access_media",
+          "can_analyse",
+          "can_store",
+          "authorised_now"
+        ],
+        "title": "PlatformCapability",
+        "description": "What we can honestly do with a link to this platform.\n\nSix independent booleans \u2014 not a tier, not a score. The UI states the\nlimitation and offers the working alternative (ADR-009)."
+      },
+      "ProvenanceView": {
+        "properties": {
+          "profile_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Profile Id"
+          },
+          "source_slug": {
+            "type": "string",
+            "title": "Source Slug"
+          },
+          "source_provenance": {
+            "type": "string",
+            "title": "Source Provenance"
+          },
+          "reviewer": {
+            "type": "string",
+            "title": "Reviewer"
+          },
+          "confidence": {
+            "type": "number",
+            "title": "Confidence"
+          },
+          "review_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Review Date"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "supersedes": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supersedes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "profile_id",
+          "source_slug",
+          "source_provenance",
+          "reviewer",
+          "confidence",
+          "review_date",
+          "version"
+        ],
+        "title": "ProvenanceView"
+      },
+      "ReferenceCreate": {
+        "properties": {
+          "url": {
+            "type": "string",
+            "maxLength": 2048,
+            "title": "Url"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "url"
+        ],
+        "title": "ReferenceCreate"
+      },
+      "ReferenceResponse": {
+        "properties": {
+          "reference_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Reference Id"
+          },
+          "platform": {
+            "type": "string",
+            "title": "Platform"
+          },
+          "canonical_url": {
+            "type": "string",
+            "title": "Canonical Url"
+          },
+          "author_handle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Author Handle"
+          },
+          "observed_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Observed At"
+          },
+          "capability": {
+            "$ref": "#/components/schemas/PlatformCapability"
+          },
+          "alternative": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alternative"
+          },
+          "media_downloaded": {
+            "type": "boolean",
+            "title": "Media Downloaded",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "reference_id",
+          "platform",
+          "canonical_url",
+          "observed_at",
+          "capability"
+        ],
+        "title": "ReferenceResponse"
+      },
+      "RegionalContextResponse": {
+        "properties": {
+          "place": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Place"
+          },
+          "place_source": {
+            "type": "string",
+            "enum": [
+              "user_manual",
+              "declined",
+              "unspecified"
+            ],
+            "title": "Place Source"
+          },
+          "resolved_geography": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolved Geography"
+          },
+          "granularity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Granularity"
+          },
+          "coverage": {
+            "type": "string",
+            "enum": [
+              "city",
+              "region",
+              "country",
+              "none"
+            ],
+            "title": "Coverage"
+          },
+          "as_of": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          },
+          "season": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Season"
+          },
+          "occasion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occasion"
+          },
+          "confidence": {
+            "type": "number",
+            "title": "Confidence"
+          },
+          "precedence": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Precedence"
+          },
+          "profiles": {
+            "items": {
+              "$ref": "#/components/schemas/RegionalProfileView"
+            },
+            "type": "array",
+            "title": "Profiles"
+          },
+          "conflicts": {
+            "items": {
+              "$ref": "#/components/schemas/GuidanceConflictView"
+            },
+            "type": "array",
+            "title": "Conflicts"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Notes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "place",
+          "place_source",
+          "resolved_geography",
+          "granularity",
+          "coverage",
+          "as_of",
+          "season",
+          "occasion",
+          "confidence",
+          "precedence",
+          "profiles",
+          "conflicts"
+        ],
+        "title": "RegionalContextResponse",
+        "description": "``GET /v1/regional/context?place=&date=&occasion=``.\n\nGeographic style context only. No weather, no inventory \u2014 see the module\ndocstring."
+      },
+      "RegionalProfileView": {
+        "properties": {
+          "geography": {
+            "type": "string",
+            "title": "Geography"
+          },
+          "granularity": {
+            "type": "string",
+            "title": "Granularity"
+          },
+          "season": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Season"
+          },
+          "occasions": {
+            "items": {
+              "$ref": "#/components/schemas/OccasionGuidanceView"
+            },
+            "type": "array",
+            "title": "Occasions"
+          },
+          "seasonality": {
+            "items": {
+              "$ref": "#/components/schemas/SeasonGuidanceView"
+            },
+            "type": "array",
+            "title": "Seasonality"
+          },
+          "styling_examples": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Styling Examples"
+          },
+          "variants": {
+            "items": {
+              "$ref": "#/components/schemas/StyleVariantView"
+            },
+            "type": "array",
+            "title": "Variants"
+          },
+          "provenance": {
+            "$ref": "#/components/schemas/ProvenanceView"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "geography",
+          "granularity",
+          "occasions",
+          "seasonality",
+          "styling_examples",
+          "variants",
+          "provenance"
+        ],
+        "title": "RegionalProfileView"
+      },
+      "SeasonGuidanceView": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "months": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Months"
+          },
+          "guidance": {
+            "type": "string",
+            "title": "Guidance"
+          },
+          "layers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Layers"
+          },
+          "avoid": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Avoid"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "months",
+          "guidance"
+        ],
+        "title": "SeasonGuidanceView"
+      },
+      "SessionResponse": {
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "User Id"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "email_verified": {
+            "type": "boolean",
+            "title": "Email Verified",
+            "default": false
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Id"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_id",
+          "expires_at"
+        ],
+        "title": "SessionResponse"
+      },
+      "StyleVariantView": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "suggests": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Suggests"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "name",
+          "description"
+        ],
+        "title": "StyleVariantView"
+      },
+      "UploadAuthorizeRequest": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "garment_photo",
+              "outfit_photo",
+              "inspiration",
+              "avatar"
+            ],
+            "title": "Kind",
+            "default": "garment_photo"
+          },
+          "content_type": {
+            "type": "string",
+            "maxLength": 127,
+            "title": "Content Type"
+          },
+          "content_length": {
+            "type": "integer",
+            "maximum": 10737418240.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Content Length"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "content_type",
+          "content_length"
+        ],
+        "title": "UploadAuthorizeRequest"
+      },
+      "UploadAuthorizeResponse": {
+        "properties": {
+          "asset_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Asset Id"
+          },
+          "upload_url": {
+            "type": "string",
+            "title": "Upload Url"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          },
+          "max_bytes": {
+            "type": "integer",
+            "title": "Max Bytes"
+          },
+          "storage_mode": {
+            "type": "string",
+            "title": "Storage Mode"
+          },
+          "required_headers": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Required Headers"
+          }
+        },
+        "type": "object",
+        "required": [
+          "asset_id",
+          "upload_url",
+          "expires_at",
+          "max_bytes",
+          "storage_mode"
+        ],
+        "title": "UploadAuthorizeResponse"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

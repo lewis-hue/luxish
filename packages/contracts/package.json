@@ -1,0 +1,19 @@
+{
+  "name": "@fashion/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "description": "OpenAPI document and the typed client generated from it. Never hand-edit src/schema.d.ts.",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "generate": "openapi-typescript openapi.json -o src/schema.d.ts",
+    "fetch-spec": "node scripts/fetch-spec.mjs",
+    "check": "npm run generate && git diff --exit-code src/schema.d.ts"
+  },
+  "dependencies": {
+    "openapi-fetch": "^0.13.0"
+  },
+  "devDependencies": {
+    "openapi-typescript": "^7.4.0"
+  }
+}

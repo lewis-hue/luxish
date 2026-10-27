@@ -23,6 +23,10 @@ function sourceFiles(dir: string): string[] {
 
 describe('branding', () => {
   it('keeps the working name out of src entirely', () => {
+    // Note for anyone tempted to satisfy this by deriving a value from BRAND:
+    // storage keys and keychain services must NOT be brand-derived. They are
+    // addresses, not labels, and a rebrand that changed them would silently sign
+    // out every existing install. They use the stable `fashion.` namespace instead.
     const offenders = sourceFiles(SRC)
       .filter((file) => /\bAtelier\b/i.test(readFileSync(file, 'utf8')))
       .map((file) => relative(SRC, file).replace(/\\/g, '/'));
