@@ -2,13 +2,15 @@ import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
+import { useEffect } from 'react';
 import { Platform, Pressable, ScrollView, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Colors, Display, Motion, Radius, Spacing } from '@/constants/theme';
-import { lookById, ownedCount } from '@/features/discover/looks';
+import { recordInteraction } from '@/features/discover/interactions';
+import { lookById, ownedCount, type Look } from '@/features/discover/looks';
 import { useSavedLooks } from '@/features/discover/saved';
 import { webSearchUrlForDescription } from '@/features/discover/visual-search';
 import {
@@ -42,6 +44,11 @@ export default function LookDetailScreen() {
   const saved = useSavedLooks();
 
   const look = id ? lookById(id) : undefined;
+
+  // Fire-and-forget: a tap must never wait on analytics.
+  useEffect(() => {
+    if (look) void recordInteraction(look.id, 'view', look.aesthetics);
+  }, [look]);
 
   if (!look) {
     return (
@@ -167,7 +174,7 @@ export default function LookDetailScreen() {
                   {SLOT_LABELS[group.slot]}
                 </ThemedText>
                 {group.pieces.map((piece) => (
-                  <PieceRow key={piece.id} piece={piece} />
+                  <PieceRow key={piece.id} piece={piece} look={look} />
                 ))}
               </View>
             ))}
@@ -181,11 +188,15 @@ export default function LookDetailScreen() {
               onPress={() => {
                 if (Platform.OS !== 'web') void Haptics.selectionAsync();
                 void saved.toggle(look.id);
+                if (!isSaved) void recordInteraction(look.id, 'save', look.aesthetics);
               }}
             />
             <ActionButton
               label="Ask the stylist about this look"
-              onPress={() => router.push('/(tabs)/stylist')}
+              onPress={() => {
+                void recordInteraction(look.id, 'ask_stylist', look.aesthetics);
+                router.push('/(tabs)/stylist');
+              }}
             />
           </View>
 
@@ -202,11 +213,13 @@ export default function LookDetailScreen() {
   );
 }
 
-function PieceRow({ piece }: { piece: OutfitPiece }) {
+function PieceRow({ piece, look }: { piece: OutfitPiece; look: Look }) {
   const colors = Colors[useScheme()];
 
   const search = () => {
     if (Platform.OS !== 'web') void Haptics.selectionAsync();
+    // Searching for a piece is a much stronger signal than opening the look.
+    void recordInteraction(look.id, 'search_piece', look.aesthetics);
     void Linking.openURL(
       webSearchUrlForDescription({
         name: piece.name,
