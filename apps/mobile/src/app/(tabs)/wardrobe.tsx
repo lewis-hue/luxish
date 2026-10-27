@@ -1,7 +1,15 @@
 import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
 import { useMemo, useState } from 'react';
-import { FlatList, Platform, Pressable, View, useWindowDimensions } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Platform,
+  Pressable,
+  View,
+  useWindowDimensions,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
@@ -14,83 +22,145 @@ import {
   Radius,
   Spacing,
 } from '@/constants/theme';
-import {
-  AVAILABILITY_LABEL,
-  SAMPLE_WARDROBE,
-  WARDROBE_FILTERS,
-  filterWardrobe,
-  type SampleGarment,
-} from '@/features/wardrobe/sample';
+import { useFavouriteGarments } from '@/features/discover/saved';
+import { useGarmentCapture } from '@/features/wardrobe/capture';
+import { AVAILABILITY_LABEL } from '@/features/wardrobe/sample';
+import { useWardrobe, type WardrobeEntry } from '@/features/wardrobe/store';
+import { SLOTS, SLOT_LABELS, type Slot } from '@/features/taxonomy';
 import { useScheme } from '@/hooks/use-theme';
 
-type FilterId = (typeof WARDROBE_FILTERS)[number]['id'];
+import { GarmentSheet } from '@/features/wardrobe/garment-sheet';
+
+type FilterId = 'all' | Slot | 'favourites';
 
 /**
- * Wardrobe — the user's own items, filters, collections and capture (§3, §5).
+ * Wardrobe — the user's own items, filters, capture (§3, §5).
  *
- * Shows a sample wardrobe rather than an empty grid, which §3 asks for explicitly:
- * someone should be able to see styling work before photographing forty garments.
- * The banner says it is a sample and never stops saying it — a demonstration that
- * quietly passes for the user's own data is worse than none, because the moment they
- * add a real garment they cannot tell which is which.
+ * Filters are the five taxonomy slots rather than ad-hoc groupings, so what the user
+ * sees matches what the stylist reasons about. Favourites get their own filter
+ * because "show me the clothes I love" is a real and frequent request.
+ *
+ * The sample wardrobe stays visible alongside real garments and stays labelled, so
+ * a demonstration item can never be mistaken for something the user owns.
  */
 export default function WardrobeScreen() {
   const colors = Colors[useScheme()];
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
+  const favourites = useFavouriteGarments();
+  const wardrobe = useWardrobe(favourites.values);
+  const capture = useGarmentCapture();
   const [filter, setFilter] = useState<FilterId>('all');
+  const [selected, setSelected] = useState<WardrobeEntry | null>(null);
 
   const columns = width >= 700 ? 4 : 3;
   const gutter = Spacing.two;
 
-  const visible = useMemo(() => filterWardrobe(SAMPLE_WARDROBE, filter), [filter]);
-  const availableCount = SAMPLE_WARDROBE.filter(
-    (garment) => garment.availability === 'available',
-  ).length;
+  const visible = useMemo(() => {
+    if (filter === 'all') return wardrobe.entries;
+    if (filter === 'favourites') return wardrobe.entries.filter((entry) => entry.isFavourite);
+    return wardrobe.entries.filter((entry) => entry.slot === filter);
+  }, [filter, wardrobe.entries]);
+
+  const ready = wardrobe.entries.filter((entry) => entry.availability === 'available').length;
+
+  const add = async (source: 'camera' | 'library') => {
+    const result =
+      source === 'camera' ? await capture.photograph() : await capture.pickFromLibrary();
+
+    if (result === 'denied') {
+      Alert.alert(
+        source === 'camera' ? 'Camera access needed' : 'Photo access needed',
+        'Grant access in Settings to add your clothes. Everything else keeps working.',
+      );
+      return;
+    }
+    if (result === 'cancelled' || typeof result === 'string') return;
+
+    await wardrobe.addMany(result);
+    if (Platform.OS !== 'web') void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  };
 
   return (
-    <FlatList
-      style={{ backgroundColor: colors.background }}
-      data={visible}
-      keyExtractor={(item) => item.id}
-      numColumns={columns}
-      key={columns}
-      columnWrapperStyle={{ gap: gutter }}
-      contentContainerStyle={{
-        paddingTop: insets.top + Spacing.three,
-        paddingHorizontal: Spacing.three,
-        paddingBottom: BottomTabInset + insets.bottom + Spacing.five,
-        gap: gutter,
-      }}
-      showsVerticalScrollIndicator={false}
-      ListHeaderComponent={
-        <Header
-          filter={filter}
-          onFilter={setFilter}
-          total={SAMPLE_WARDROBE.length}
-          available={availableCount}
-          gutter={gutter}
-        />
-      }
-      renderItem={({ item }) => <GarmentCell garment={item} />}
-    />
+    <>
+      <FlatList
+        style={{ backgroundColor: colors.background }}
+        data={visible}
+        keyExtractor={(item) => item.id}
+        numColumns={columns}
+        key={columns}
+        columnWrapperStyle={{ gap: gutter }}
+        contentContainerStyle={{
+          paddingTop: insets.top + Spacing.three,
+          paddingHorizontal: Spacing.three,
+          paddingBottom: BottomTabInset + insets.bottom + Spacing.five,
+          gap: gutter,
+        }}
+        showsVerticalScrollIndicator={false}
+        ListHeaderComponent={
+          <Header
+            filter={filter}
+            onFilter={setFilter}
+            total={wardrobe.entries.length}
+            ready={ready}
+            favouriteCount={favourites.count}
+            busy={capture.busy}
+            onAdd={add}
+            gutter={gutter}
+          />
+        }
+        renderItem={({ item }) => (
+          <GarmentCell
+            entry={item}
+            onPress={() => setSelected(item)}
+            onToggleFavourite={() => {
+              if (Platform.OS !== 'web') void Haptics.selectionAsync();
+              void favourites.toggle(item.id);
+            }}
+          />
+        )}
+        ListEmptyComponent={
+          <View style={{ paddingVertical: Spacing.six, alignItems: 'center' }}>
+            <ThemedText type="small" themeColor="textSecondary">
+              {filter === 'favourites'
+                ? 'No favourites yet. Tap the heart on anything you love.'
+                : 'Nothing in this group yet.'}
+            </ThemedText>
+          </View>
+        }
+      />
+
+      <GarmentSheet
+        entry={selected}
+        onClose={() => setSelected(null)}
+        onRename={wardrobe.rename}
+        onSetAvailability={wardrobe.setAvailability}
+        onDelete={wardrobe.remove}
+        onToggleFavourite={favourites.toggle}
+        isFavourite={selected ? favourites.has(selected.id) : false}
+      />
+    </>
   );
 }
 
-function GarmentCell({ garment }: { garment: SampleGarment }) {
+function GarmentCell({
+  entry,
+  onPress,
+  onToggleFavourite,
+}: {
+  entry: WardrobeEntry;
+  onPress: () => void;
+  onToggleFavourite: () => void;
+}) {
   const colors = Colors[useScheme()];
-  const unavailable = garment.availability !== 'available';
-  const badge = AVAILABILITY_LABEL[garment.availability];
+  const unavailable = entry.availability !== 'available';
+  const badge = AVAILABILITY_LABEL[entry.availability];
 
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${garment.name}. ${garment.confirmed.colour} ${garment.category}${
-        badge ? `. ${badge}` : ''
-      }`}
-      onPress={() => {
-        if (Platform.OS !== 'web') void Haptics.selectionAsync();
-      }}
+      accessibilityLabel={`${entry.name}${badge ? `. ${badge}` : ''}`}
+      onPress={onPress}
       style={({ pressed }) => ({ flex: 1, gap: Spacing.one, opacity: pressed ? 0.7 : 1 })}>
       <View
         style={{
@@ -102,8 +172,8 @@ function GarmentCell({ garment }: { garment: SampleGarment }) {
           borderColor: colors.border,
         }}>
         <Image
-          source={garment.image}
-          placeholder={garment.blurhash ? { blurhash: garment.blurhash } : undefined}
+          source={entry.image ?? (entry.uri ? { uri: entry.uri } : undefined)}
+          placeholder={entry.blurhash ? { blurhash: entry.blurhash } : undefined}
           cachePolicy="memory-disk"
           contentFit="cover"
           transition={Motion.base}
@@ -111,11 +181,51 @@ function GarmentCell({ garment }: { garment: SampleGarment }) {
           style={{
             width: '100%',
             aspectRatio: AspectRatio.garment,
-            // Dimmed rather than hidden: an unavailable garment still exists, and
-            // hiding it would make the wardrobe look wrong.
+            // Dimmed, not hidden: an unavailable garment still exists, and hiding
+            // it makes the wardrobe look wrong.
             opacity: unavailable ? 0.45 : 1,
           }}
         />
+
+        {entry.status === 'pending' ? (
+          <View
+            style={{
+              position: 'absolute',
+              inset: 0,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: 'rgba(16,12,11,0.35)',
+            }}>
+            <ActivityIndicator color="#FFFFFF" />
+          </View>
+        ) : null}
+
+        {/* Favourite is a direct tap on the cell — burying "I love this" behind a
+            detail screen means it never gets used. */}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={
+            entry.isFavourite ? `Remove ${entry.name} from favourites` : `Favourite ${entry.name}`
+          }
+          accessibilityState={{ selected: entry.isFavourite }}
+          onPress={onToggleFavourite}
+          hitSlop={10}
+          style={{
+            position: 'absolute',
+            top: Spacing.one,
+            right: Spacing.one,
+            width: 28,
+            height: 28,
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderRadius: Radius.full,
+            backgroundColor: 'rgba(16,12,11,0.5)',
+          }}>
+          <ThemedText style={{ fontSize: 13, color: entry.isFavourite ? '#FF8FA8' : '#FFFFFF' }}>
+            {entry.isFavourite ? '♥' : '♡'}
+          </ThemedText>
+        </Pressable>
+
         {badge ? (
           <View
             style={{
@@ -127,18 +237,23 @@ function GarmentCell({ garment }: { garment: SampleGarment }) {
               borderRadius: Radius.full,
               backgroundColor: 'rgba(16,12,11,0.72)',
             }}>
-            <ThemedText
-              type="small"
-              style={{ fontSize: 9, letterSpacing: 0.6, color: 'rgba(255,255,255,0.92)' }}>
+            <ThemedText type="small" style={{ fontSize: 9, color: 'rgba(255,255,255,0.92)' }}>
               {badge}
             </ThemedText>
           </View>
         ) : null}
       </View>
 
-      <ThemedText type="small" numberOfLines={1} style={{ fontSize: 12 }}>
-        {garment.name}
-      </ThemedText>
+      <View style={{ gap: 1 }}>
+        <ThemedText type="small" numberOfLines={1} style={{ fontSize: 12 }}>
+          {entry.name}
+        </ThemedText>
+        {entry.isSample ? (
+          <ThemedText type="small" themeColor="textSecondary" style={{ fontSize: 10 }}>
+            Sample
+          </ThemedText>
+        ) : null}
+      </View>
     </Pressable>
   );
 }
@@ -147,16 +262,28 @@ function Header({
   filter,
   onFilter,
   total,
-  available,
+  ready,
+  favouriteCount,
+  busy,
+  onAdd,
   gutter,
 }: {
   filter: FilterId;
   onFilter: (id: FilterId) => void;
   total: number;
-  available: number;
+  ready: number;
+  favouriteCount: number;
+  busy: boolean;
+  onAdd: (source: 'camera' | 'library') => void;
   gutter: number;
 }) {
   const colors = Colors[useScheme()];
+
+  const filters: { id: FilterId; label: string }[] = [
+    { id: 'all', label: 'All' },
+    ...SLOTS.map((slot) => ({ id: slot as FilterId, label: SLOT_LABELS[slot] })),
+    { id: 'favourites', label: `Loved${favouriteCount ? ` (${favouriteCount})` : ''}` },
+  ];
 
   return (
     <View style={{ gap: Spacing.three, marginBottom: gutter }}>
@@ -165,7 +292,7 @@ function Header({
           type="small"
           themeColor="textSecondary"
           style={{ fontSize: 11, letterSpacing: 1.4, textTransform: 'uppercase' }}>
-          {available} of {total} ready to wear
+          {ready} of {total} ready to wear
         </ThemedText>
         <ThemedText
           style={{
@@ -179,30 +306,18 @@ function Header({
         </ThemedText>
       </View>
 
-      {/* Says "sample" permanently, not just on first run. */}
-      <View
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: Spacing.two,
-          padding: Spacing.three,
-          borderRadius: Radius.md,
-          borderCurve: 'continuous',
-          borderWidth: 1,
-          borderColor: colors.accent,
-        }}>
-        <View style={{ flex: 1, gap: 2 }}>
-          <ThemedText type="smallBold" style={{ color: colors.accent, fontSize: 12 }}>
-            Sample wardrobe
-          </ThemedText>
-          <ThemedText type="small" themeColor="textSecondary" style={{ fontSize: 12 }}>
-            Demonstration items so you can try styling before adding your own.
-          </ThemedText>
-        </View>
+      <View style={{ flexDirection: 'row', gap: Spacing.two }}>
+        <AddButton label="Take a photo" onPress={() => onAdd('camera')} busy={busy} primary />
+        <AddButton label="Add from library" onPress={() => onAdd('library')} busy={busy} />
       </View>
 
+      <ThemedText type="small" themeColor="textSecondary" style={{ fontSize: 12 }}>
+        Add up to 20 at once. We sort them into groups and tidy the background — you can
+        rename anything we get wrong.
+      </ThemedText>
+
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two }}>
-        {WARDROBE_FILTERS.map((option) => {
+        {filters.map((option) => {
           const active = option.id === filter;
           return (
             <Pressable
@@ -231,5 +346,46 @@ function Header({
         })}
       </View>
     </View>
+  );
+}
+
+function AddButton({
+  label,
+  onPress,
+  busy,
+  primary,
+}: {
+  label: string;
+  onPress: () => void;
+  busy: boolean;
+  primary?: boolean;
+}) {
+  const colors = Colors[useScheme()];
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ busy, disabled: busy }}
+      disabled={busy}
+      onPress={onPress}
+      style={({ pressed }) => ({
+        flex: 1,
+        minHeight: 46,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: Radius.md,
+        borderCurve: 'continuous',
+        backgroundColor: primary ? colors.accent : 'transparent',
+        borderWidth: 1,
+        borderColor: primary ? colors.accent : colors.border,
+        opacity: busy ? 0.6 : pressed ? 0.75 : 1,
+      })}>
+      {busy ? (
+        <ActivityIndicator color={primary ? colors.accentText : colors.text} />
+      ) : (
+        <ThemedText type="smallBold" style={{ color: primary ? colors.accentText : colors.text }}>
+          {label}
+        </ThemedText>
+      )}
+    </Pressable>
   );
 }
