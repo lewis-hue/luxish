@@ -39,10 +39,30 @@ class Garment(Base, TimestampMixin):
         sa.Index("ix_garments_user_id_created_at", "user_id", "created_at"),
         sa.Index("ix_garments_user_id_category", "user_id", "category"),
         sa.Index("ix_garments_user_id_availability", "user_id", "availability"),
+        sa.Index("ix_garments_user_id_is_favourite", "user_id", "is_favourite"),
         sa.CheckConstraint(
             "inference_confidence IS NULL OR "
             "(inference_confidence >= 0 AND inference_confidence <= 1)",
             name="inference_confidence_range",
+        ),
+        sa.CheckConstraint(
+            "categorisation_confidence IS NULL OR "
+            "(categorisation_confidence >= 0 AND categorisation_confidence <= 1)",
+            name="categorisation_confidence_range",
+        ),
+        # One garment per photograph, so a double-tap on "add" or a retried
+        # bulk upload cannot produce two rows for the same image. Partial,
+        # because rows with no asset and deleted rows must still be allowed to
+        # collide — a user may re-add something they removed.
+        sa.Index(
+            "uq_garments_user_id_media_asset_id",
+            "user_id",
+            "media_asset_id",
+            unique=True,
+            postgresql_where=sa.text(
+                "media_asset_id IS NOT NULL AND deleted_at IS NULL"
+            ),
+            sqlite_where=sa.text("media_asset_id IS NOT NULL AND deleted_at IS NULL"),
         ),
     )
 
@@ -74,6 +94,31 @@ class Garment(Base, TimestampMixin):
     inference_confidence: Mapped[float | None] = mapped_column(sa.Float, nullable=True)
     inference_version: Mapped[str | None] = mapped_column(sa.String(64), nullable=True)
     inferred_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+
+    #: Confidence in the *slot* the auto-categoriser chose, separate from
+    #: ``inference_confidence`` (which covers the attribute payload). Kept apart
+    #: because the UI acts on them differently: a low slot confidence asks the
+    #: user which group it belongs in, a low attribute confidence just hides a
+    #: detail.
+    categorisation_confidence: Mapped[float | None] = mapped_column(
+        sa.Float, nullable=True
+    )
+
+    #: Weighted up when the stylist builds an outfit. The user's own signal, so
+    #: it lives beside the garment rather than in a separate preference blob.
+    is_favourite: Mapped[bool] = mapped_column(
+        sa.Boolean, nullable=False, default=False, server_default=sa.false()
+    )
+
+    #: The cut-out. SET NULL rather than CASCADE: losing the cut-out must never
+    #: take the garment with it — the original photograph is still perfectly
+    #: usable, and a wardrobe that deletes clothes because a mask expired is
+    #: worse than one that shows an untidy background.
+    background_removed_asset_id: Mapped[uuid.UUID | None] = mapped_column(
+        sa.Uuid(as_uuid=True),
+        sa.ForeignKey("media_assets.id", ondelete="SET NULL"),
+        nullable=True,
+    )
 
     deleted_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True, index=True)
 

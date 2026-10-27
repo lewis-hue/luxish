@@ -20,8 +20,12 @@ from alembic import command
 
 API_ROOT = Path(__file__).resolve().parents[1]
 
-# 0005 is intentionally unused: it was reserved for the stylist task, which has not
-# landed. The chain must stay linear with a single head.
+# 0005 is intentionally skipped: the number was reserved while the chain was being
+# planned and was never used. The stylist tables landed as 0008 instead. The chain
+# must stay linear with a single head.
+#
+# This list is the test's whole point: autogenerate is not trusted to keep the chain
+# linear, so a new migration has to be declared here deliberately.
 EXPECTED_ORDER = [
     "0001_core",
     "0002_wardrobe",
@@ -29,6 +33,8 @@ EXPECTED_ORDER = [
     "0004_ai",
     "0006_regional",
     "0007_external",
+    "0008_stylist",
+    "0009_wardrobe_media",
 ]
 
 

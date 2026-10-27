@@ -29,6 +29,18 @@ dependencies = [
   # store in app/providers/base.py implements the same interface, so no test
   # and no single-process dev box needs a live Redis.
   "redis>=5.0,<7",
+  # Compositing the sam-3.1 mask onto a solid ground (Task 11). Pillow does the
+  # raster work; nothing here generates or re-synthesises image content.
+  "pillow>=10",
+  # Meta's own parser for sam-3.1's special-token output. The mask payload is
+  # base85 and the published docs state neither the variant nor the
+  # compression — they point at `decode_mask_to_raster` instead — so we
+  # delegate rather than reverse-engineer it. **Pin >= 0.0.6**: earlier
+  # releases report every line carrying an `include_confidence` `c=` field as
+  # malformed and return no records, which is indistinguishable from "the model
+  # found nothing". Imported lazily; its absence degrades to a labelled
+  # capability gap rather than a crash (app/providers/segmentation.py).
+  "meta-sam-parser>=0.0.6",
 ]
 
 [project.optional-dependencies]

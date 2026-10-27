@@ -12,6 +12,7 @@ import uuid
 from fastapi import APIRouter, Query, Response, status
 
 from app.deps import AuthDep, SessionDep
+from app.domain import garment_media
 from app.domain.wardrobe import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, GarmentRepository
 from app.schemas.wardrobe import GarmentCreate, GarmentOut, GarmentPage, GarmentPatch
 
@@ -75,5 +76,14 @@ async def correct_garment(
 
 @router.delete("/garments/{garment_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_garment(garment_id: uuid.UUID, db: SessionDep, ctx: AuthDep) -> Response:
-    await _repo(db, ctx).soft_delete(garment_id)
+    """Delete a garment, its photograph and its cut-out.
+
+    Delegates rather than calling ``soft_delete`` directly, so that deleting a
+    garment always writes the media tombstones. Without them a categorisation
+    or background-removal job already in flight would write its result back
+    against an asset the user just deleted — the write guard consults the
+    tombstone, not the garment row (ADR-012). There is one deletion path for
+    exactly this reason.
+    """
+    await garment_media.delete_garment(db, user_id=ctx.user_id, garment_id=garment_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

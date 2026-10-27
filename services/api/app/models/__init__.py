@@ -18,6 +18,14 @@ from app.models.preference import Preference
 from app.models.provider_connection import ProviderConnection
 from app.models.regional_profile import RegionalStyleProfile
 from app.models.session import RevokedToken, Session
+from app.models.stylist import (
+    Conversation,
+    Message,
+    Outfit,
+    OutfitFeedback,
+    OutfitItem,
+    StylistRun,
+)
 from app.models.tombstone import Tombstone
 from app.models.usage import UsageReservation
 from app.models.user import User
@@ -27,6 +35,7 @@ __all__ = [
     "Collection",
     "CollectionGarment",
     "Consent",
+    "Conversation",
     "ExternalIdentity",
     "ExternalReference",
     "Garment",
@@ -34,11 +43,16 @@ __all__ = [
     "Job",
     "MediaAsset",
     "MediaDerivative",
+    "Message",
+    "Outfit",
+    "OutfitFeedback",
+    "OutfitItem",
     "Preference",
     "ProviderConnection",
     "RegionalStyleProfile",
     "RevokedToken",
     "Session",
+    "StylistRun",
     "Tombstone",
     "UsageReservation",
     "User",

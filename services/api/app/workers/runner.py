@@ -15,15 +15,32 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Awaitable, Callable, Sequence
+from typing import TYPE_CHECKING
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.domain.jobs import AssetGone, claim_job, complete_job, fail_job
 from app.models.job import Job
 
+if TYPE_CHECKING:  # pragma: no cover - imported for signatures only
+    from app.providers.segmentation import SegmentationProvider
+    from app.workers.categorise import GarmentClassifier, MediaStore
+
 logger = logging.getLogger(__name__)
 
 Handler = Callable[[AsyncSession, Job], Awaitable[dict | None]]
+
+
+class UnknownJobKind(LookupError):
+    """A deployable was configured for a queue no handler serves."""
+
+    def __init__(self, unknown: Sequence[str], known: Sequence[str]) -> None:
+        self.unknown = tuple(unknown)
+        self.known = tuple(known)
+        super().__init__(
+            f"no handler for job kind(s) {', '.join(unknown)}; "
+            f"this service handles {', '.join(known)}"
+        )
 
 
 async def run_one(
@@ -90,8 +107,77 @@ def media_handlers() -> dict[str, Handler]:
     return {"media.derive": derive}
 
 
-def all_handlers(kinds: Sequence[str] | None = None) -> dict[str, Handler]:
-    handlers = media_handlers()
+def stylist_handlers() -> dict[str, Handler]:
+    """The stylist queue's handler.
+
+    ``execute_run`` builds its own provider registry per job, because
+    ``AIRunRecorder`` needs the job's session to record accounting rows in the
+    same transaction as the outfit it is accounting for.
+    """
+    from app.domain import stylist
+
+    return {stylist.JOB_KIND: stylist.handle_job}
+
+
+def wardrobe_media_handlers(
+    *,
+    classifier: GarmentClassifier | None = None,
+    segmenter: SegmentationProvider | None = None,
+    store: MediaStore | None = None,
+) -> dict[str, Handler]:
+    """Categorisation and background removal.
+
+    Every collaborator is injectable so the test suite can wire doubles, and
+    every default *refuses* rather than fakes: with no credential configured
+    the jobs fail with a recorded reason and the garment keeps its original
+    photograph. A worker deployable passes the real three.
+
+    The segmentation provider is chosen by name from
+    :data:`~app.providers.segmentation.SEGMENTATION_PROVIDERS` so a swap is a
+    config change rather than an edit here.
+    """
+    from app.config import get_settings
+    from app.providers.meta import MetaProvider
+    from app.providers.segmentation import SEGMENTATION_PROVIDERS
+    from app.workers.categorise import MetaGarmentClassifier, categorise_handlers
+
+    if classifier is None or segmenter is None:
+        cfg = get_settings()
+        if classifier is None:
+            classifier = MetaGarmentClassifier(MetaProvider())
+        if segmenter is None:
+            segmenter = SEGMENTATION_PROVIDERS[cfg.segmentation_provider]()
+
+    return categorise_handlers(
+        classifier=classifier, segmenter=segmenter, store=store
+    )
+
+
+def all_handlers(
+    kinds: Sequence[str] | None = None,
+    *,
+    classifier: GarmentClassifier | None = None,
+    segmenter: SegmentationProvider | None = None,
+    store: MediaStore | None = None,
+) -> dict[str, Handler]:
+    """Every handler this service knows how to run.
+
+    ``kinds`` selects a subset, which is how one deployable per queue class is
+    achieved from a single image (ADR-003). An unknown kind is *not* silently
+    dropped: a deployable asked to serve a queue nobody handles would poll
+    forever and look healthy, so it raises instead.
+    """
+    handlers = {
+        **media_handlers(),
+        **stylist_handlers(),
+        **wardrobe_media_handlers(
+            classifier=classifier, segmenter=segmenter, store=store
+        ),
+    }
     if kinds is None:
         return handlers
-    return {kind: handlers[kind] for kind in kinds if kind in handlers}
+
+    unknown = sorted(set(kinds) - set(handlers))
+    if unknown:
+        raise UnknownJobKind(unknown, sorted(handlers))
+    return {kind: handlers[kind] for kind in kinds}

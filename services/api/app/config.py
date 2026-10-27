@@ -83,6 +83,13 @@ class Settings(BaseSettings):
     )
 
     # Durable jobs (Task 6).
+    #: Which background-removal backend runs. Keys match
+    #: ``app.providers.segmentation.SEGMENTATION_PROVIDERS``. "meta_sam" is the
+    #: default because at current volume it is cheaper than keeping a GPU warm;
+    #: "birefnet" is the self-hosted path and currently refuses rather than
+    #: faking (ADR-017).
+    segmentation_provider: Literal["meta_sam", "birefnet"] = "meta_sam"
+
     job_max_attempts: int = 5
 
     # SSRF-guarded fetcher (Task 10).
