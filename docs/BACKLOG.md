@@ -46,13 +46,14 @@ connection.
       Profile now opens its Account section with the signed-in state and a
       Sign in / Sign out row. Cancelling the browser is treated as a decision,
       not an error.
-- [~] **A5. Wardrobe is local-only.** *Server side proven; mobile still to
-      wire.* The blocker was not auth, it was that no storage backend existed:
-      the stub stored nothing and GCS refuses for want of a credential, so no
-      photograph could reach the server at all. `app/storage/local.py` is the
+- [x] **A5. Wardrobe is local-only.** The blocker turned out not to be auth
+      but that no storage backend existed at all: the stub stored nothing and
+      GCS refuses for want of a credential. `app/storage/local.py` is the
       missing backend, refused outside the local environment by enforcement.
-      The full path now runs against real Postgres, the real model and the
-      real parser. What remains is the mobile store calling it.
+      `features/wardrobe/sync.ts` is the mobile half: authorise, PUT, create,
+      poll. Local-first rather than local-only, so a photograph is never lost
+      waiting for a network, and `serverId` being absent is what marks one as
+      unsent.
 
 ## B. Requested features not yet present
 
@@ -110,11 +111,10 @@ connection.
       imports, discovery serves, and the `${GOOGLE_CLIENT_ID}` substitution
       works: the Google provider carries the real client id with
       `trustEmail` still false.
-- [ ] **D2. Expo Go redirect URI is not registered.** The realm lists
-      `luxish://callback` and ports 8081. Expo Go produces
-      `exp://<host>/--/callback`, and the host changes every time the tunnel
-      restarts. Needs either a dev-only wildcard in the dev realm or a
-      development build, which is the cleaner answer.
+- [x] **D2. Expo Go redirect URI is not registered.** The realm accepts
+      `exp://*` now, marked development-only; a deployed realm must not carry
+      it. Web entries moved to 19000, because Windows reserves 8011-8410 and
+      Metro cannot bind 8081 on this machine.
 - [x] **D3. Two Postgres-marked tests have never run.** Both pass now, and
       they earned their keep immediately: a self-referencing foreign key
       generated a 64-character constraint name against PostgreSQL's 63-char
@@ -134,6 +134,8 @@ Moved here as items complete, newest first.
 
 ### 2026-10-28
 
+- **A5** wardrobe photos reach the API; upload, classify, cut out, merge back.
+- **D2** Expo Go can complete sign-in against the realm.
 - **D1** Keycloak imports the realm; Google sign-in configured and verified.
 - **D3** both Postgres tests pass, having found a real 63-char identifier bug.
 - **A5/B3/B4** *partial*: the media pipeline runs end to end on the server.
