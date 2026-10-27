@@ -68,3 +68,6 @@ gha-creds-*.json
 Thumbs.db
 
 example
+
+# EAS Simulator session file — carries a daemon token.
+.env.eas-simulator

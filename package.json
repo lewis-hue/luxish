@@ -25,5 +25,8 @@
     "api:migrate": "cd services/api && alembic upgrade head",
     "dev:up": "docker compose -f infra/docker-compose.yml up -d",
     "dev:down": "docker compose -f infra/docker-compose.yml down"
+  },
+  "devDependencies": {
+    "eas-cli": "^26.0.0"
   }
 }
