@@ -85,7 +85,8 @@ export function detectPlatform(url: string): Platform {
 }
 
 const LIMITATION =
-  'We can save this link and open the post, but we are not permitted to download and analyse the video or photo behind it. To identify the garments, add a screenshot of the post or your own photo — we will analyse that instead.';
+  'We can save and open this link, but not download the media behind it. ' +
+  'Add a screenshot or your own photo to identify the garments.';
 
 export function supportFor(platform: Platform): PlatformSupport {
   switch (platform) {

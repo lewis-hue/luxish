@@ -123,7 +123,7 @@ export const DRESS_CODES: readonly DressCode[] = [
     label: 'White tie',
     formalityRank: 9,
     definition:
-      'The most formal code, centred on the evening tailcoat — a different ensemble from black tie, not a stricter one.',
+      'The most formal code, centred on the evening tailcoat. A different ensemble from black tie, not a stricter one.',
     startingPoints: [
       'evening tailcoat + formal trousers + white waistcoat + white bow tie',
       'full-length formal evening gown',

@@ -225,7 +225,7 @@ export const REGIONAL_GARMENTS: readonly RegionalGarment[] = [
     label: 'Kitenge',
     aliases: ['chitenge', 'ankara'],
     kind: 'textile',
-    note: 'A printed textile family. Becomes a shirt, dress, blazer or wrap — record which.',
+    note: 'A printed textile family. Becomes a shirt, dress, blazer or wrap. Record which.',
   },
   {
     id: 'kanga',
@@ -254,7 +254,7 @@ export const REGIONAL_GARMENTS: readonly RegionalGarment[] = [
     label: 'Dera',
     aliases: [],
     kind: 'garment',
-    note: 'A loose dress. Record actual length, sleeves and opacity — "free size" still needs measurements.',
+    note: 'A loose dress. Record actual length, sleeves and opacity. "Free size" still needs measurements.',
     slot: 'tops',
   },
   {
@@ -285,6 +285,6 @@ export const REGIONAL_GARMENTS: readonly RegionalGarment[] = [
     label: 'Agbada',
     aliases: [],
     kind: 'ensemble',
-    note: 'An ensemble: outer agbada, inner buba, sokoto trousers — each separately identifiable.',
+    note: 'An ensemble: outer agbada, inner buba, sokoto trousers, each separately identifiable.',
   },
 ];

@@ -8,7 +8,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { EmptyState } from '@/components/ui/empty-state';
-import { Colors, Display, Motion, Radius, Spacing } from '@/constants/theme';
+import {
+  Colors,
+  Display,
+  FontSize,
+  Motion,
+  Radius,
+  Spacing,
+  Tracking,
+} from '@/constants/theme';
 import { recordInteraction } from '@/features/discover/interactions';
 import { lookById, ownedCount, type Look } from '@/features/discover/looks';
 import { useSavedLooks } from '@/features/discover/saved';
@@ -56,8 +64,8 @@ export default function LookDetailScreen() {
         <Stack.Screen options={{ title: 'Look' }} />
         <EmptyState
           status="empty"
-          title="That look is not here"
-          body="It may have been removed from the collection."
+          title="This look is unavailable"
+          body="It may have been removed."
           action={{ label: 'Back to Discover', onPress: () => router.back() }}
         />
       </>
@@ -116,7 +124,7 @@ export default function LookDetailScreen() {
           {/* Aesthetics, each explained by the evidence that produced it. An
               unexplained tag is not useful and cannot be argued with. */}
           <View style={{ gap: Spacing.two }}>
-            <SectionLabel>Why this reads the way it does</SectionLabel>
+            <SectionLabel>Why it works</SectionLabel>
             <View style={{ gap: Spacing.two }}>
               {look.aesthetics.map((aestheticId) => {
                 const aesthetic = aestheticById(aestheticId);
@@ -134,9 +142,9 @@ export default function LookDetailScreen() {
                     <ThemedText type="smallBold" style={{ color: colors.accent }}>
                       {aesthetic.label}
                     </ThemedText>
-                    <ThemedText type="small" themeColor="textSecondary" style={{ fontSize: 13 }}>
+                    <ThemedText type="small" themeColor="textSecondary" style={{ fontSize: FontSize.footnote }}>
                       {explainAesthetic(aesthetic, look.styleEvidence).replace(
-                        `${aesthetic.label} — `,
+                        `${aesthetic.label}: `,
                         '',
                       )}
                     </ThemedText>
@@ -158,10 +166,10 @@ export default function LookDetailScreen() {
           <View style={{ gap: Spacing.three }}>
             <View style={{ gap: Spacing.half }}>
               <SectionLabel>The pieces</SectionLabel>
-              <ThemedText type="small" themeColor="textSecondary" style={{ fontSize: 13 }}>
+              <ThemedText type="small" themeColor="textSecondary" style={{ fontSize: FontSize.footnote }}>
                 {owned > 0
-                  ? `You already own ${owned} of ${look.pieces.length}.`
-                  : `${look.pieces.length} pieces. None are in your wardrobe yet.`}
+                  ? `${owned} of ${look.pieces.length} in your wardrobe`
+                  : `${look.pieces.length} pieces, none in your wardrobe`}
               </ThemedText>
             </View>
 
@@ -170,7 +178,11 @@ export default function LookDetailScreen() {
                 <ThemedText
                   type="small"
                   themeColor="textSecondary"
-                  style={{ fontSize: 11, letterSpacing: 1.2, textTransform: 'uppercase' }}>
+                  style={{
+                    fontSize: FontSize.meta,
+                    letterSpacing: Tracking.label,
+                    textTransform: 'uppercase',
+                  }}>
                   {SLOT_LABELS[group.slot]}
                 </ThemedText>
                 {group.pieces.map((piece) => (
@@ -183,7 +195,7 @@ export default function LookDetailScreen() {
           {/* Actions. */}
           <View style={{ gap: Spacing.two }}>
             <ActionButton
-              label={isSaved ? 'Saved to your inspiration' : 'Save for inspiration'}
+              label={isSaved ? 'Saved' : 'Save look'}
               active={isSaved}
               onPress={() => {
                 if (Platform.OS !== 'web') void Haptics.selectionAsync();
@@ -192,7 +204,7 @@ export default function LookDetailScreen() {
               }}
             />
             <ActionButton
-              label="Ask the stylist about this look"
+              label="Ask the stylist"
               onPress={() => {
                 void recordInteraction(look.id, 'ask_stylist', look.aesthetics);
                 router.push('/(tabs)/stylist');
@@ -202,9 +214,11 @@ export default function LookDetailScreen() {
 
           {/* Disclosure, moved here from the grid where it repeated on every card. */}
           {look.isGenerated ? (
-            <ThemedText type="small" themeColor="textSecondary" style={{ fontSize: 11 }}>
-              This image was generated, not photographed. The pieces are real garment
-              types you can look for.
+            <ThemedText
+              type="small"
+              themeColor="textSecondary"
+              style={{ fontSize: FontSize.meta }}>
+              Generated image. The pieces are real garment types.
             </ThemedText>
           ) : null}
         </View>
@@ -265,8 +279,8 @@ function PieceRow({ piece, look }: { piece: OutfitPiece; look: Look }) {
         <ThemedText type="small" numberOfLines={1}>
           {piece.name}
         </ThemedText>
-        <ThemedText type="small" themeColor="textSecondary" style={{ fontSize: 12 }}>
-          {piece.owned ? 'In your wardrobe' : 'Not in your wardrobe'}
+        <ThemedText type="small" themeColor="textSecondary" style={{ fontSize: FontSize.caption }}>
+          {piece.owned ? 'In your wardrobe' : 'Not owned'}
         </ThemedText>
       </View>
 
@@ -296,7 +310,11 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
     <ThemedText
       type="small"
       themeColor="textSecondary"
-      style={{ fontSize: 11, letterSpacing: 1.4, textTransform: 'uppercase' }}>
+      style={{
+        fontSize: FontSize.meta,
+        letterSpacing: Tracking.wide,
+        textTransform: 'uppercase',
+      }}>
       {children}
     </ThemedText>
   );

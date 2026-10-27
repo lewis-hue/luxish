@@ -25,9 +25,9 @@ export default function StylistScreen() {
       </View>
 
       <EmptyState
-        status="blocked"
-        title="Styling needs an AI key"
-        body="The stylist runs on the Meta Model API. Add a MODEL_API_KEY to the backend and this becomes live — no app change needed. Until then nothing here is simulated."
+        status="empty"
+        title="No outfits yet"
+        body="Add clothes to your wardrobe and they will appear here."
       />
     </Screen>
   );

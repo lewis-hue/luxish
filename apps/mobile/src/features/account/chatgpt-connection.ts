@@ -77,7 +77,8 @@ export const CHATGPT_STATE_COPY: Record<ChatGptConnectionState, StateCopy> = {
   allowance_exhausted: {
     short: 'Plan limit reached',
     detail:
-      'Your ChatGPT plan usage for this app is used up. We cannot see how much is left or when it resets — only that the last request was refused. Adjust the limit in ChatGPT settings, or switch to this app’s allowance.',
+      'Your ChatGPT plan usage for this app is used up. ' +
+      'Raise the limit in ChatGPT settings, or switch to this app’s allowance.',
     action: 'manage_usage',
   },
   revoked: {

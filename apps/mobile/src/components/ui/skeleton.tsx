@@ -41,18 +41,24 @@ export const SKELETON_DELAY_MS = 400;
  * `active` goes false, so content never waits on the delay.
  */
 export function useDelayedVisible(active: boolean, delay = SKELETON_DELAY_MS): boolean {
-  const [visible, setVisible] = useState(false);
+  const [elapsed, setElapsed] = useState(false);
 
   useEffect(() => {
-    if (!active) {
-      setVisible(false);
-      return;
-    }
-    const timer = setTimeout(() => setVisible(true), delay);
-    return () => clearTimeout(timer);
+    if (!active) return;
+    const timer = setTimeout(() => setElapsed(true), delay);
+    return () => {
+      clearTimeout(timer);
+      // Reset in cleanup rather than in the effect body. Setting state
+      // synchronously in the body triggers a cascading render, and React's
+      // lint rule rightly rejects it; cleanup runs exactly when `active`
+      // flips, which is when the reset is wanted.
+      setElapsed(false);
+    };
   }, [active, delay]);
 
-  return visible;
+  // Derived, not stored. `active` going false hides the placeholder on the
+  // same render, so content never waits for a state update to land.
+  return active && elapsed;
 }
 
 /**

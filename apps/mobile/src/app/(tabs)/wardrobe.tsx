@@ -18,9 +18,11 @@ import {
   BottomTabInset,
   Colors,
   Display,
+  FontSize,
   Motion,
   Radius,
   Spacing,
+  Tracking,
 } from '@/constants/theme';
 import { useFavouriteGarments } from '@/features/discover/saved';
 import { useGarmentCapture } from '@/features/wardrobe/capture';
@@ -123,7 +125,7 @@ export default function WardrobeScreen() {
           <View style={{ paddingVertical: Spacing.six, alignItems: 'center' }}>
             <ThemedText type="small" themeColor="textSecondary">
               {filter === 'favourites'
-                ? 'No favourites yet. Tap the heart on anything you love.'
+                ? 'Tap the heart on anything you love and it will appear here.'
                 : 'Nothing in this group yet.'}
             </ThemedText>
           </View>
@@ -237,7 +239,9 @@ function GarmentCell({
               borderRadius: Radius.full,
               backgroundColor: 'rgba(16,12,11,0.72)',
             }}>
-            <ThemedText type="small" style={{ fontSize: 9, color: 'rgba(255,255,255,0.92)' }}>
+            <ThemedText
+              type="small"
+              style={{ fontSize: FontSize.meta, color: 'rgba(255,255,255,0.94)' }}>
               {badge}
             </ThemedText>
           </View>
@@ -245,11 +249,14 @@ function GarmentCell({
       </View>
 
       <View style={{ gap: 1 }}>
-        <ThemedText type="small" numberOfLines={1} style={{ fontSize: 12 }}>
+        <ThemedText type="small" numberOfLines={1} style={{ fontSize: FontSize.caption }}>
           {entry.name}
         </ThemedText>
         {entry.isSample ? (
-          <ThemedText type="small" themeColor="textSecondary" style={{ fontSize: 10 }}>
+          <ThemedText
+            type="small"
+            themeColor="textSecondary"
+            style={{ fontSize: FontSize.meta }}>
             Sample
           </ThemedText>
         ) : null}
@@ -291,7 +298,11 @@ function Header({
         <ThemedText
           type="small"
           themeColor="textSecondary"
-          style={{ fontSize: 11, letterSpacing: 1.4, textTransform: 'uppercase' }}>
+          style={{
+            fontSize: FontSize.meta,
+            letterSpacing: Tracking.wide,
+            textTransform: 'uppercase',
+          }}>
           {ready} of {total} ready to wear
         </ThemedText>
         <ThemedText
@@ -308,12 +319,14 @@ function Header({
 
       <View style={{ flexDirection: 'row', gap: Spacing.two }}>
         <AddButton label="Take a photo" onPress={() => onAdd('camera')} busy={busy} primary />
-        <AddButton label="Add from library" onPress={() => onAdd('library')} busy={busy} />
+        <AddButton label="Choose photos" onPress={() => onAdd('library')} busy={busy} />
       </View>
 
-      <ThemedText type="small" themeColor="textSecondary" style={{ fontSize: 12 }}>
-        Add up to 20 at once. We sort them into groups and tidy the background — you can
-        rename anything we get wrong.
+      <ThemedText
+        type="small"
+        themeColor="textSecondary"
+        style={{ fontSize: FontSize.caption }}>
+        Up to 20 at once. Sorted and tidied automatically. Rename anything.
       </ThemedText>
 
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two }}>

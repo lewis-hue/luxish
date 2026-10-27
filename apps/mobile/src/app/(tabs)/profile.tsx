@@ -53,7 +53,7 @@ export default function ProfileScreen() {
           }
           detail={
             health.data?.reachable
-              ? `${health.data.baseUrl} — environment "${health.data.environment}"`
+              ? `${health.data.baseUrl} · ${health.data.environment}`
               : (health.data?.problem ?? `Trying ${API_BASE_URL}`)
           }
         />

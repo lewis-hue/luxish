@@ -10,6 +10,12 @@
  * fast and the process exits.
  */
 
+import {
+  INTERACTION_WINDOW_DAYS,
+  rank,
+  type InteractionEvent,
+} from '@/features/discover/interactions';
+
 jest.mock('expo-sqlite/kv-store', () => ({
   __esModule: true,
   default: {
@@ -17,12 +23,6 @@ jest.mock('expo-sqlite/kv-store', () => ({
     setItemAsync: async () => undefined,
   },
 }));
-
-import {
-  INTERACTION_WINDOW_DAYS,
-  rank,
-  type InteractionEvent,
-} from '@/features/discover/interactions';
 
 const NOW = 1_800_000_000_000;
 const DAY = 24 * 60 * 60 * 1000;

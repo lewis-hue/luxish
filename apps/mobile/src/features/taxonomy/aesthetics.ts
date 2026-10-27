@@ -85,7 +85,7 @@ export const AESTHETICS: readonly Aesthetic[] = [
     label: 'Streetwear',
     family: 'street',
     definition:
-      'Relaxed or deliberate proportions with graphic and sportswear references. Culturally broad — not one oversized silhouette.',
+      'Relaxed or deliberate proportions with graphic and sportswear references. Culturally broad, not one oversized silhouette.',
     cues: ['graphic tee', 'hoodie', 'cargo trousers', 'statement trainers', 'bomber'],
     confusableWith: ['skate', 'athleisure', 'y2k'],
   },
@@ -195,7 +195,7 @@ export const AESTHETICS: readonly Aesthetic[] = [
     label: 'Gothic-inspired',
     family: 'expressive',
     definition:
-      'Dark palettes, dramatic shapes, lace and velvet. Describes clothing only — never the wearer.',
+      'Dark palettes, dramatic shapes, lace and velvet. Describes clothing only, never the wearer.',
     cues: ['black palette', 'velvet', 'lace', 'flat boots'],
     confusableWith: ['rocker', 'avant_garde'],
   },

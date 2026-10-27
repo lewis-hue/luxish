@@ -25,7 +25,7 @@ export default function Root({ children }: PropsWithChildren) {
           content="width=device-width, initial-scale=1, shrink-to-fit=no, viewport-fit=cover"
         />
         {/* From branding.config.js, so a rebrand reaches the browser tab too. */}
-        <title>{`${BRAND.name} — ${BRAND.tagline}`}</title>
+        <title>{`${BRAND.name} · ${BRAND.tagline}`}</title>
         <meta name="description" content={BRAND.tagline} />
         {/* Lets the browser render form controls and scrollbars in the right scheme. */}
         <meta name="color-scheme" content="light dark" />

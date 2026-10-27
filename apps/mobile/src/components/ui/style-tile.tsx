@@ -9,7 +9,16 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { ThemedText } from '@/components/themed-text';
-import { AspectRatio, Colors, Display, Motion, Radius, Spacing } from '@/constants/theme';
+import {
+  AspectRatio,
+  Colors,
+  Display,
+  FontSize,
+  Motion,
+  Radius,
+  Spacing,
+  Tracking,
+} from '@/constants/theme';
 import { attributionLine, type InspirationAsset } from '@/features/discover/types';
 import { useReducedMotion, useScheme } from '@/hooks/use-theme';
 
@@ -129,8 +138,8 @@ export function StyleTile({
           <ThemedText
             type="small"
             style={{
-              fontSize: 10,
-              letterSpacing: 1.2,
+              fontSize: FontSize.meta,
+              letterSpacing: Tracking.label,
               textTransform: 'uppercase',
               color: 'rgba(255,255,255,0.72)',
             }}>
@@ -217,8 +226,8 @@ function Badge({ label }: { label: string }) {
         type="small"
         numberOfLines={1}
         style={{
-          fontSize: 9.5,
-          letterSpacing: 0.8,
+          fontSize: FontSize.meta,
+          letterSpacing: Tracking.label,
           textTransform: 'uppercase',
           color: 'rgba(255,255,255,0.9)',
         }}>

@@ -53,7 +53,7 @@ export const STYLE_CATEGORIES: readonly StyleCategory[] = [
   {
     id: 'smart-casual',
     title: 'Smart casual',
-        subtitle: 'The flexible middle ground — tailored but unstuffy',
+        subtitle: 'Tailored but relaxed',
     cover: null,
     lookCount: null,
     formality: 'smart_casual',

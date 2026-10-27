@@ -24,8 +24,8 @@ export default function CommunityScreen() {
 
       <EmptyState
         status="planned"
-        title="Community opens in Phase C"
-        body="Posts, short video, comments, saves, follows, creator profiles and item search from a post are specified and scheduled. Moderation has to ship with them, not after, so the whole surface lands together."
+        title="Community is not open yet"
+        body="Posts, video and follows arrive together with moderation."
       />
     </Screen>
   );

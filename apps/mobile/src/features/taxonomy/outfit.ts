@@ -58,7 +58,7 @@ export function explainAesthetic(
   );
   const shown = matched.length ? matched : evidence.slice(0, 3);
   return shown.length
-    ? `${aesthetic.label} — ${shown.join(', ')}`
+    ? `${aesthetic.label}: ${shown.join(', ')}`
     : aesthetic.label;
 }
 
