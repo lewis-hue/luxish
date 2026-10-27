@@ -56,7 +56,7 @@ export function StyleTile({
   const colors = Colors[useScheme()];
   const credit = asset ? attributionLine(asset.source) : null;
 
-  return (
+  const tile = (
     <MotionPressable
       accessibilityRole="button"
       accessibilityLabel={`${title}${subtitle ? `. ${subtitle}` : ''}`}
@@ -70,7 +70,10 @@ export function StyleTile({
           overflow: 'hidden',
           backgroundColor: colors.backgroundElement,
         },
-        style,
+        // In grid mode the caller's style belongs to the wrapper that holds
+        // the image *and* its caption, not to the image alone, or `flex: 1`
+        // would size the photograph and leave the text unaligned.
+        feature ? style : undefined,
       ]}>
       {asset ? (
         <Image
@@ -98,79 +101,134 @@ export function StyleTile({
       )}
 
       {/*
-        Bottom-weighted scrim. Three stops rather than two: a linear fade leaves a
-        visible hard edge where it meets the image, and the midpoint softens it.
+        The label sits ON the photograph only for the feature tile, and BELOW
+        it on paper for grid tiles.
+
+        That split is not a preference. Every premium reference measured puts
+        product text below the image: NET-A-PORTER, SSENSE, Indyx and MR
+        PORTER all do, and none overlays. Material 3 is blunter still: "It
+        isn't recommended to place text or icons on images. If it's necessary,
+        ensure the background image provides sufficient contrast... Add a
+        translucent scrim or bounding shape."
+
+        White text over an unknown photograph is a contrast gamble, and a
+        scrim is what makes it safe. On a grid of twelve tiles that gamble is
+        taken twelve times and darkens twelve photographs to pay for it, in an
+        app where the photographs are the content. On a single full-bleed hero
+        the scrim is affordable: it is one image, it is large, and the text is
+        the reason the hero exists.
       */}
-      <LinearGradient
-        colors={['transparent', 'rgba(16,12,11,0.35)', 'rgba(16,12,11,0.88)']}
-        locations={[0.35, 0.62, 1]}
-        pointerEvents="none"
-        style={{
-          position: 'absolute',
-          left: 0,
-          right: 0,
-          bottom: 0,
-          height: '68%',
-        }}
-      />
-
-      <View
-        style={{
-          position: 'absolute',
-          left: 0,
-          right: 0,
-          bottom: 0,
-          padding: feature ? Spacing.four : Spacing.three,
-          gap: Spacing.half,
-        }}>
-        {meta ? (
-          <ThemedText
-            type="small"
+      {feature ? (
+        <>
+          {/*
+            Three stops rather than two: a linear fade leaves a visible hard
+            edge where it meets the image, and the midpoint softens it.
+          */}
+          <LinearGradient
+            colors={['transparent', 'rgba(16,12,11,0.35)', 'rgba(16,12,11,0.88)']}
+            locations={[0.35, 0.62, 1]}
+            pointerEvents="none"
             style={{
-              fontSize: FontSize.meta,
-              letterSpacing: Tracking.label,
-              textTransform: 'uppercase',
-              color: 'rgba(255,255,255,0.72)',
+              position: 'absolute',
+              left: 0,
+              right: 0,
+              bottom: 0,
+              height: '68%',
+            }}
+          />
+
+          <View
+            style={{
+              position: 'absolute',
+              left: 0,
+              right: 0,
+              bottom: 0,
+              padding: Spacing.four,
+              gap: Spacing.half,
             }}>
-            {meta}
-          </ThemedText>
-        ) : null}
-
-        <ThemedText
-          numberOfLines={2}
-          style={{
-            fontFamily: Display.regular,
-            fontSize: feature ? 30 : 20,
-            lineHeight: feature ? 34 : 23,
-            color: '#FFFFFF',
-          }}>
-          {title}
-        </ThemedText>
-
-        {subtitle ? (
-          <ThemedText
-            type="small"
-            numberOfLines={feature ? 3 : 2}
-            style={{ color: 'rgba(255,255,255,0.78)', fontSize: feature ? 14 : 12.5 }}>
-            {subtitle}
-          </ThemedText>
-        ) : null}
-      </View>
+            {meta ? <TileMeta label={meta} onImage /> : null}
+            <ThemedText
+              numberOfLines={2}
+              style={{
+                fontFamily: Display.regular,
+                fontSize: 30,
+                lineHeight: 34,
+                color: '#FFFFFF',
+              }}>
+              {title}
+            </ThemedText>
+            {subtitle ? (
+              <ThemedText
+                type="small"
+                numberOfLines={3}
+                style={{ color: 'rgba(255,255,255,0.78)', fontSize: FontSize.footnote }}>
+                {subtitle}
+              </ThemedText>
+            ) : null}
+          </View>
+        </>
+      ) : null}
 
       {/*
-        Licence attribution only. The AI-generated badge was removed from the tile
-        at the user's request — it is noise on every single card in a grid where
-        every image is generated. The disclosure Play policy asks for now lives
-        once on the collection detail screen instead of twelve times on the grid,
-        and `asset.isGenerated` still carries the fact so nothing is lost.
+        Licence attribution only. The AI-generated badge was removed from the
+        tile at the user's request: it is noise on every single card in a grid
+        where every image is generated. The disclosure Play policy asks for
+        lives once on the collection detail screen instead of twelve times on
+        the grid, and `asset.isGenerated` still carries the fact.
       */}
       {credit ? (
-        <View
-          style={{ position: 'absolute', top: Spacing.two, right: Spacing.two }}>
+        <View style={{ position: 'absolute', top: Spacing.two, right: Spacing.two }}>
           <Badge label={credit} />
         </View>
       ) : null}
     </MotionPressable>
+  );
+
+  if (feature) return tile;
+
+  return (
+    <View style={[{ gap: Spacing.two }, style]}>
+      {tile}
+      <View style={{ gap: 2, paddingHorizontal: Spacing.half }}>
+        {meta ? <TileMeta label={meta} /> : null}
+        <ThemedText
+          numberOfLines={2}
+          style={{
+            fontFamily: Display.regular,
+            fontSize: FontSize.title3,
+            lineHeight: 23,
+            color: colors.text,
+          }}>
+          {title}
+        </ThemedText>
+        {subtitle ? (
+          <ThemedText
+            type="small"
+            numberOfLines={2}
+            themeColor="textSecondary"
+            style={{ fontSize: FontSize.caption }}>
+            {subtitle}
+          </ThemedText>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
+/** The small tracked caps label above a tile title. */
+function TileMeta({ label, onImage }: { label: string; onImage?: boolean }) {
+  const colors = Colors[useScheme()];
+  return (
+    <ThemedText
+      type="small"
+      style={{
+        fontSize: FontSize.meta,
+        letterSpacing: Tracking.label,
+        textTransform: 'uppercase',
+        color: onImage ? 'rgba(255,255,255,0.72)' : colors.textSecondary,
+      }}>
+      {label}
+    </ThemedText>
   );
 }
 
