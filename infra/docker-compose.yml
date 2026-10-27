@@ -40,6 +40,29 @@ services:
   # Keycloak >= 26.8.1 is a floor, not a preference: 26.8.1 fixed 22 CVEs, three of
   # them in identity brokering (CVE-2026-82968 wrong-account linking,
   # CVE-2026-15943 masked-secret reuse, CVE-2026-18569 forged logout tokens).
+  # Captures every email the stack sends and shows it in a browser. Nothing
+  # leaves the machine.
+  #
+  # Added because the realm keeps `verifyEmail: true`, which is right and must
+  # stay right: registration sends a verification mail, and a local stack with
+  # no SMTP fails it with "Failed to send email". Disabling verification would
+  # have made local development stop exercising the flow that ships, so the
+  # mail server is faked instead of the requirement.
+  mailpit:
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: 'true'
+      MP_SMTP_AUTH_ALLOW_INSECURE: 'true'
+    ports:
+      # Read the mail at http://localhost:55026
+      - '55026:8025'
+    healthcheck:
+      test: ['CMD', '/mailpit', 'readyz']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
   keycloak:
     image: quay.io/keycloak/keycloak:26.8.1
     # `start-dev` is development only — it forces local caches. Production uses
@@ -78,6 +101,8 @@ services:
       - ./keycloak/import:/opt/keycloak/data/import:ro
     depends_on:
       postgres:
+        condition: service_healthy
+      mailpit:
         condition: service_healthy
     healthcheck:
       test:
