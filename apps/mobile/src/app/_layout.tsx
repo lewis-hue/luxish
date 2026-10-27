@@ -66,6 +66,17 @@ export default function RootLayout() {
               }}>
               <Stack.Screen name="(tabs)" />
               <Stack.Screen
+                name="look/[id]"
+                options={{
+                  headerShown: true,
+                  headerTitle: '',
+                  // Transparent so the cover runs under it; the title is in the
+                  // image, not the bar.
+                  headerTransparent: true,
+                  headerBackButtonDisplayMode: 'minimal',
+                }}
+              />
+              <Stack.Screen
                 name="import"
                 options={{
                   // Incoming shares arrive over whatever tab is open.

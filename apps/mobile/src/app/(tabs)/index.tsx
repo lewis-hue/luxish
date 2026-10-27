@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { FlatList, Pressable, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -101,6 +102,7 @@ function Tile({ category }: { category: StyleCategory }) {
       title={category.title}
       subtitle={null}
       meta={category.cues[0] ?? null}
+      onPress={() => router.push({ pathname: '/look/[id]', params: { id: category.id } })}
     />
   );
 }
@@ -183,6 +185,7 @@ function Header({
           title={lead.title}
           subtitle={lead.subtitle}
           meta="Featured"
+          onPress={() => router.push({ pathname: '/look/[id]', params: { id: lead.id } })}
         />
       ) : null}
     </View>
