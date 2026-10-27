@@ -44,10 +44,18 @@ python -m venv .venv
 # .venv/bin/python -m pip install -e '.[dev]'        # macOS / Linux
 
 .venv/Scripts/python -m alembic upgrade head
-.venv/Scripts/python -m uvicorn app.main:app --reload --port 8000
+.venv/Scripts/python -m alembic upgrade head
+.venv/Scripts/python scripts/seed.py          # 9 regional profiles; idempotent
+.venv/Scripts/python -m uvicorn app.main:app --reload --port 8010
 ```
 
-Open http://localhost:8000/docs for the generated OpenAPI UI.
+Open http://localhost:8010/docs for the generated OpenAPI UI. **Port 8010, not
+8000** — 8000 is commonly already taken, and the failure is a bind error after the
+app has already logged "Application startup complete", which reads as a crash.
+
+Verify it: `/healthz` returns 200 unauthenticated, and `/v1/regional/context`
+returns a structured 401 with a `code` and `request_id`. The second is the
+*correct* response without a token, not a failure.
 
 ### Mobile
 
@@ -72,8 +80,14 @@ Nothing in the repository holds a credential. Copy the example and fill in what 
 have; every integration degrades to a labelled unavailable state rather than failing.
 
 ```bash
-cp .env.example .env
+cp .env.example services/api/.env    # then prefix every backend var with ATELIER_
+cp .env.example apps/mobile/.env     # only EXPO_PUBLIC_* matters here
 ```
+
+**The backend reads `services/api/.env`, not the repository root, and its Settings
+use `env_prefix = "ATELIER_"`.** So the variable is `ATELIER_DATABASE_URL`, not
+`DATABASE_URL`. Getting this wrong presents as a pydantic "Field required" error
+listing variables you believe you have already set.
 
 | Variable | Needed for | Without it |
 |---|---|---|
@@ -179,9 +193,23 @@ non-local deployments; see the production notes in the Keycloak README.
 **A realm change appears to do nothing** — the realm already existed, so the import
 was skipped. Delete it and restart.
 
-**`docker compose up` hangs** — known on this machine. The daemon responds to
-`version` and `ps` but hangs on `run`/`start`. Nothing in the repository works around
-it; the unit suites deliberately need no server so development continues regardless.
+**Containers never start** — observed on the authoring machine on 2026-10-27, and
+not fixed by restarting Docker Desktop. The daemon answers `docker version`,
+`docker ps` and `docker images` instantly, and image pulls succeed, but every new
+container stays in `Created` and never reaches `Running` — including
+`docker run hello-world`. Existing containers report `Up` while their published
+ports refuse connections. `docker info` showed 258 accumulated containers.
+
+What to try, in order: `wsl --shutdown`, restart Docker Desktop, then
+`docker container prune`. If it persists, Docker Desktop → Troubleshoot → Reset to
+factory defaults. WSL itself was healthy (`wsl -l -v` showed both distributions
+Running), so this is Docker Desktop's container runtime rather than WSL.
+
+**Nothing in the repository depends on Docker to develop.** The unit suites need no
+server, and the API runs against SQLite — set
+`ATELIER_DATABASE_URL=sqlite+aiosqlite:///C:/tmp/atelier_dev.sqlite3`. What you lose
+is Keycloak (so no real sign-in, and no authenticated endpoint can be exercised by
+hand) and the two Postgres-only tests.
 
 ---
 
@@ -189,9 +217,10 @@ it; the unit suites deliberately need no server so development continues regardl
 
 Stated here so nobody hunts for it:
 
-- **`packages/contracts`** is empty. The typed client is generated from the API's
-  OpenAPI document; the generator is not yet configured, so the mobile app has no
-  live API calls and every screen renders from local data or a labelled empty state.
+- **Authenticated screens** cannot be exercised by hand without Keycloak, which
+  needs Docker. The typed client, the queries and the error states are all in place
+  and tested; what is missing is a token. Profile shows backend reachability, which
+  works unauthenticated.
 - **`apps/admin`** is empty (Phase C).
 - **`infra/terraform`** is empty. Local development does not need it; deployment does.
 - **`tests/load/locustfile.py`** does not exist, so no figure in
