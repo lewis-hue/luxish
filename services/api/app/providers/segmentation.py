@@ -101,6 +101,38 @@ SEGMENTATION_BODY_ALLOWLIST: frozenset[str] = frozenset(
 #: surface it is composited onto, and a wardrobe grid wants one consistent one.
 CUTOUT_BACKGROUND = "#F2EDE5"
 
+#: Whether a cut-out gets a contact shadow, and how strong.
+#:
+#: This is not decoration. Depop A/B tested background removal with no shadow
+#: and measured 9% adoption against flat listing and sales metrics; the
+#: published diagnosis was that "without a shadow, products looked like they
+#: were floating in space, unnatural and unconvincing. An image that looks too
+#: artificially edited can undermine the trust that peer-to-peer selling
+#: depends on." The same feature with a generated shadow returned +1.5% items
+#: listed. So the hard cut-out on a flat ground is the version that failed,
+#: and the shadow is what makes the cut-out usable rather than an extra
+#: (ADR-019).
+#:
+#: A *contact* shadow, not a drop shadow: tight under the garment with no
+#: horizontal offset, because a diagonal offset implies a light source the
+#: photograph does not have and reads as a sticker on a page.
+#:
+#: All three numbers are ASSUMED and expressed as fractions of the image so
+#: they hold at any resolution. Revisit with real garment photographs.
+#: How far down the shadow sits, as a fraction of image height.
+SHADOW_OFFSET_RATIO = 0.012
+#: Blur radius, as a fraction of the shorter side. Soft enough to read as
+#: contact rather than as a second, darker garment.
+SHADOW_BLUR_RATIO = 0.018
+#: Peak opacity. Past roughly 0.35 the garment starts to look like it is
+#: floating above the page rather than resting on it, which is the problem
+#: the shadow exists to solve.
+SHADOW_OPACITY = 0.28
+#: How far the shadow darkens the ground colour. Derived from the background
+#: rather than fixed, so a shadow is never a grey smudge on warm paper: pure
+#: black against #F2EDE5 reads as dirt.
+SHADOW_DARKEN = 0.45
+
 CUTOUT_CONTENT_TYPE = "image/png"
 
 #: Versioned so an :class:`~app.models.ai_run.AIRun` can be traced back to the
@@ -641,11 +673,16 @@ def composite_cutout(
     original: bytes,
     records: Sequence[MaskRecord],
     background: str = CUTOUT_BACKGROUND,
+    shadow: bool = True,
 ) -> bytes:
     """Paste the masked garment onto a solid ground and return PNG bytes.
 
     The original bytes are read, never written: the return value is new bytes
     for a new asset.
+
+    ``shadow`` adds the contact shadow and defaults on, because a cut-out
+    without one measurably underperforms (see :data:`SHADOW_OPACITY`). It is a
+    parameter only so a test can assert the difference.
     """
     try:
         from PIL import Image, ImageChops
@@ -689,11 +726,55 @@ def composite_cutout(
             )
 
         canvas = Image.new("RGB", size, background)
+        if shadow:
+            _paint_contact_shadow(canvas, combined, background=background)
         canvas.paste(source, (0, 0), combined)
 
         buffer = io.BytesIO()
         canvas.save(buffer, format="PNG", optimize=True)
         return buffer.getvalue()
+
+
+def _shadow_colour(background: str) -> tuple[int, int, int]:
+    """A darker version of the ground, so the shadow stays in the same family."""
+    from PIL import ImageColor
+
+    red, green, blue = ImageColor.getrgb(background)[:3]
+    return (
+        int(red * SHADOW_DARKEN),
+        int(green * SHADOW_DARKEN),
+        int(blue * SHADOW_DARKEN),
+    )
+
+
+def _paint_contact_shadow(canvas: Any, mask: Any, *, background: str) -> None:
+    """Paint the garment's shadow onto ``canvas``, in place, beneath it.
+
+    Built from the garment's own silhouette rather than an ellipse, because a
+    generic blob under a specific shape is exactly the "artificially edited"
+    look the shadow is there to avoid.
+
+    Clipping at the bottom edge is correct and deliberate: a garment
+    photographed to the edge of frame has nowhere for its shadow to fall.
+    """
+    from PIL import Image, ImageFilter
+
+    width, height = canvas.size
+    offset = max(1, round(height * SHADOW_OFFSET_RATIO))
+    blur = max(1.0, min(width, height) * SHADOW_BLUR_RATIO)
+
+    # Blur first, then shift. Shifting a hard mask and blurring afterwards
+    # bleeds the shadow symmetrically above the garment too, which looks like
+    # a halo rather than contact.
+    softened = mask.filter(ImageFilter.GaussianBlur(blur))
+
+    shifted = Image.new("L", canvas.size, 0)
+    shifted.paste(softened, (0, offset))
+
+    peak = round(255 * SHADOW_OPACITY)
+    alpha = shifted.point(lambda value: value * peak // 255)
+
+    canvas.paste(Image.new("RGB", canvas.size, _shadow_colour(background)), (0, 0), alpha)
 
 
 # --------------------------------------------------------------------------- #
@@ -1045,6 +1126,10 @@ DEFAULT_SEGMENTATION_PROVIDER = "meta_sam"
 __all__ = [
     "CATEGORY_NOUN_PHRASE",
     "CUTOUT_BACKGROUND",
+    "SHADOW_BLUR_RATIO",
+    "SHADOW_DARKEN",
+    "SHADOW_OFFSET_RATIO",
+    "SHADOW_OPACITY",
     "CUTOUT_CONTENT_TYPE",
     "DEFAULT_SEGMENTATION_PROVIDER",
     "GENERIC_NOUN_PHRASE",

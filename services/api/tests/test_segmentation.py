@@ -549,7 +549,12 @@ def test_a_raster_that_disagrees_with_its_box_is_resized_not_assumed() -> None:
     from PIL import Image
 
     record = mask_record(x1=2, y1=2, x2=5, y2=5, height=2, width=2, raster=b"\x01" * 4)
-    cutout = composite_cutout(original=solid_png((8, 8), (10, 20, 200)), records=[record])
+    # `shadow=False` so the ground pixel sampled below stays exactly the
+    # background. This test is about reconciling the raster with its box; the
+    # contact shadow is covered on its own in tests/test_cutout_shadow.py.
+    cutout = composite_cutout(
+        original=solid_png((8, 8), (10, 20, 200)), records=[record], shadow=False
+    )
 
     with Image.open(io.BytesIO(cutout)) as image:
         rgb = image.convert("RGB")
