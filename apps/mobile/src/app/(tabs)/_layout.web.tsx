@@ -1,4 +1,5 @@
 import { TabList, TabSlot, TabTrigger, Tabs, type TabTriggerSlotProps } from 'expo-router/ui';
+import type { ComponentRef, Ref } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
@@ -60,11 +61,22 @@ export default function WebTabsLayout() {
   );
 }
 
-function TabButton({ children, isFocused, ...props }: TabTriggerSlotProps) {
+// `asChild` clones this element with a ref attached, so the component has to accept
+// one. React 19 passes ref as an ordinary prop, so no forwardRef is needed — but the
+// prop still has to be declared or the cloned element does not typecheck.
+function TabButton({
+  children,
+  isFocused,
+  ref,
+  ...props
+  // RN 0.88's strict TS API types refs as the *instance*, not the component, so
+  // `Ref<View>` is rejected where `Ref<ComponentRef<typeof View>>` is accepted.
+}: TabTriggerSlotProps & { ref?: Ref<ComponentRef<typeof View>> }) {
   const colors = Colors[useScheme()];
   return (
     <Pressable
       {...props}
+      ref={ref}
       accessibilityRole="tab"
       accessibilityState={{ selected: isFocused }}
       style={({ pressed }) => ({

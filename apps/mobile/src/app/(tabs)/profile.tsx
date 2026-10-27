@@ -6,7 +6,7 @@ import { Screen } from '@/components/ui/screen';
 import { useApiHealth } from '@/api/queries/health';
 import { BRAND } from '@/branding';
 import { API_BASE_URL } from '@/api/client';
-import { Colors, Fonts, Radius, Spacing } from '@/constants/theme';
+import { Colors, Display, Radius, Spacing } from '@/constants/theme';
 import {
   CHATGPT_STATE_COPY,
   type ChatGptConnectionState,
@@ -37,7 +37,7 @@ export default function ProfileScreen() {
   return (
     <Screen scroll>
       <View style={{ gap: Spacing.one, marginBottom: Spacing.four }}>
-        <ThemedText style={{ fontFamily: Fonts.serif, fontSize: 40, lineHeight: 44 }}>
+        <ThemedText style={{ fontFamily: Display.regular, fontSize: 40, lineHeight: 44 }}>
           Profile
         </ThemedText>
         <ThemedText type="small" themeColor="textSecondary">

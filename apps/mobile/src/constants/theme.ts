@@ -58,6 +58,20 @@ export const Colors = {
 
 export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
 
+/**
+ * The display face, loaded at startup by the root layout.
+ *
+ * Bodoni Moda is a high-contrast didone — the register fashion magazines have used
+ * for a century, and specific enough that the app does not read as a template. It is
+ * used for headings and nothing else: body copy and controls stay on the system face,
+ * because a custom UI font is the fastest way to make a native app feel like a
+ * website wearing a costume.
+ */
+export const Display = {
+  regular: 'BodoniModa_400Regular',
+  semibold: 'BodoniModa_600SemiBold',
+} as const;
+
 export const Fonts = Platform.select({
   ios: {
     /** iOS `UIFontDescriptorSystemDesignDefault` */

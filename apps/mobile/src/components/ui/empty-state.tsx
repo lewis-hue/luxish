@@ -1,7 +1,7 @@
 import { Pressable, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { Colors, Fonts, Radius, Spacing } from '@/constants/theme';
+import { Colors, Display, Radius, Spacing } from '@/constants/theme';
 import { useScheme } from '@/hooks/use-theme';
 
 type Status = 'empty' | 'planned' | 'blocked' | 'error' | 'offline';
@@ -71,7 +71,7 @@ export function EmptyState({ status, title, body, action }: EmptyStateProps) {
 
       <ThemedText
         style={{
-          fontFamily: Fonts.serif,
+          fontFamily: Display.regular,
           fontSize: 24,
           lineHeight: 30,
           textAlign: 'center',

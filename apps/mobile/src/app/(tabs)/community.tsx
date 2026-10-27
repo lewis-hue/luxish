@@ -3,7 +3,7 @@ import { View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Screen } from '@/components/ui/screen';
-import { Fonts, Spacing } from '@/constants/theme';
+import { Display, Spacing } from '@/constants/theme';
 
 /**
  * Community — discovery and following feeds, creator content, posting (§3, §12).
@@ -14,7 +14,7 @@ export default function CommunityScreen() {
   return (
     <Screen scroll>
       <View style={{ gap: Spacing.one, marginBottom: Spacing.three }}>
-        <ThemedText style={{ fontFamily: Fonts.serif, fontSize: 40, lineHeight: 44 }}>
+        <ThemedText style={{ fontFamily: Display.regular, fontSize: 40, lineHeight: 44 }}>
           Community
         </ThemedText>
         <ThemedText type="small" themeColor="textSecondary">

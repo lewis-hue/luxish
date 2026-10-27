@@ -65,6 +65,12 @@ export interface InspirationAsset {
   id: string;
   /** Delivered URL. Our CDN derivative, unless `source.hotlinkOnly` is set. */
   uri: string;
+  /**
+   * A bundled asset, for imagery that ships with the app rather than being
+   * fetched. Set for the generated Discover covers; null for anything remote.
+   * When present it wins over `uri` — a local asset needs no network at all.
+   */
+  localSource?: number | import('expo-image').ImageSource | null;
   /** Low-cost placeholder so the grid never flashes empty. */
   blurhash: string | null;
   width: number;

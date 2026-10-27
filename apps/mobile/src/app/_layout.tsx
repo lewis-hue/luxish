@@ -1,4 +1,9 @@
+import {
+  BodoniModa_400Regular,
+  BodoniModa_600SemiBold,
+} from '@expo-google-fonts/bodoni-moda';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { useFonts } from 'expo-font';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
@@ -32,13 +37,22 @@ const queryClient = new QueryClient({
 export default function RootLayout() {
   const scheme = useScheme();
 
+  // The display face must be resolved before the first paint, or every heading
+  // renders in a fallback serif and then reflows once Bodoni arrives — a visible
+  // jump on the busiest screen in the app.
+  const [fontsLoaded, fontError] = useFonts({
+    BodoniModa_400Regular,
+    BodoniModa_600SemiBold,
+  });
+
   useEffect(() => {
-    // Nothing async to wait on yet — no custom fonts and no restored session — so
-    // hide on first mount. When session restore lands this becomes conditional on
-    // it, but it stays a single effect: setting state here only to read it back in
-    // another effect would cause a cascading render.
-    SplashScreen.hideAsync();
-  }, []);
+    // Hide on a font error too. A missing display face is a degraded screen; a
+    // splash that never goes away is a broken app.
+    if (fontsLoaded || fontError) SplashScreen.hideAsync();
+  }, [fontsLoaded, fontError]);
+
+  // Holding the splash avoids a flash of unstyled headings.
+  if (!fontsLoaded && !fontError) return null;
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>

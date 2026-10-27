@@ -1,18 +1,27 @@
 import { Image } from 'expo-image';
-import { Pressable, View, type StyleProp, type ViewStyle } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import * as Haptics from 'expo-haptics';
+import { Platform, Pressable, View, type StyleProp, type ViewStyle } from 'react-native';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+} from 'react-native-reanimated';
 
 import { ThemedText } from '@/components/themed-text';
-import { AspectRatio, Colors, Fonts, Motion, Radius, Spacing } from '@/constants/theme';
+import { AspectRatio, Colors, Display, Motion, Radius, Spacing } from '@/constants/theme';
 import { attributionLine, type InspirationAsset } from '@/features/discover/types';
-import { useScheme } from '@/hooks/use-theme';
+import { useReducedMotion, useScheme } from '@/hooks/use-theme';
+
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 type StyleTileProps = {
-  /** Null until an inspiration image source is licensed; falls back to type. */
   asset: InspirationAsset | null;
   title: string;
   subtitle?: string | null;
-  /** Shown under the title, e.g. '24 looks'. */
   meta?: string | null;
+  /** Taller treatment for the lead tile. */
+  feature?: boolean;
   onPress?: () => void;
   style?: StyleProp<ViewStyle>;
 };
@@ -20,109 +29,172 @@ type StyleTileProps = {
 /**
  * Image-led tile for the Discover grid.
  *
- * Fixed aspect ratio (§3) so the grid never reflows as images land, a blurhash
- * placeholder so it never flashes empty, and two overlays that are not optional: the
- * licence attribution when the provider requires it, and an AI-generated disclosure
- * when the image came from a model (required by Google Play policy).
+ * The label sits *on* the photograph behind a gradient scrim rather than in a band
+ * beneath it — a band turns a fashion grid into a file listing. The scrim is what
+ * makes that safe: white text on an unknown image is a contrast gamble, and the
+ * gradient guarantees a dark ground under the text regardless of what the photograph
+ * does there.
  *
- * With no asset it renders an editorial typographic cover rather than a grey box, so
- * the grid is complete before any imagery is licensed.
+ * Press feedback is a spring scale rather than an opacity fade, because fading a
+ * photograph reads as "loading" instead of "pressed". It collapses to nothing when
+ * the user has asked for reduced motion.
  */
 export function StyleTile({
   asset,
   title,
   subtitle,
   meta,
+  feature,
   onPress,
   style,
 }: StyleTileProps) {
   const colors = Colors[useScheme()];
+  const reducedMotion = useReducedMotion();
+  const pressed = useSharedValue(0);
   const credit = asset ? attributionLine(asset.source) : null;
 
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: reducedMotion ? 1 : 1 - pressed.value * 0.025 }],
+  }));
+
   return (
-    <Pressable
+    <AnimatedPressable
       accessibilityRole="button"
       accessibilityLabel={`${title}${subtitle ? `. ${subtitle}` : ''}`}
       accessibilityHint="Opens this style collection"
+      onPressIn={() => {
+        pressed.value = withSpring(1, { damping: 20, stiffness: 400 });
+        // Selection feedback is the lightest tap iOS offers; anything heavier on a
+        // browse grid becomes noise within a few scrolls.
+        if (Platform.OS !== 'web') void Haptics.selectionAsync();
+      }}
+      onPressOut={() => {
+        pressed.value = withSpring(0, { damping: 20, stiffness: 400 });
+      }}
       onPress={onPress}
-      style={({ pressed }) => [
+      style={[
         {
           borderRadius: Radius.lg,
           borderCurve: 'continuous',
           overflow: 'hidden',
           backgroundColor: colors.backgroundElement,
-          borderWidth: 1,
-          borderColor: colors.border,
-          opacity: pressed ? 0.88 : 1,
         },
+        animatedStyle,
         style,
       ]}>
       {asset ? (
         <Image
-          source={{ uri: asset.uri }}
+          source={asset.localSource ?? { uri: asset.uri }}
           placeholder={asset.blurhash ? { blurhash: asset.blurhash } : undefined}
-          // 'memory-disk' is what keeps scrolling smooth on mid-range Android.
           cachePolicy="memory-disk"
           contentFit="cover"
           transition={Motion.base}
           accessible={false}
-          style={{ width: '100%', aspectRatio: AspectRatio.editorial }}
+          style={{
+            width: '100%',
+            aspectRatio: feature ? 4 / 5 : AspectRatio.editorial,
+          }}
         />
       ) : (
-        <TypographicCover title={title} />
+        <TypographicCover title={title} feature={feature} />
       )}
 
-      {/* Label band, so text never sits directly on photography. */}
-      <View style={{ padding: Spacing.three, gap: Spacing.one }}>
-        <ThemedText type="smallBold" numberOfLines={1}>
-          {title}
-        </ThemedText>
-        {subtitle ? (
-          <ThemedText type="small" themeColor="textSecondary" numberOfLines={2}>
-            {subtitle}
+      {/*
+        Bottom-weighted scrim. Three stops rather than two: a linear fade leaves a
+        visible hard edge where it meets the image, and the midpoint softens it.
+      */}
+      <LinearGradient
+        colors={['transparent', 'rgba(16,12,11,0.35)', 'rgba(16,12,11,0.88)']}
+        locations={[0.35, 0.62, 1]}
+        pointerEvents="none"
+        style={{
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          bottom: 0,
+          height: '68%',
+        }}
+      />
+
+      <View
+        style={{
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          bottom: 0,
+          padding: feature ? Spacing.four : Spacing.three,
+          gap: Spacing.half,
+        }}>
+        {meta ? (
+          <ThemedText
+            type="small"
+            style={{
+              fontSize: 10,
+              letterSpacing: 1.2,
+              textTransform: 'uppercase',
+              color: 'rgba(255,255,255,0.72)',
+            }}>
+            {meta}
           </ThemedText>
         ) : null}
 
-        {meta || asset?.isGenerated || credit ? (
-          <View
-            style={{
-              flexDirection: 'row',
-              gap: Spacing.two,
-              flexWrap: 'wrap',
-              marginTop: Spacing.one,
-            }}>
-            {meta ? <Badge label={meta} tone="muted" /> : null}
-            {/* Disclosure, not decoration — never drop this for space. */}
-            {asset?.isGenerated ? <Badge label="AI image" tone="accent" /> : null}
-            {credit ? <Badge label={credit} tone="muted" /> : null}
-          </View>
+        <ThemedText
+          numberOfLines={2}
+          style={{
+            fontFamily: Display.regular,
+            fontSize: feature ? 30 : 20,
+            lineHeight: feature ? 34 : 23,
+            color: '#FFFFFF',
+          }}>
+          {title}
+        </ThemedText>
+
+        {subtitle ? (
+          <ThemedText
+            type="small"
+            numberOfLines={feature ? 3 : 2}
+            style={{ color: 'rgba(255,255,255,0.78)', fontSize: feature ? 14 : 12.5 }}>
+            {subtitle}
+          </ThemedText>
         ) : null}
       </View>
-    </Pressable>
+
+      {/* Disclosure, top-right so it never competes with the title. */}
+      {asset?.isGenerated || credit ? (
+        <View
+          style={{
+            position: 'absolute',
+            top: Spacing.two,
+            right: Spacing.two,
+            flexDirection: 'row',
+            gap: Spacing.one,
+          }}>
+          {asset?.isGenerated ? <Badge label="AI" /> : null}
+          {credit ? <Badge label={credit} /> : null}
+        </View>
+      ) : null}
+    </AnimatedPressable>
   );
 }
 
-/**
- * Editorial fallback cover: the category initial set large in the serif face, on the
- * raised surface. Reads as a deliberate design choice rather than a missing image.
- */
-function TypographicCover({ title }: { title: string }) {
+/** Editorial fallback while a cover is missing. */
+function TypographicCover({ title, feature }: { title: string; feature?: boolean }) {
   const colors = Colors[useScheme()];
   return (
     <View
       accessible={false}
       style={{
         width: '100%',
-        aspectRatio: AspectRatio.editorial,
+        aspectRatio: feature ? 4 / 5 : AspectRatio.editorial,
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: colors.backgroundSelected,
       }}>
       <ThemedText
         style={{
-          fontFamily: Fonts.serif,
-          fontSize: 72,
-          lineHeight: 80,
+          fontFamily: Display.regular,
+          fontSize: feature ? 96 : 72,
+          lineHeight: feature ? 104 : 80,
           color: colors.accent,
         }}>
         {title.trim().charAt(0).toUpperCase()}
@@ -131,26 +203,26 @@ function TypographicCover({ title }: { title: string }) {
   );
 }
 
-function Badge({ label, tone }: { label: string; tone: 'accent' | 'muted' }) {
-  const colors = Colors[useScheme()];
-  const accent = tone === 'accent';
+function Badge({ label }: { label: string }) {
   return (
     <View
       style={{
         paddingHorizontal: Spacing.two,
-        paddingVertical: Spacing.half,
+        paddingVertical: 3,
         borderRadius: Radius.full,
-        backgroundColor: accent ? colors.accent : 'transparent',
-        borderWidth: accent ? 0 : 1,
-        borderColor: colors.border,
+        // Dark pill rather than a tinted one: it has to sit legibly on an
+        // unpredictable photograph, and the accent does not always.
+        backgroundColor: 'rgba(16,12,11,0.55)',
       }}>
       <ThemedText
         type="small"
+        numberOfLines={1}
         style={{
-          fontSize: 11,
-          color: accent ? colors.accentText : colors.textSecondary,
-        }}
-        numberOfLines={1}>
+          fontSize: 9.5,
+          letterSpacing: 0.8,
+          textTransform: 'uppercase',
+          color: 'rgba(255,255,255,0.9)',
+        }}>
         {label}
       </ThemedText>
     </View>

@@ -4,7 +4,7 @@ import { Pressable, TextInput, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { Screen } from '@/components/ui/screen';
-import { Colors, Fonts, Radius, Spacing } from '@/constants/theme';
+import { Colors, Display, Radius, Spacing } from '@/constants/theme';
 import {
   availableActions,
   detectPlatform,
@@ -36,7 +36,7 @@ export default function ImportScreen() {
   return (
     <Screen scroll>
       <View style={{ gap: Spacing.two, marginBottom: Spacing.four }}>
-        <ThemedText style={{ fontFamily: Fonts.serif, fontSize: 28, lineHeight: 34 }}>
+        <ThemedText style={{ fontFamily: Display.regular, fontSize: 28, lineHeight: 34 }}>
           Add inspiration
         </ThemedText>
         <ThemedText type="small" themeColor="textSecondary">
