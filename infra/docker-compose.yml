@@ -54,10 +54,14 @@ services:
       KC_DB_USERNAME: luxish
       KC_DB_PASSWORD: luxish
       KC_HEALTH_ENABLED: 'true'
-      # Placeholders referenced by luxish-realm.json, so no secret is committed.
+      # Referenced as ${...} inside luxish-realm.json, so no secret is ever
+      # committed. Real values come from `infra/.env`, which is gitignored;
+      # see infra/.env.example. The `:-unset` default keeps the stack bootable
+      # without Google configured, in which case the Google button appears and
+      # fails at Google rather than breaking the import.
       LUXISH_API_CLIENT_SECRET: local-dev-only-not-a-real-secret
-      GOOGLE_CLIENT_ID: unset
-      GOOGLE_CLIENT_SECRET: unset
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-unset}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-unset}
     ports:
       - '55080:8080'
       - '55000:9000' # management port: /health/ready lives here, not on 8080

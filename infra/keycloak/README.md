@@ -174,7 +174,56 @@ npm run dev:up                       # postgres + redis + keycloak
 # Readiness:     http://localhost:55000/health/ready
 ```
 
-Google sign-in stays inert locally until `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`
-are set — the placeholders import as the literal string `unset`, so the button appears
-but cannot complete. That is intentional: it keeps the realm importable with no
-credentials.
+## Configuring Google sign-in
+
+Credentials live in `infra/.env`, which is gitignored. Copy `infra/.env.example`
+and fill in the two values:
+
+```
+GOOGLE_CLIENT_ID=...apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=...
+```
+
+Compose passes them to Keycloak, and `luxish-realm.json` references them as
+`${GOOGLE_CLIENT_ID}` / `${GOOGLE_CLIENT_SECRET}`, so **no credential is ever
+committed**. `docker compose config` is the quick way to confirm they resolved.
+
+### The redirect URI is the part that catches people
+
+The OAuth client in the Google Cloud console must be of type **Web
+application**, and it must list this exact authorised redirect URI:
+
+```
+http://localhost:55080/realms/luxish/broker/google/endpoint
+```
+
+Google matches it character for character. A missing `http://`, a trailing
+slash, port 8080 instead of 55080, or `luxish` capitalised all produce
+`redirect_uri_mismatch` at the Google consent screen rather than anything
+Keycloak logs. The port is 55080 because this stack deliberately uses high
+ports to avoid colliding with whatever already owns 8080.
+
+The path is derived, not arbitrary: Keycloak serves every broker callback at
+`/realms/<realm>/broker/<alias>/endpoint`, and the alias is `google` in the
+realm JSON. Rename the alias and the URI changes with it.
+
+For a deployed environment, add that environment's origin as a second
+authorised redirect URI rather than replacing this one, so local development
+keeps working.
+
+### What stays true regardless of the credentials
+
+`trustEmail` is `false` on this provider, and that is deliberate. Google does
+verify its users' email addresses, so turning it on is defensible, but the
+realm keeps the `first broker login` flow doing the verification itself. The
+reason is that `trustEmail: true` makes account linking depend on an assertion
+from a third party: anyone who can make an identity provider assert
+`email_verified` for an address can take over the local account that owns it.
+Keeping it false costs one extra email on first sign-up and removes that class
+of takeover entirely. See the security note on `identityProviders[alias=google]`
+above.
+
+If Google is not configured, the placeholders import as the literal string
+`unset`. The button still appears and fails at Google. That is intentional: the
+realm stays importable with no credentials, which is what keeps CI and a fresh
+clone working.
