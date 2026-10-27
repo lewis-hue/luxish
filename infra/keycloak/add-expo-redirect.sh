@@ -20,8 +20,25 @@
 set -euo pipefail
 
 URI="${1:-}"
+
+# `--from-logs` reads the URI Keycloak actually rejected instead of guessing.
+# This is the reliable way: `makeRedirectUri` resolves differently depending
+# on how Expo Go loaded the app, so the host is not predictable from the
+# tunnel URL, and Keycloak records the exact value it refused.
+if [[ "$URI" == "--from-logs" ]]; then
+  CONTAINER="${KEYCLOAK_CONTAINER:-luxish-keycloak-1}"
+  URI=$(docker logs "$CONTAINER" --tail 400 2>&1     | grep -o 'error="invalid_redirect_uri", redirect_uri="[^"]*"'     | tail -1 | sed 's/.*redirect_uri="//; s/"$//')
+  if [[ -z "$URI" ]]; then
+    echo "no rejected redirect_uri in the last 400 log lines." >&2
+    echo "Try signing in once first, so there is a rejection to read." >&2
+    exit 1
+  fi
+  echo "read from logs: $URI"
+fi
+
 if [[ -z "$URI" ]]; then
   echo "usage: $0 exp://<host>/--/callback" >&2
+  echo "       $0 --from-logs      # register whatever Keycloak last refused" >&2
   exit 2
 fi
 if [[ "$URI" != exp://* ]]; then
