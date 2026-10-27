@@ -15,7 +15,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Awaitable, Callable, Sequence
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -141,16 +141,72 @@ def wardrobe_media_handlers(
     from app.providers.segmentation import SEGMENTATION_PROVIDERS
     from app.workers.categorise import MetaGarmentClassifier, categorise_handlers
 
-    if classifier is None or segmenter is None:
-        cfg = get_settings()
-        if classifier is None:
-            classifier = MetaGarmentClassifier(MetaProvider())
-        if segmenter is None:
-            segmenter = SEGMENTATION_PROVIDERS[cfg.segmentation_provider]()
-
-    return categorise_handlers(
-        classifier=classifier, segmenter=segmenter, store=store
+    from app.domain.garment_media import (
+        BACKGROUND_REMOVAL_JOB_KIND,
+        CATEGORISE_JOB_KIND,
     )
+    from app.providers.base import AIRunRecorder
+
+    cfg = get_settings()
+    if store is None:
+        store = build_media_store(cfg)
+
+    # Injected collaborators are used as given; that is the test path.
+    if classifier is not None and segmenter is not None:
+        return categorise_handlers(
+            classifier=classifier, segmenter=segmenter, store=store
+        )
+
+    # Otherwise the providers are built **per job**, not once here, because
+    # each needs an AIRunRecorder bound to that job's session. The providers
+    # refuse to run without one, and they are right to: an unaccounted model
+    # call is spend nobody can attribute to a user or a feature. Building them
+    # at start-up would mean either no recorder or a recorder holding a
+    # session that has long since closed.
+    def _bound(session: AsyncSession) -> dict[str, Handler]:
+        recorder = AIRunRecorder(session)
+        return categorise_handlers(
+            classifier=classifier or MetaGarmentClassifier(
+                MetaProvider(recorder=recorder)
+            ),
+            segmenter=segmenter
+            or SEGMENTATION_PROVIDERS[cfg.segmentation_provider](recorder=recorder),
+            store=store,
+        )
+
+    async def _categorise(session: AsyncSession, job: Job) -> dict | None:
+        return await _bound(session)[CATEGORISE_JOB_KIND](session, job)
+
+    async def _remove_background(session: AsyncSession, job: Job) -> dict | None:
+        return await _bound(session)[BACKGROUND_REMOVAL_JOB_KIND](session, job)
+
+    return {
+        CATEGORISE_JOB_KIND: _categorise,
+        BACKGROUND_REMOVAL_JOB_KIND: _remove_background,
+    }
+
+
+def build_media_store(cfg: Any) -> MediaStore:
+    """The store the configured upload mode implies.
+
+    Tied to `upload_storage_mode` rather than configured separately, because
+    the two cannot disagree: a worker reading from a different place than the
+    client wrote to would find nothing, and would report it as a missing
+    object rather than as the misconfiguration it is.
+
+    Anything other than `local_file` gets the refusing store. That is the safe
+    default: it fails loudly instead of returning empty bytes, which would be
+    composited into a blank cut-out and saved as though it had worked.
+    """
+    from app.workers.categorise import UnavailableMediaStore
+
+    if cfg.upload_storage_mode == "local_file":
+        from app.storage.local import build_local_store
+
+        return build_local_store(
+            environment=cfg.environment, root=cfg.local_media_root
+        )
+    return UnavailableMediaStore()
 
 
 def all_handlers(

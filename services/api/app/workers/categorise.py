@@ -86,7 +86,19 @@ CATEGORISATION_MODEL = "muse-spark-1.3"
 
 #: A classification is five short labels and five numbers. A generous ceiling
 #: here is only a bill.
-CATEGORISATION_MAX_TOKENS = 512
+#: Output budget for one classification.
+#:
+#: 2048 rather than a figure sized to the JSON, which is about 200 characters.
+#: The cap covers **reasoning tokens too**, and `muse-spark-1.3` spends them
+#: before it emits anything. At 512 it consumed the entire budget thinking and
+#: returned `finish_reason: "length"` with an empty string, so every
+#: classification failed with "did not return JSON" while the accounting
+#: recorded a successful 512-token call. The failure looked like a parsing bug
+#: and was a budget bug.
+#:
+#: Measured, not guessed: 512 returns nothing, 2048 returns the complete
+#: object with room to spare.
+CATEGORISATION_MAX_TOKENS = 2048
 
 #: Deterministic as the provider allows. Classification is not a creative task,
 #: and the drift this whole module exists to prevent is partly sampling drift.

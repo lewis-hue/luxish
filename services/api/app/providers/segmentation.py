@@ -541,11 +541,21 @@ class MetaSamParser:
     confidence as malformed and return no records, which looks exactly like
     "the model found nothing".
 
-    The attribute names used below (``parse_image_stream``,
-    ``decode_mask_to_raster``, ``record.mask``, ``mask.bounds``) are the ones the
-    published docs name. They are **unverified at runtime** in this build: the
-    package is not installed here, so the import failure degrades to
-    :class:`SegmentationUnavailable` and the garment keeps its original.
+    **Verified against the installed package**, which differs from what the
+    docs implied. There is no ``parse_image_stream``: the package exposes a
+    push parser, built by ``image_segmentation_format().create_parser()``,
+    fed whole or in chunks with ``push(str)`` and closed with
+    ``finish(CompletedOutcome())``. The non-streaming ``/v1/responses`` call
+    gives us the complete ``output_text``, so one push and a finish is the
+    whole interaction.
+
+    Record shapes also differ from the guess. A record carries ``bounds``,
+    ``confidence``, ``mask``, ``object_id`` and ``kind``; bounds are
+    ``left/top/right/bottom`` rather than ``x1/y1/x2/y2``; and the mask is a
+    ``SegmentationMask`` with ``encoding``, ``width``, ``height`` and
+    ``payload``. Box geometry comes from the mask record's own bounds, because
+    the separate ``SegmentationBoxRecord`` is a different record kind and is
+    not always present.
     """
 
     #: The constraint to keep in sync with pyproject.
@@ -572,33 +582,47 @@ class MetaSamParser:
             return ()
         module = self.module()
         try:
-            parsed = module.parse_image_stream(text)
+            parser = module.image_segmentation_format().create_parser()
+            # One push: the non-streaming endpoint hands us the whole
+            # `output_text`, and the parser accepts any chunking.
+            parser.push(text)
+            result = parser.finish(module.CompletedOutcome()).result
+
             records: list[MaskRecord] = []
-            for item in parsed:
-                box = item.box
-                mask = item.mask
-                # The bounds' origin is intentionally discarded: the docs state
-                # placement comes from the paired box, and the mask token's
-                # ``x=0;y=0`` is always literally zero.
-                _origin_y, _origin_x, height, width = _bounds_of(mask)
+            for item in result.records:
+                mask = getattr(item, "mask", None)
+                bounds = getattr(item, "bounds", None)
+                # Box records and diagnostics share the stream with mask
+                # records; only the latter carry pixels.
+                if mask is None or bounds is None:
+                    continue
+
                 raster = bytes(module.decode_mask_to_raster(mask))
+                width = int(getattr(mask, "width", 0) or 0)
+                height = int(getattr(mask, "height", 0) or 0)
+                confidence = _confidence_of(item)
+
                 records.append(
                     MaskRecord(
                         object_id=int(getattr(item, "object_id", 0) or 0),
                         box=Box(
-                            x1=int(box.x1),
-                            y1=int(box.y1),
-                            x2=int(box.x2),
-                            y2=int(box.y2),
-                            frame_width=int(getattr(box, "w", 0) or 0),
-                            frame_height=int(getattr(box, "h", 0) or 0),
-                            confidence=_confidence_of(box),
+                            # Inclusive, matching the published examples where
+                            # `H == y2 - y1 + 1`.
+                            x1=int(bounds.left),
+                            y1=int(bounds.top),
+                            x2=int(bounds.right),
+                            y2=int(bounds.bottom),
+                            # The parser reports bounds in source pixels
+                            # already, so there is no frame to rescale from.
+                            frame_width=0,
+                            frame_height=0,
+                            confidence=confidence,
                         ),
                         height=height,
                         width=width,
                         encoding=str(getattr(mask, "encoding", MARKER_LOSSLESS)),
                         raster=raster,
-                        confidence=_confidence_of(mask) or _confidence_of(box),
+                        confidence=confidence,
                     )
                 )
         except SegmentationUnavailable:

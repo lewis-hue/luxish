@@ -363,16 +363,44 @@ def test_a_raster_of_the_wrong_length_is_refused() -> None:
         )
 
 
-def test_the_mask_decoder_is_metas_own_and_degrades_when_absent() -> None:
+def test_the_mask_decoder_degrades_when_metas_parser_is_absent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """We do not hand-roll base85 + compression the docs never specify.
 
-    ``meta-sam-parser`` is not installed in this build, so the import failure
-    must degrade to a labelled capability gap rather than a guessed decoder.
+    The import failure must degrade to a labelled capability gap rather than
+    to a guessed decoder, which would yield cut-outs with torn edges and no
+    error to point at.
+
+    Absence is simulated rather than assumed. The package *is* installed now,
+    and a test that passes only because a dependency happens to be missing
+    stops testing anything the moment someone installs it, which is exactly
+    what happened here.
     """
+    import builtins
+
+    real_import = builtins.__import__
+
+    def refuse(name: str, *args: object, **kwargs: object):
+        if name == "meta_sam_parser":
+            raise ImportError("simulated: not installed")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", refuse)
+
     parser = MetaSamParser()
     assert "meta-sam-parser>=0.0.6" in parser.REQUIREMENT
     with pytest.raises(SegmentationUnavailable):
         parser.parse("<0f>1<|box;x1=0;y1=0;x2=1;y2=1;w=2;h=2|><|mask;x=0;y=0;data=2,2,~AA|>")
+
+
+def test_the_mask_decoder_is_metas_own() -> None:
+    """The adapter delegates; it must not grow a decoder of its own."""
+    import inspect
+
+    source = inspect.getsource(MetaSamParser.parse)
+    assert "decode_mask_to_raster" in source
+    assert "base64" not in source and "b85decode" not in source
 
 
 def test_an_empty_line_needs_no_parser_at_all() -> None:
