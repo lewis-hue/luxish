@@ -23,10 +23,15 @@ export interface ClientOptions {
   /** Called before every request. Keep it cheap — it runs on the hot path. */
   getToken?: TokenProvider;
   /**
-   * Invoked when the API rejects our token. The app clears its session here; this
-   * package deliberately does not know how to re-authenticate.
+   * Invoked when the API rejects our token, and awaited.
+   *
+   * Return `true` to say "I obtained a fresh token, retry the request once".
+   * Return `false` (or nothing) to say the session is genuinely over, in which
+   * case the 401 is thrown as normal. This package deliberately does not know
+   * how to re-authenticate; it only knows to ask once and to retry at most
+   * once, so a server that answers 401 to everything cannot loop.
    */
-  onUnauthorized?: () => void;
+  onUnauthorized?: () => void | boolean | Promise<void | boolean>;
   /** Overridable for tests. */
   fetch?: typeof globalThis.fetch;
 }
@@ -77,14 +82,32 @@ function authMiddleware(options: ClientOptions): Middleware {
       return request;
     },
 
-    async onResponse({ response }) {
+    async onResponse({ request, response }) {
       if (response.ok) return response;
 
       const requestId = response.headers.get(REQUEST_ID_HEADER);
 
-      // A 401 means our token is gone or rejected. Tell the app once, here, rather
-      // than making every call site recognise it.
-      if (response.status === 401) options.onUnauthorized?.();
+      // A 401 means our token is gone or rejected. Tell the app once, here,
+      // rather than making every call site recognise it.
+      //
+      // If the app says it recovered, replay the request once with the new
+      // token. Without this, a token that expires mid-session surfaces as a
+      // failed request even though the very next call would have worked, so
+      // the user sees a spurious error and a refresh that fixed nothing they
+      // can see. The retry is bounded to one attempt by construction: the
+      // replayed request is issued directly rather than through the
+      // middleware, so it cannot re-enter this branch.
+      if (response.status === 401) {
+        const recovered = await options.onUnauthorized?.();
+        if (recovered === true) {
+          const retried = request.clone();
+          const token = await options.getToken?.();
+          if (token) retried.headers.set('Authorization', `Bearer ${token}`);
+          // Returned whether or not it succeeded: a second 401 falls through
+          // to the normal error path below, which is the correct outcome.
+          return (options.fetch ?? globalThis.fetch)(retried);
+        }
+      }
 
       // Read the body defensively: an error response is exactly when a body is most
       // likely to be absent or not be JSON.

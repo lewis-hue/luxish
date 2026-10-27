@@ -9,6 +9,7 @@
 import { ApiError, createApiClient, type ApiClient } from '@fashion/contracts';
 import { Platform } from 'react-native';
 
+import { accessToken, refresh } from '@/features/auth/session';
 import { secureSession } from '@/storage/secure';
 
 export { ApiError };
@@ -38,12 +39,25 @@ export function setUnauthorizedHandler(handler: (() => void) | null): void {
 
 export const api: ApiClient = createApiClient({
   baseUrl: API_BASE_URL,
-  getToken: () => secureSession.validAccessToken(),
-  onUnauthorized: () => {
-    // Clear first, then notify: the handler may navigate, and navigating with a
-    // stale token still in the keychain would re-authenticate into a dead session.
-    void secureSession.clear();
+  // `accessToken()` rather than `secureSession.validAccessToken()`. The latter
+  // returns null the moment the access token is within 30s of expiry and does
+  // nothing about it, so every call after the first five minutes would 401
+  // while a perfectly good refresh token sat in the keychain. This refreshes
+  // first and only gives up when the refresh token is genuinely dead.
+  getToken: () => accessToken(),
+  onUnauthorized: async () => {
+    // A 401 while a refresh token is still good means the access token was
+    // revoked rather than expired. Returning true tells the client to replay
+    // the request once with the new token, so a mid-session expiry never
+    // surfaces to the user as a failed action.
+    if (await refresh()) return true;
+    // Clear first, then notify: the handler may navigate, and navigating with
+    // a stale token still in the keychain would re-authenticate into a dead
+    // session. `refresh()` already cleared on failure; this is belt and braces
+    // for the no-refresh-token case.
+    await secureSession.clear();
     onUnauthorized?.();
+    return false;
   },
 });
 
@@ -65,8 +79,8 @@ export function describeError(error: unknown): {
       return {
         kind: 'auth',
         retryable: false,
-        title: 'Please sign in again',
-        body: 'Your session has expired.',
+        title: 'Session expired',
+        body: 'Sign in to continue.',
       };
     }
     if (error.status === 429) {

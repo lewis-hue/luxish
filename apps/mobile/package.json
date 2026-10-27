@@ -21,6 +21,7 @@
     "@shopify/flash-list": "2.3.2",
     "@tanstack/react-query": "^5.105.0",
     "expo": "~58.0.19",
+    "expo-auth-session": "~58.0.15",
     "expo-blur": "~58.0.5",
     "expo-camera": "~58.0.12",
     "expo-constants": "~58.0.13",
