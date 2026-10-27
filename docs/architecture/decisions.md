@@ -369,3 +369,90 @@ rather than in code — which is exactly why it is also asserted in our own test
   reviewable in a pull request rather than being console state.
 - `docs/ROADMAP.md` §4 rows written before this decision still describe the
   per-provider design and need reconciling.
+
+---
+
+## ADR-018: Celery + Redis for execution; PostgreSQL stays the durable record
+
+**Decision (user directive, 2026-10-27).** Adopt Celery with Redis for task dispatch,
+concurrency and fan-out. The existing PostgreSQL `jobs` table remains the **source of
+truth** for job state — status, attempts, idempotency key, tombstone guard — and a
+periodic sweeper re-enqueues anything Redis lost. Celery becomes the executor, not the
+system of record.
+
+**Why both, rather than Celery alone.** Four independent paths to a silently lost job,
+each verified from Celery and Kombu's own documentation and source on 2026-10-27:
+
+1. **`task_acks_late` defaults to `Disabled`.** Out of the box Celery+Redis is
+   *at-most-once*: the message is acknowledged on delivery, so a killed worker loses
+   the task with no trace.
+2. **Redis is a Kombu *virtual* transport with emulated acks** — `ack_emulation = True`.
+   In-flight messages live in a plain Redis hash (`unacked`) and zset
+   (`unacked_index`). Durability is therefore bounded entirely by Redis: Memorystore
+   offers AOF **or** RDB but not both, replication is asynchronous, and a wrong
+   `maxmemory-policy` evicts queue keys silently.
+3. **Recovery requires a live worker.** Abandoned messages are restored only by
+   `restore_visible`, which runs inside a worker on a throttled ~100-second sweep.
+   With scale-to-zero there is no worker, so Celery's own recovery path is
+   *structurally unable to run*.
+4. **Cloud Run allows 10 seconds between SIGTERM and SIGKILL**, and that window is not
+   configurable outside a private preview. Celery's warm shutdown waits for running
+   tasks to finish. For our media and AI jobs, which take minutes, those two
+   behaviours are irreconcilable — tasks will be killed mid-flight on every scale-down
+   and every deploy, as routine rather than as an edge case.
+
+The Postgres table closes all four. This is the **Transactional Outbox** plus
+**Polling Publisher** pattern; the tombstone guard (ADR-012) is a fencing guard
+against resurrect-after-delete.
+
+**The settings that make it safe**, with defaults named because the defaults are wrong
+for us:
+
+| Setting | Default | Ours | Why |
+|---|---|---|---|
+| `task_acks_late` | Disabled | `True` | Otherwise a SIGKILL loses the task outright |
+| `worker_prefetch_multiplier` | 4 | `1` | Limits blast radius to one message per process |
+| `visibility_timeout` | 3600 | **very high** | See the triple-dispatch note below |
+| `task_reject_on_worker_lost` | Disabled | **leave off** | Celery warns it "can cause message loops"; our bounded `attempts` is the safer re-drive |
+| `result_backend` | none | **leave unset** | Postgres already stores status; a Redis result backend would add a second durability problem for data we already hold durably |
+| `task_ignore_result` | Disabled | `True` | Same reason |
+
+**The triple-dispatch trap, and the one rule that avoids it.** Two redelivery
+mechanisms now exist: Redis's `visibility_timeout` and our sweeper. If the visibility
+timeout is shorter than the sweeper's staleness threshold, Redis redelivers first and
+the sweeper later adds a *third* copy. So `visibility_timeout` is set deliberately
+**longer than any task could possibly run**, making Postgres the sole re-drive
+authority. This is the single most consequential setting in the configuration.
+
+**Deployment.** Cloud Run **worker pools** (GA 2026-04-14), not services. Worker pools
+require no `$PORT` listener and never throttle CPU between requests — both of which
+make a Celery worker on a Cloud Run *service* a fight against the product. They have
+no built-in queue-depth autoscaling, so scaling is manual or via Google's CREMA
+autoscaler. `celery beat` is **not** used: it requires exactly one scheduler and keeps
+state in a local file, both wrong on Cloud Run. The sweeper is driven by Cloud
+Scheduler against an HTTP endpoint instead.
+
+**The honest cost, recorded rather than glossed.** Celery has **no native async
+support** and no official guidance for calling async code from a task — the
+maintainers cite time and funding, not design. Our stack is async FastAPI with async
+SQLAlchemy and asyncpg, so the bridge is community practice we own and must test:
+either `asyncio.run()` per task with `NullPool`, or one persistent loop per worker
+process. The failure mode when it is wrong is `Task got Future attached to a different
+loop`, because asyncpg connections outlive the loop that created them. All three
+third-party async pools for Celery are abandoned or pre-release.
+
+**What we are not choosing, and why it was close.** `dramatiq` has native async actors
+on a persistent per-worker loop — exactly the thing Celery lacks — and returns
+in-flight messages on shutdown by design. `procrastinate` is Postgres-backed and
+async-native, needs no extension on Cloud SQL, and supports enqueueing inside the same
+transaction as the business write, which would remove the dual-write window, the
+sweeper, the Redis durability question and the async glue at once. Either would match
+this architecture's intent more closely than Celery does. Celery is adopted because it
+was specified, its ecosystem and operational familiarity are real, and the design above
+makes it safe. If the async bridge proves troublesome in practice, `dramatiq` is the
+smallest migration and `procrastinate` the most aligned.
+
+**Verified facts** (2026-10-27): Celery 5.6.3 released 2026-03-26; Celery 6 is not
+released; Redis and RabbitMQ are rated identically in Celery's current broker table,
+which no longer has a durability column — the gap comes from the virtual-transport
+mechanism, not from a documented preference.
