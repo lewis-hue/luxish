@@ -159,18 +159,17 @@ export function StyleTile({
         ) : null}
       </View>
 
-      {/* Disclosure, top-right so it never competes with the title. */}
-      {asset?.isGenerated || credit ? (
+      {/*
+        Licence attribution only. The AI-generated badge was removed from the tile
+        at the user's request — it is noise on every single card in a grid where
+        every image is generated. The disclosure Play policy asks for now lives
+        once on the collection detail screen instead of twelve times on the grid,
+        and `asset.isGenerated` still carries the fact so nothing is lost.
+      */}
+      {credit ? (
         <View
-          style={{
-            position: 'absolute',
-            top: Spacing.two,
-            right: Spacing.two,
-            flexDirection: 'row',
-            gap: Spacing.one,
-          }}>
-          {asset?.isGenerated ? <Badge label="AI" /> : null}
-          {credit ? <Badge label={credit} /> : null}
+          style={{ position: 'absolute', top: Spacing.two, right: Spacing.two }}>
+          <Badge label={credit} />
         </View>
       ) : null}
     </AnimatedPressable>
