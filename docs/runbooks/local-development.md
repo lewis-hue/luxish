@@ -44,7 +44,6 @@ python -m venv .venv
 # .venv/bin/python -m pip install -e '.[dev]'        # macOS / Linux
 
 .venv/Scripts/python -m alembic upgrade head
-.venv/Scripts/python -m alembic upgrade head
 .venv/Scripts/python scripts/seed.py          # 9 regional profiles; idempotent
 .venv/Scripts/python -m uvicorn app.main:app --reload --port 8010
 ```
@@ -91,12 +90,14 @@ listing variables you believe you have already set.
 
 | Variable | Needed for | Without it |
 |---|---|---|
-| `DATABASE_URL` | everything | API will not start |
-| `REDIS_URL` | rate limits, usage reservation | API will not start |
-| `MODEL_API_KEY` | the stylist, segmentation, lookbooks | Stylist reports `blocked`; nothing is simulated |
-| `KEYCLOAK_ISSUER` | sign-in | Protected routes reject every token |
-| `GOOGLE_CLIENT_ID` / `_SECRET` | Google sign-in | Button appears but cannot complete |
-| `GCS_BUCKET` | real uploads | Upload authorization reports `storage_mode: simulated` |
+| `ATELIER_DATABASE_URL` | everything | API will not start |
+| `ATELIER_REDIS_URL` | rate limits, usage reservation | API will not start |
+| `ATELIER_META_API_KEY` | the stylist, segmentation, lookbooks | Stylist reports `blocked`; nothing is simulated |
+| `ATELIER_GCS_BUCKET` | real uploads | Upload authorization reports `storage_mode: simulated` |
+| `ATELIER_KEYCLOAK_ISSUER` | sign-in | Protected routes reject every token |
+| `ATELIER_KEYCLOAK_CLIENT_ID` | token `azp` check | API will not start |
+| `GOOGLE_CLIENT_ID` / `_SECRET` | Google sign-in (read by Keycloak, unprefixed) | Button appears but cannot complete |
+| `EXPO_PUBLIC_API_BASE_URL` | the app reaching the API | Falls back to 10.0.2.2 (Android) or 127.0.0.1 |
 
 Meta keys are prefixed `LLM_`. Get one self-serve at https://dev.meta.ai/api-keys —
 note that **rate limits are per team, not per key**, so a second key buys no headroom.
@@ -136,10 +137,9 @@ ATELIER_TEST_PG_URL=postgresql+asyncpg://atelier:atelier@localhost:55432/atelier
 
 These cover native enums, JSONB, and real `SELECT … FOR UPDATE SKIP LOCKED`
 concurrency — none of which SQLite can exercise. They are excluded by default and run
-in CI. **On this machine they have never run:** `docker run` hangs indefinitely even
-though the daemon answers `docker version` and `docker ps`, so no Postgres container
-could be started. Treat the job-queue concurrency guarantee as **unverified locally**
-until CI runs or Docker is repaired.
+in CI. **On this machine they have never run** — see *Containers never start* below.
+Treat the job-queue concurrency guarantee as **unverified locally** until CI runs or
+Docker is repaired.
 
 ---
 
@@ -153,8 +153,11 @@ cd services/api
 ```
 
 Every migration must reverse cleanly — CI runs up, down, then up again. A migration
-that cannot be rolled back cannot be deployed safely. Numbers 0004–0006 are reserved
-for the AI, stylist and regional tasks so the chain stays readable.
+that cannot be rolled back cannot be deployed safely. The chain is currently
+`0001_core → 0002_wardrobe → 0003_jobs → 0004_ai → 0006_regional → 0007_external`;
+`0005` is reserved for the stylist task and intentionally unused. It must stay linear
+with a single head — three revisions sharing a parent produces
+`CommandError: Multiple head revisions`.
 
 ---
 
