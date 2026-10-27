@@ -197,6 +197,25 @@ function GarmentCell({
           }}
         />
 
+        {entry.syncError ? (
+          // Not an overlay: the photograph is fine and the garment is
+          // usable, only the upload failed. A dot in the corner says so
+          // without hiding what the user came to look at.
+          <View
+            accessible
+            accessibilityLabel={`${entry.name} could not be uploaded`}
+            style={{
+              position: 'absolute',
+              top: Spacing.one,
+              left: Spacing.one,
+              width: 8,
+              height: 8,
+              borderRadius: Radius.full,
+              backgroundColor: colors.danger,
+            }}
+          />
+        ) : null}
+
         {entry.status === 'pending' ? (
           <View
             accessible

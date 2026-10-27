@@ -2,7 +2,6 @@
   "realm": "luxish",
   "enabled": true,
   "displayName": "LUXish",
-
   "sslRequired": "external",
   "registrationAllowed": true,
   "registrationEmailAsUsername": true,
@@ -12,7 +11,6 @@
   "rememberMe": true,
   "verifyEmail": true,
   "editUsernameAllowed": false,
-
   "accessTokenLifespan": 300,
   "accessTokenLifespanForImplicitFlow": 300,
   "ssoSessionIdleTimeout": 1800,
@@ -20,12 +18,10 @@
   "offlineSessionIdleTimeout": 2592000,
   "revokeRefreshToken": true,
   "refreshTokenMaxReuse": 0,
-
   "bruteForceProtected": true,
   "permanentLockout": false,
   "maxFailureWaitSeconds": 900,
   "failureFactor": 10,
-
   "clients": [
     {
       "clientId": "luxish-mobile",
@@ -40,10 +36,14 @@
       "frontchannelLogout": false,
       "redirectUris": [
         "luxish://callback",
-        "http://127.0.0.1:8081/*",
-        "http://localhost:8081/*"
+        "exp://*",
+        "http://127.0.0.1:19000/*",
+        "http://localhost:19000/*"
       ],
-      "webOrigins": ["http://127.0.0.1:8081", "http://localhost:8081"],
+      "webOrigins": [
+        "http://127.0.0.1:19000",
+        "http://localhost:19000"
+      ],
       "attributes": {
         "pkce.code.challenge.method": "S256",
         "post.logout.redirect.uris": "luxish://signed-out",
@@ -65,8 +65,16 @@
           }
         }
       ],
-      "defaultClientScopes": ["basic", "acr", "profile", "email", "roles"],
-      "optionalClientScopes": ["offline_access"]
+      "defaultClientScopes": [
+        "basic",
+        "acr",
+        "profile",
+        "email",
+        "roles"
+      ],
+      "optionalClientScopes": [
+        "offline_access"
+      ]
     },
     {
       "clientId": "luxish-api",
@@ -84,7 +92,6 @@
       }
     }
   ],
-
   "identityProviders": [
     {
       "alias": "google",
@@ -105,7 +112,6 @@
       }
     }
   ],
-
   "requiredActions": [
     {
       "alias": "VERIFY_EMAIL",

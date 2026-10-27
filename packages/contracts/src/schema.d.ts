@@ -155,7 +155,17 @@ export interface paths {
         get: operations["read_garment_v1_wardrobe_garments__garment_id__get"];
         put?: never;
         post?: never;
-        /** Delete Garment */
+        /**
+         * Delete Garment
+         * @description Delete a garment, its photograph and its cut-out.
+         *
+         *     Delegates rather than calling ``soft_delete`` directly, so that deleting a
+         *     garment always writes the media tombstones. Without them a categorisation
+         *     or background-removal job already in flight would write its result back
+         *     against an asset the user just deleted — the write guard consults the
+         *     tombstone, not the garment row (ADR-012). There is one deletion path for
+         *     exactly this reason.
+         */
         delete: operations["delete_garment_v1_wardrobe_garments__garment_id__delete"];
         options?: never;
         head?: never;
@@ -164,6 +174,151 @@ export interface paths {
          * @description Record a user correction. Confirmed attributes always win on read.
          */
         patch: operations["correct_garment_v1_wardrobe_garments__garment_id__patch"];
+        trace?: never;
+    };
+    "/v1/wardrobe/garments/{garment_id}/favourite": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Favourite
+         * @description Mark a garment as a favourite. Idempotent.
+         *
+         *     A favourite is a **stated** preference, not an inferred one, so it is stored
+         *     as user truth and the stylist weights it rather than guessing at it.
+         */
+        post: operations["favourite_v1_wardrobe_garments__garment_id__favourite_post"];
+        /**
+         * Unfavourite
+         * @description Un-favourite a garment. Idempotent, and returns the garment either way.
+         */
+        delete: operations["unfavourite_v1_wardrobe_garments__garment_id__favourite_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/wardrobe/favourites": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Favourites
+         * @description This user's favourites, newest first. Same cursor idiom as the wardrobe.
+         */
+        get: operations["read_favourites_v1_wardrobe_favourites_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/wardrobe/favourites/ids": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Favourite Ids
+         * @description Just the ids — the cheap read the stylist's retrieval step wants.
+         */
+        get: operations["read_favourite_ids_v1_wardrobe_favourites_ids_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/wardrobe/garments/bulk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Bulk Create
+         * @description Create many garments from already-authorised uploads.
+         *
+         *     **200 even when some items fail.** A partial failure is reported per item,
+         *     never as a status code: nineteen good photographs must not be discarded
+         *     because the twentieth referenced an upload that is not this user's. Each
+         *     item is independently durable and independently idempotent on its
+         *     ``media_asset_id``.
+         */
+        post: operations["bulk_create_v1_wardrobe_garments_bulk_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/wardrobe/garments/bulk/delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Bulk Delete
+         * @description Delete many garments, through the tombstone path (ADR-012).
+         *
+         *     Each deletion writes a tombstone for the garment's media, so a
+         *     categorisation or background-removal job already in flight is refused by
+         *     ``guard_write`` instead of resurrecting a deleted photograph. Per-item
+         *     status, for the same reason as the bulk create.
+         */
+        post: operations["bulk_delete_v1_wardrobe_garments_bulk_delete_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/wardrobe/garments/{garment_id}/media": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete With Media
+         * @description Delete a garment **and** tombstone its media.
+         *
+         *     The plain ``DELETE /wardrobe/garments/{id}`` is a soft delete of the garment
+         *     row only. That is enough to stop a late inference landing on the row, but it
+         *     leaves no tombstone, so a worker holding the asset id has nothing denying its
+         *     write. This is the full deletion ADR-012 describes and is what the mobile
+         *     client should call; see this module's report note about delegating the
+         *     original route here so there is only one answer.
+         */
+        delete: operations["delete_with_media_v1_wardrobe_garments__garment_id__media_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/v1/social/references": {
@@ -220,6 +375,123 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/stylist/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Run
+         * @description Queue a styling run. Returns 202 with an id to poll.
+         *
+         *     ``place`` is a name the user typed. No device location is involved, so a
+         *     user who declined location permission reaches exactly this code path.
+         */
+        post: operations["create_run_v1_stylist_runs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stylist/runs/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Run
+         * @description Poll a run. A completed run with ``outfit: null`` is a real answer.
+         */
+        get: operations["read_run_v1_stylist_runs__run_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stylist/runs/{run_id}/swap": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Swap Slot
+         * @description Queue a revision of one slot, keeping the rest of the outfit locked.
+         */
+        post: operations["swap_slot_v1_stylist_runs__run_id__swap_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stylist/runs/{run_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel Run
+         * @description Ask a running loop to stop. It notices between steps.
+         */
+        post: operations["cancel_run_v1_stylist_runs__run_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stylist/outfits/{outfit_id}/feedback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Feedback */
+        post: operations["create_feedback_v1_stylist_outfits__outfit_id__feedback_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stylist/outfits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Outfits */
+        get: operations["list_outfits_v1_stylist_outfits_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/account": {
         parameters: {
             query?: never;
@@ -244,6 +516,158 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * AttachmentIn
+         * @description Imported text offered with a request. Treated as data, always.
+         */
+        AttachmentIn: {
+            /**
+             * Source
+             * @default imported
+             */
+            source: string;
+            /** Text */
+            text: string;
+            /** Origin Url */
+            origin_url?: string | null;
+        };
+        /** BulkDeleteIn */
+        BulkDeleteIn: {
+            /** Garment Ids */
+            garment_ids: string[];
+        };
+        /** BulkGarmentCreate */
+        BulkGarmentCreate: {
+            /** Items */
+            items: components["schemas"]["BulkGarmentIn"][];
+        };
+        /**
+         * BulkGarmentIn
+         * @description One garment, keyed on an upload this user was authorised for.
+         *
+         *     ``media_asset_id`` is the idempotency key: one garment per uploaded asset
+         *     per owner, enforced by a partial unique index, so re-sending a batch after a
+         *     network failure returns the same records instead of duplicating a wardrobe.
+         */
+        BulkGarmentIn: {
+            /**
+             * Media Asset Id
+             * Format: uuid
+             */
+            media_asset_id: string;
+            /** Name */
+            name?: string | null;
+            /** Category */
+            category?: ("shirt" | "tshirt" | "knitwear" | "sweatshirt" | "blouse" | "dress" | "trousers" | "jeans" | "skirt" | "shorts" | "blazer" | "jacket" | "coat" | "shoes" | "bag" | "accessory") | null;
+            /**
+             * Availability
+             * @default available
+             * @enum {string}
+             */
+            availability: "available" | "laundry" | "unavailable" | "archived";
+            /**
+             * Is Favourite
+             * @default false
+             */
+            is_favourite: boolean;
+        };
+        /**
+         * BulkItemOut
+         * @description What happened to one item. Position-preserving, so a client can zip.
+         */
+        BulkItemOut: {
+            /** Index */
+            index: number;
+            /**
+             * Media Asset Id
+             * Format: uuid
+             */
+            media_asset_id: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "created" | "existing" | "deleted" | "failed";
+            /** Garment Id */
+            garment_id?: string | null;
+            /** Code */
+            code?: string | null;
+            /** Message */
+            message?: string | null;
+            /** Jobs */
+            jobs?: string[];
+        };
+        /**
+         * BulkResultOut
+         * @description A batch result. **Never** a 4xx for a partial failure.
+         *
+         *     One bad item out of twenty must not discard the nineteen that worked, so the
+         *     response is a 200 (or 207-shaped 200) carrying per-item status, and the
+         *     counts are precomputed because every client needs them.
+         */
+        BulkResultOut: {
+            /** Items */
+            items: components["schemas"]["BulkItemOut"][];
+            /** Succeeded */
+            succeeded: number;
+            /** Failed */
+            failed: number;
+        };
+        /**
+         * FavouriteIdsOut
+         * @description Just the ids, for a client — or the stylist — that weights favourites.
+         *
+         *     ``total`` is reported separately so a truncated read is visible rather than
+         *     silently partial.
+         */
+        FavouriteIdsOut: {
+            /** Garment Ids */
+            garment_ids: string[];
+            /** Total */
+            total: number;
+            /**
+             * Truncated
+             * @default false
+             */
+            truncated: boolean;
+        };
+        /** FavouritePage */
+        FavouritePage: {
+            /** Items */
+            items: components["schemas"]["GarmentMediaOut"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /** FeedbackCreate */
+        FeedbackCreate: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "would_wear" | "wore" | "dislike";
+            /** Note */
+            note?: string | null;
+        };
+        /** FeedbackOut */
+        FeedbackOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Outfit Id
+             * Format: uuid
+             */
+            outfit_id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "would_wear" | "wore" | "dislike";
+            /** Note */
+            note?: string | null;
+        };
         /** GarmentCreate */
         GarmentCreate: {
             /** Name */
@@ -262,6 +686,66 @@ export interface components {
              * @enum {string}
              */
             availability: "available" | "laundry" | "unavailable" | "archived";
+        };
+        /**
+         * GarmentMediaOut
+         * @description A garment, plus what this task added.
+         *
+         *     Extends rather than replaces :class:`~app.schemas.wardrobe.GarmentOut` so
+         *     there is one definition of a garment and one place to change it.
+         */
+        GarmentMediaOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string | null;
+            /** Category */
+            category: string | null;
+            /**
+             * Availability
+             * @enum {string}
+             */
+            availability: "available" | "laundry" | "unavailable" | "archived";
+            /** Media Asset Id */
+            media_asset_id: string | null;
+            /** Confirmed Attributes */
+            confirmed_attributes: {
+                [key: string]: unknown;
+            };
+            /** Inferred Attributes */
+            inferred_attributes: {
+                [key: string]: unknown;
+            };
+            /** Inference Confidence */
+            inference_confidence: number | null;
+            /** Inference Version */
+            inference_version: string | null;
+            /** Effective Attributes */
+            effective_attributes: {
+                [key: string]: unknown;
+            };
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /**
+             * Is Favourite
+             * @default false
+             */
+            is_favourite: boolean;
+            /** Background Removed Asset Id */
+            background_removed_asset_id?: string | null;
+            /** Categorisation Confidence */
+            categorisation_confidence?: number | null;
         };
         /** GarmentOut */
         GarmentOut: {
@@ -406,6 +890,71 @@ export interface components {
             /** Note */
             note?: string | null;
         };
+        /** OutfitItemOut */
+        OutfitItemOut: {
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "top" | "bottom" | "dress" | "outer" | "shoes" | "bag" | "accessory";
+            /** Owned */
+            owned: boolean;
+            /** Garment Id */
+            garment_id?: string | null;
+            /** Product Ref */
+            product_ref?: string | null;
+            /** Name */
+            name?: string | null;
+            /** Category */
+            category?: string | null;
+            /** Attributes */
+            attributes?: {
+                [key: string]: unknown;
+            };
+        };
+        /** OutfitOut */
+        OutfitOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Items */
+            items: components["schemas"]["OutfitItemOut"][];
+            /** Rationale */
+            rationale?: string | null;
+            /** Occasion */
+            occasion?: string | null;
+            /** Place */
+            place?: string | null;
+            /** Styled For */
+            styled_for?: string | null;
+            /** Missing Slots */
+            missing_slots?: string[];
+            /** Created At */
+            created_at?: string | null;
+        };
+        /** OutfitPageOut */
+        OutfitPageOut: {
+            /** Items */
+            items: components["schemas"]["OutfitOut"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /**
+         * PlaceIn
+         * @description A place the user named. Never a coordinate.
+         *
+         *     ``manual`` is accepted alongside ``name`` because that is the key the
+         *     mobile client sends when the user typed a place after declining location
+         *     permission; both mean the same thing and exactly one is required.
+         */
+        PlaceIn: {
+            /** Name */
+            name?: string | null;
+            /** Manual */
+            manual?: string | null;
+        };
         /**
          * PlatformCapability
          * @description What we can honestly do with a link to this platform.
@@ -547,6 +1096,90 @@ export interface components {
             /** Notes */
             notes?: string | null;
         };
+        /**
+         * RunAccepted
+         * @description The 202 body. A run id to poll, and where it is.
+         */
+        RunAccepted: {
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            /**
+             * Conversation Id
+             * Format: uuid
+             */
+            conversation_id: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "queued" | "running" | "completed" | "failed" | "cancelled";
+        };
+        /** RunCreate */
+        RunCreate: {
+            /** Text */
+            text?: string | null;
+            /** Occasion */
+            occasion?: string | null;
+            /** Place */
+            place?: components["schemas"]["PlaceIn"] | string | null;
+            /** Date */
+            date?: string | null;
+            /** Attachments */
+            attachments?: components["schemas"]["AttachmentIn"][];
+            /** Conversation Id */
+            conversation_id?: string | null;
+        };
+        /** RunOut */
+        RunOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Conversation Id
+             * Format: uuid
+             */
+            conversation_id: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "queued" | "running" | "completed" | "failed" | "cancelled";
+            /** Progress */
+            progress: number;
+            outfit?: components["schemas"]["OutfitOut"] | null;
+            /** Explanation */
+            explanation?: string | null;
+            /** Explanation Code */
+            explanation_code?: string | null;
+            /** Prompt Version */
+            prompt_version?: string | null;
+            /** Provider */
+            provider?: string | null;
+            /** Model */
+            model?: string | null;
+            /**
+             * Tool Calls Used
+             * @default 0
+             */
+            tool_calls_used: number;
+            /** Tool Executions */
+            tool_executions?: components["schemas"]["ToolExecutionOut"][];
+            /** Error Code */
+            error_code?: string | null;
+            /** Swap Slot */
+            swap_slot?: ("top" | "bottom" | "dress" | "outer" | "shoes" | "bag" | "accessory") | null;
+            /** Parent Run Id */
+            parent_run_id?: string | null;
+            /** Excluded */
+            excluded?: string[];
+            /** Required */
+            required?: string[];
+        };
         /** SeasonGuidanceView */
         SeasonGuidanceView: {
             /** Name */
@@ -594,6 +1227,26 @@ export interface components {
             suggests?: string[];
             /** Note */
             note?: string | null;
+        };
+        /** SwapRequest */
+        SwapRequest: {
+            /**
+             * Slot
+             * @enum {string}
+             */
+            slot: "top" | "bottom" | "dress" | "outer" | "shoes" | "bag" | "accessory";
+        };
+        /**
+         * ToolExecutionOut
+         * @description One dispatch attempt. ``ok=false`` means it was refused, not that it ran.
+         */
+        ToolExecutionOut: {
+            /** Name */
+            name: string;
+            /** Ok */
+            ok: boolean;
+            /** Error Code */
+            error_code?: string | null;
         };
         /** UploadAuthorizeRequest */
         UploadAuthorizeRequest: {
@@ -979,6 +1632,215 @@ export interface operations {
             };
         };
     };
+    favourite_v1_wardrobe_garments__garment_id__favourite_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                garment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GarmentMediaOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unfavourite_v1_wardrobe_garments__garment_id__favourite_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                garment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GarmentMediaOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_favourites_v1_wardrobe_favourites_get: {
+        parameters: {
+            query?: {
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FavouritePage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_favourite_ids_v1_wardrobe_favourites_ids_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FavouriteIdsOut"];
+                };
+            };
+        };
+    };
+    bulk_create_v1_wardrobe_garments_bulk_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkGarmentCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    bulk_delete_v1_wardrobe_garments_bulk_delete_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkDeleteIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_with_media_v1_wardrobe_garments__garment_id__media_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                garment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     create_reference_v1_social_references_post: {
         parameters: {
             query?: never;
@@ -1065,6 +1927,203 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RegionalContextResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_run_v1_stylist_runs_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RunCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunAccepted"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_run_v1_stylist_runs__run_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    swap_slot_v1_stylist_runs__run_id__swap_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SwapRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunAccepted"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_run_v1_stylist_runs__run_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_feedback_v1_stylist_outfits__outfit_id__feedback_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                outfit_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeedbackCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeedbackOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_outfits_v1_stylist_outfits_get: {
+        parameters: {
+            query?: {
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OutfitPageOut"];
                 };
             };
             /** @description Validation Error */
