@@ -34,6 +34,7 @@ if [[ "$URI" == "--from-logs" ]]; then
     exit 1
   fi
   echo "read from logs: $URI"
+  SCRAPED=1
 fi
 
 if [[ -z "$URI" ]]; then
@@ -48,6 +49,32 @@ fi
 if [[ "$URI" == *"*"* ]]; then
   echo "refusing: wildcards defeat the point of this script" >&2
   exit 2
+fi
+
+# A rejected redirect_uri in the log is attacker-influencable: anyone who can
+# reach the login endpoint can get a line of their choosing written there,
+# and this script would then add it to the allowlist. So a scraped value is
+# constrained to the shapes Expo Go actually produces — a private LAN address
+# or an Expo-owned host — and still has to be confirmed by a human.
+#
+# A URI passed as an argument is the developer's own assertion and is trusted
+# to the extent that running the script at all is.
+EXPECTED='^exp://(192\.168\.[0-9]{1,3}\.[0-9]{1,3}|10\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}|172\.(1[6-9]|2[0-9]|3[01])\.[0-9]{1,3}\.[0-9]{1,3}|127\.0\.0\.1|localhost|[a-z0-9-]+\.(exp\.direct|on\.expo\.app))(:[0-9]{1,5})?/--/callback$'
+
+if [[ "${SCRAPED:-0}" == "1" ]]; then
+  if [[ ! "$URI" =~ $EXPECTED ]]; then
+    echo "refusing: $URI is not a shape Expo Go produces." >&2
+    echo "If it is genuinely yours, pass it explicitly instead of --from-logs." >&2
+    exit 1
+  fi
+  if [[ -t 0 ]]; then
+    read -r -p "Register $URI ? [y/N] " answer
+    [[ "$answer" == [yY] ]] || { echo "cancelled."; exit 1; }
+  else
+    echo "refusing: --from-logs needs a terminal to confirm on." >&2
+    echo "Pass the URI explicitly in a non-interactive context." >&2
+    exit 1
+  fi
 fi
 
 KC="${KEYCLOAK_URL:-http://localhost:55080}"
