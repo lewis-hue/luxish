@@ -22,10 +22,11 @@ import {
   Radius,
   Spacing,
   Tracking,
+  toneColor,
 } from '@/constants/theme';
 import { useFavouriteGarments } from '@/features/discover/saved';
 import { useGarmentCapture } from '@/features/wardrobe/capture';
-import { AVAILABILITY_LABEL } from '@/features/wardrobe/sample';
+import { AVAILABILITY_LABEL, AVAILABILITY_TONE } from '@/features/wardrobe/sample';
 import { useWardrobe, type WardrobeEntry } from '@/features/wardrobe/store';
 import { SLOTS, SLOT_LABELS, type Slot } from '@/features/taxonomy';
 import { useScheme } from '@/hooks/use-theme';
@@ -256,11 +257,29 @@ function GarmentCell({
               position: 'absolute',
               left: Spacing.one,
               bottom: Spacing.one,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: Spacing.one,
               paddingHorizontal: Spacing.two,
-              paddingVertical: 2,
+              paddingVertical: 3,
               borderRadius: Radius.full,
               backgroundColor: 'rgba(16,12,11,0.72)',
             }}>
+            {/*
+              A coloured dot beside the word, never colour alone. WCAG 1.4.1
+              forbids colour as the sole carrier of meaning, and the pill sits
+              over an unknown photograph where a tint would be unreliable
+              anyway. The text stays white so it is legible regardless; the dot
+              is what carries the state at a glance.
+            */}
+            <View
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: Radius.full,
+                backgroundColor: toneColor(colors, AVAILABILITY_TONE[entry.availability]),
+              }}
+            />
             <ThemedText
               type="small"
               style={{ fontSize: FontSize.meta, color: 'rgba(255,255,255,0.94)' }}>

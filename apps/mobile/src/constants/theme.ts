@@ -80,6 +80,45 @@ export const Colors = {
 export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
 
 /**
+ * One scheme's colours, widened from the literal hex types.
+ *
+ * `Colors.light` and `Colors.dark` infer as different literal types, so a
+ * function taking one cannot be passed the other. This is the shape to accept
+ * when a helper works with either.
+ */
+export type Palette = { readonly [K in ThemeColor]: string };
+
+/** A state's meaning, independent of which colour currently carries it. */
+export type Tone = 'success' | 'warning' | 'danger' | 'muted' | 'accent';
+
+/**
+ * Resolve a tone to a colour for the current scheme.
+ *
+ * Exists so no screen names a semantic colour directly. Features describe
+ * *meaning* ("this garment is unavailable") and the palette decides what that
+ * looks like, which is what lets the semantic colours be re-tuned in one place
+ * without hunting through screens.
+ *
+ * `muted` maps to `textSecondary` rather than to a grey of its own: a state
+ * the user chose, like archiving something, should read as ordinary rather
+ * than as a warning about their own decision.
+ */
+export function toneColor(colors: Palette, tone: Tone): string {
+  switch (tone) {
+    case 'success':
+      return colors.success;
+    case 'warning':
+      return colors.warning;
+    case 'danger':
+      return colors.danger;
+    case 'accent':
+      return colors.accent;
+    case 'muted':
+      return colors.textSecondary;
+  }
+}
+
+/**
  * The display face, loaded at startup by the root layout.
  *
  * Bodoni Moda is a high-contrast didone — the register fashion magazines have used

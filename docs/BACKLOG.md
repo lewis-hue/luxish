@@ -21,17 +21,24 @@ lands.
 The highest-value items, because the work is mostly done and the gap is a
 connection.
 
-- [ ] **A1. Stylist tab is a dead end.** The loop runs against the live Meta
-      API and produces real outfits, verified with five paid runs. The tab
-      shows "No outfits yet" and has no way to ask for one. Needs a request
-      composer, a run view with progress, and the outfit result.
-- [ ] **A2. Semantic colours are unused.** `success`, `warning`, `danger` and
-      `borderStrong` are defined and contrast-tested; no screen references
-      them. Availability states, failed uploads and low-confidence
-      categorisation should all read through them.
-- [ ] **A3. Skeletons are unrendered.** `SkeletonGrid`, `SkeletonText` and
-      `useDelayedVisible` exist with tests. Nothing imports them. They become
-      real as soon as any screen loads over the network, which A5 introduces.
+- [~] **A1. Stylist tab is a dead end.** *Composer done; the run is still
+      blocked.* The tab now opens with wardrobe readiness, a request field,
+      prompt chips that fill the field rather than commit to a phrasing, dress
+      codes, and a thinking state. Tapping "Style me" reports that sign-in is
+      needed, which is the real reason, rather than spinning or inventing an
+      outfit locally. Completes when A4 and A5 land.
+- [x] **A2. Semantic colours are unused.** Now used in four places:
+      availability badges on wardrobe cells, the availability chips in the
+      garment sheet, owned/not-owned on the look detail, and stylist
+      readiness. Colour is never the only signal — each carries a dot or a
+      word too, per WCAG 1.4.1. `toneColor()` in the theme resolves a
+      *meaning* to a colour, so no screen names a semantic hex. `borderStrong`
+      now bounds every outlined control and text input, which is what WCAG
+      1.4.11 asks for.
+- [x] **A3. Skeletons are unrendered.** `SkeletonText` and `useDelayedVisible`
+      now drive the stylist's thinking state, held back 400ms so a fast result
+      never flashes a placeholder. `SkeletonGrid` stays unused until a grid
+      loads over the network (A5).
 - [ ] **A4. No sign-in screen.** The PKCE flow, token storage and refresh are
       implemented. There is no UI to trigger them, so the app has never signed
       anybody in. Needs a sign-in screen with "Continue with Google", and a
@@ -67,10 +74,11 @@ connection.
 
 ## C. Visual polish still owed
 
-- [ ] **C1. Animations are on two screens.** Discover and Wardrobe have the
-      entrance stagger and press motion. Stylist, Community, Profile and the
-      look detail screen have none, so the app feels inconsistent as you move
-      between tabs.
+- [x] **C1. Animations are on two screens.** Now on the look detail (piece
+      rows stagger in, actions take press motion), Profile (rows compress at
+      0.99 rather than the tile's 0.975, because a visible scale on something
+      full-width reads as the whole screen moving) and the Stylist composer.
+      Community is still a placeholder by design.
 - [ ] **C2. Bodoni Moda renders at the wrong optical size.** The bundled
       static instances are cut for 11pt text and are used at 30px and 96px. A
       didone at display size needs the fine hairlines of its display cut; the
@@ -108,3 +116,10 @@ connection.
 ## Done
 
 Moved here as items complete, newest first.
+
+### 2026-10-28
+
+- **A2** semantic colours now carry meaning on four screens, never by colour alone.
+- **A3** skeletons render for the first time, in the stylist's thinking state.
+- **C1** animations extended to the look detail, Profile and Stylist.
+- **A1** *partial*: the Stylist composer exists; the run still needs sign-in.

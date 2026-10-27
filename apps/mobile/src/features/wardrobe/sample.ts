@@ -195,3 +195,25 @@ export const AVAILABILITY_LABEL: Record<Availability, string | null> = {
   unavailable: 'Unavailable',
   archived: 'Archived',
 };
+
+/**
+ * Which semantic colour each state reads in.
+ *
+ * `laundry` is a warning, not a failure: the garment is fine and will be back.
+ * `unavailable` is the one that actually costs the user an outfit, so it is
+ * the only state that earns `danger`. `archived` is a deliberate choice by the
+ * user and reads neutral, because colouring a decision they made implies
+ * something went wrong.
+ *
+ * Returning a token name rather than a colour keeps this file free of hex and
+ * lets the caller resolve it for the current scheme.
+ */
+export const AVAILABILITY_TONE: Record<
+  Availability,
+  'success' | 'warning' | 'danger' | 'muted'
+> = {
+  available: 'success',
+  laundry: 'warning',
+  unavailable: 'danger',
+  archived: 'muted',
+};

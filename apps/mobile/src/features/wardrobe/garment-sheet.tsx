@@ -4,8 +4,22 @@ import { Alert, Modal, Pressable, ScrollView, TextInput, View } from 'react-nati
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
-import { AspectRatio, Colors, Display, Radius, Spacing } from '@/constants/theme';
-import { AVAILABILITY_LABEL, type Availability } from '@/features/wardrobe/sample';
+import {
+  AspectRatio,
+  Colors,
+  Display,
+  FontSize,
+  Radius,
+  Spacing,
+  TapTarget,
+  Tracking,
+  toneColor,
+} from '@/constants/theme';
+import {
+  AVAILABILITY_LABEL,
+  AVAILABILITY_TONE,
+  type Availability,
+} from '@/features/wardrobe/sample';
 import type { WardrobeEntry } from '@/features/wardrobe/store';
 import { SLOT_LABELS, categoryById } from '@/features/taxonomy';
 import { useScheme } from '@/hooks/use-theme';
@@ -175,7 +189,7 @@ function GarmentSheetBody({
               }}
             />
             {entry.isSample ? (
-              <ThemedText type="small" themeColor="textSecondary" style={{ fontSize: 12 }}>
+              <ThemedText type="small" themeColor="textSecondary" style={{ fontSize: FontSize.caption }}>
                 Sample items cannot be edited. Add your own photo to make it yours.
               </ThemedText>
             ) : null}
@@ -192,12 +206,13 @@ function GarmentSheetBody({
 
           <View style={{ gap: Spacing.two }}>
             <Label>Availability</Label>
-            <ThemedText type="small" themeColor="textSecondary" style={{ fontSize: 12 }}>
+            <ThemedText type="small" themeColor="textSecondary" style={{ fontSize: FontSize.caption }}>
               Anything not available is left out of suggestions.
             </ThemedText>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two }}>
               {AVAILABILITY_OPTIONS.map((option) => {
                 const active = entry.availability === option;
+                const tone = toneColor(colors, AVAILABILITY_TONE[option]);
                 return (
                   <Pressable
                     key={option}
@@ -206,20 +221,39 @@ function GarmentSheetBody({
                     disabled={entry.isSample}
                     onPress={() => void onSetAvailability(entry.id, option)}
                     style={({ pressed }) => ({
-                      minHeight: 36,
-                      justifyContent: 'center',
+                      minHeight: TapTarget,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: Spacing.two,
                       paddingHorizontal: Spacing.three,
                       borderRadius: Radius.full,
-                      backgroundColor: active ? colors.text : 'transparent',
+                      // Selected fills with the state's own colour, so the
+                      // chip says what it means rather than only that it is
+                      // chosen. Unselected uses `borderStrong`, because an
+                      // outlined control is bounded by its border and the
+                      // faint hairline is 1.32:1, under WCAG 1.4.11's 3:1.
+                      backgroundColor: active ? tone : 'transparent',
                       borderWidth: 1,
-                      borderColor: active ? colors.text : colors.border,
+                      borderColor: active ? tone : colors.borderStrong,
                       opacity: entry.isSample ? 0.4 : pressed ? 0.6 : 1,
                     })}>
+                    {!active ? (
+                      // The dot keeps the meaning visible when the chip is not
+                      // filled, so colour is never the only signal.
+                      <View
+                        style={{
+                          width: 6,
+                          height: 6,
+                          borderRadius: Radius.full,
+                          backgroundColor: tone,
+                        }}
+                      />
+                    ) : null}
                     <ThemedText
                       type="small"
                       style={{
-                        fontSize: 13,
-                        color: active ? colors.background : colors.textSecondary,
+                        fontSize: FontSize.footnote,
+                        color: active ? '#FFFFFF' : colors.textSecondary,
                       }}>
                       {AVAILABILITY_LABEL[option] ?? 'Ready to wear'}
                     </ThemedText>
@@ -251,7 +285,11 @@ function Label({ children }: { children: React.ReactNode }) {
     <ThemedText
       type="small"
       themeColor="textSecondary"
-      style={{ fontSize: 11, letterSpacing: 1.4, textTransform: 'uppercase' }}>
+      style={{
+        fontSize: FontSize.meta,
+        letterSpacing: Tracking.wide,
+        textTransform: 'uppercase',
+      }}>
       {children}
     </ThemedText>
   );

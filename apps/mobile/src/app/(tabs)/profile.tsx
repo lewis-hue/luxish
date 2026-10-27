@@ -1,12 +1,20 @@
 import * as WebBrowser from 'expo-web-browser';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
+import { MotionPressable } from '@/components/ui/motion';
 import { Screen } from '@/components/ui/screen';
 import { useApiHealth } from '@/api/queries/health';
 import { BRAND } from '@/branding';
 import { API_BASE_URL } from '@/api/client';
-import { Colors, Display, Radius, Spacing } from '@/constants/theme';
+import {
+  Colors,
+  Display,
+  FontSize,
+  Radius,
+  Spacing,
+  TapTarget,
+} from '@/constants/theme';
 import {
   CHATGPT_STATE_COPY,
   type ChatGptConnectionState,
@@ -196,13 +204,19 @@ function LinkRow({
   const colors = Colors[useScheme()];
   const disabled = !onPress;
   return (
-    <Pressable
+    <MotionPressable
       accessibilityRole={disabled ? 'text' : 'link'}
       accessibilityState={{ disabled }}
       disabled={disabled}
+      // A list row compresses less than a tile: the row is wide and a visible
+      // scale on something full-width reads as the whole screen moving.
+      scale={0.99}
+      animatePress={!disabled}
+      haptic={!disabled}
+      animateEntrance={false}
       onPress={onPress}
-      style={({ pressed }) => ({
-        minHeight: 48,
+      style={{
+        minHeight: TapTarget,
         paddingHorizontal: Spacing.three,
         flexDirection: 'row',
         alignItems: 'center',
@@ -210,15 +224,18 @@ function LinkRow({
         gap: Spacing.two,
         borderBottomWidth: 1,
         borderBottomColor: colors.border,
-        opacity: pressed ? 0.6 : 1,
-      })}>
+        opacity: disabled ? 0.6 : 1,
+      }}>
       <ThemedText type="small" themeColor={disabled ? 'textSecondary' : 'text'}>
         {label}
       </ThemedText>
       {/* States its phase instead of opening an empty screen. */}
-      <ThemedText type="small" themeColor="textSecondary" style={{ fontSize: 12 }}>
+      <ThemedText
+        type="small"
+        themeColor="textSecondary"
+        style={{ fontSize: FontSize.caption }}>
         {phase ?? '›'}
       </ThemedText>
-    </Pressable>
+    </MotionPressable>
   );
 }

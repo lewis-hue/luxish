@@ -6,7 +6,10 @@ import { useEffect } from 'react';
 import { Platform, Pressable, ScrollView, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import Animated from 'react-native-reanimated';
+
 import { ThemedText } from '@/components/themed-text';
+import { MotionPressable, useEntranceMotion } from '@/components/ui/motion';
 import { EmptyState } from '@/components/ui/empty-state';
 import {
   Colors,
@@ -185,8 +188,13 @@ export default function LookDetailScreen() {
                   }}>
                   {SLOT_LABELS[group.slot]}
                 </ThemedText>
-                {group.pieces.map((piece) => (
-                  <PieceRow key={piece.id} piece={piece} look={look} />
+                {group.pieces.map((piece, index) => (
+                  <PieceRow
+                    key={piece.id}
+                    piece={piece}
+                    look={look}
+                    index={index}
+                  />
                 ))}
               </View>
             ))}
@@ -227,8 +235,17 @@ export default function LookDetailScreen() {
   );
 }
 
-function PieceRow({ piece, look }: { piece: OutfitPiece; look: Look }) {
+function PieceRow({
+  piece,
+  look,
+  index,
+}: {
+  piece: OutfitPiece;
+  look: Look;
+  index: number;
+}) {
   const colors = Colors[useScheme()];
+  const entrance = useEntranceMotion(index);
 
   const search = () => {
     if (Platform.OS !== 'web') void Haptics.selectionAsync();
@@ -244,16 +261,19 @@ function PieceRow({ piece, look }: { piece: OutfitPiece; look: Look }) {
   };
 
   return (
-    <View
-      style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: Spacing.three,
-        padding: Spacing.two,
-        borderRadius: Radius.md,
-        borderCurve: 'continuous',
-        backgroundColor: colors.backgroundElement,
-      }}>
+    <Animated.View
+      style={[
+        {
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: Spacing.three,
+          padding: Spacing.two,
+          borderRadius: Radius.md,
+          borderCurve: 'continuous',
+          backgroundColor: colors.backgroundElement,
+        },
+        entrance,
+      ]}>
       <View
         style={{
           width: 52,
@@ -279,7 +299,15 @@ function PieceRow({ piece, look }: { piece: OutfitPiece; look: Look }) {
         <ThemedText type="small" numberOfLines={1}>
           {piece.name}
         </ThemedText>
-        <ThemedText type="small" themeColor="textSecondary" style={{ fontSize: FontSize.caption }}>
+        <ThemedText
+          type="small"
+          style={{
+            fontSize: FontSize.caption,
+            // Owning a piece is the good outcome, so it reads in `success`.
+            // Not owning it is ordinary rather than a failure, so it stays
+            // secondary text and is never coloured as a warning.
+            color: piece.owned ? colors.success : colors.textSecondary,
+          }}>
           {piece.owned ? 'In your wardrobe' : 'Not owned'}
         </ThemedText>
       </View>
@@ -301,7 +329,7 @@ function PieceRow({ piece, look }: { piece: OutfitPiece; look: Look }) {
           Find
         </ThemedText>
       </Pressable>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -351,11 +379,12 @@ function ActionButton({
 }) {
   const colors = Colors[useScheme()];
   return (
-    <Pressable
+    <MotionPressable
       accessibilityRole="button"
       accessibilityState={{ selected: active }}
+      animateEntrance={false}
       onPress={onPress}
-      style={({ pressed }) => ({
+      style={{
         minHeight: 50,
         justifyContent: 'center',
         alignItems: 'center',
@@ -363,14 +392,15 @@ function ActionButton({
         borderCurve: 'continuous',
         backgroundColor: active ? colors.accent : 'transparent',
         borderWidth: 1,
-        borderColor: active ? colors.accent : colors.border,
-        opacity: pressed ? 0.7 : 1,
-      })}>
+        // An outlined button is bounded by its border, so it needs the 3:1
+        // that WCAG 1.4.11 asks for rather than the hairline.
+        borderColor: active ? colors.accent : colors.borderStrong,
+      }}>
       <ThemedText
         type="smallBold"
         style={{ color: active ? colors.accentText : colors.text }}>
         {label}
       </ThemedText>
-    </Pressable>
+    </MotionPressable>
   );
 }
