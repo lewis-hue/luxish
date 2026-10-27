@@ -1,14 +1,9 @@
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import * as Haptics from 'expo-haptics';
-import { Platform, Pressable, View, type StyleProp, type ViewStyle } from 'react-native';
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-} from 'react-native-reanimated';
+import { View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
+import { MotionPressable } from '@/components/ui/motion';
 import {
   AspectRatio,
   Colors,
@@ -20,9 +15,7 @@ import {
   Tracking,
 } from '@/constants/theme';
 import { attributionLine, type InspirationAsset } from '@/features/discover/types';
-import { useReducedMotion, useScheme } from '@/hooks/use-theme';
-
-const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+import { useScheme } from '@/hooks/use-theme';
 
 type StyleTileProps = {
   asset: InspirationAsset | null;
@@ -31,6 +24,8 @@ type StyleTileProps = {
   meta?: string | null;
   /** Taller treatment for the lead tile. */
   feature?: boolean;
+  /** Grid position, for the entrance stagger. */
+  index?: number;
   onPress?: () => void;
   style?: StyleProp<ViewStyle>;
 };
@@ -54,32 +49,19 @@ export function StyleTile({
   subtitle,
   meta,
   feature,
+  index,
   onPress,
   style,
 }: StyleTileProps) {
   const colors = Colors[useScheme()];
-  const reducedMotion = useReducedMotion();
-  const pressed = useSharedValue(0);
   const credit = asset ? attributionLine(asset.source) : null;
 
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: reducedMotion ? 1 : 1 - pressed.value * 0.025 }],
-  }));
-
   return (
-    <AnimatedPressable
+    <MotionPressable
       accessibilityRole="button"
       accessibilityLabel={`${title}${subtitle ? `. ${subtitle}` : ''}`}
       accessibilityHint="Opens this style collection"
-      onPressIn={() => {
-        pressed.value = withSpring(1, { damping: 20, stiffness: 400 });
-        // Selection feedback is the lightest tap iOS offers; anything heavier on a
-        // browse grid becomes noise within a few scrolls.
-        if (Platform.OS !== 'web') void Haptics.selectionAsync();
-      }}
-      onPressOut={() => {
-        pressed.value = withSpring(0, { damping: 20, stiffness: 400 });
-      }}
+      index={index}
       onPress={onPress}
       style={[
         {
@@ -88,13 +70,20 @@ export function StyleTile({
           overflow: 'hidden',
           backgroundColor: colors.backgroundElement,
         },
-        animatedStyle,
         style,
       ]}>
       {asset ? (
         <Image
           source={asset.localSource ?? { uri: asset.uri }}
           placeholder={asset.blurhash ? { blurhash: asset.blurhash } : undefined}
+          // `placeholderContentFit` defaults to 'scale-down' while
+          // `contentFit` defaults to 'cover'; expo-image's own docs warn the
+          // mismatch causes flickering, so they are matched explicitly.
+          placeholderContentFit="cover"
+          // Without a recycling key a recycled cell shows the previous
+          // image until the new one decodes, which on a fast scroll looks
+          // like the wrong garment.
+          recyclingKey={asset.uri}
           cachePolicy="memory-disk"
           contentFit="cover"
           transition={Motion.base}
@@ -181,7 +170,7 @@ export function StyleTile({
           <Badge label={credit} />
         </View>
       ) : null}
-    </AnimatedPressable>
+    </MotionPressable>
   );
 }
 

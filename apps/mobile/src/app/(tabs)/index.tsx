@@ -5,7 +5,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { StyleTile } from '@/components/ui/style-tile';
-import { BottomTabInset, Colors, Display, Radius, Spacing } from '@/constants/theme';
+import {
+  BottomTabInset,
+  Colors,
+  Display,
+  FontSize,
+  Radius,
+  Spacing,
+} from '@/constants/theme';
 import { STYLE_CATEGORIES, type StyleCategory } from '@/features/discover/collections';
 import { coverFor } from '@/features/discover/imagery';
 import { useScheme } from '@/hooks/use-theme';
@@ -80,7 +87,7 @@ export default function DiscoverScreen() {
           gutter={gutter}
         />
       }
-      renderItem={({ item }) => <Tile category={item} />}
+      renderItem={({ item, index }) => <Tile category={item} index={index} />}
       ListEmptyComponent={
         lead ? undefined : (
           <View style={{ paddingVertical: Spacing.six, alignItems: 'center' }}>
@@ -94,9 +101,10 @@ export default function DiscoverScreen() {
   );
 }
 
-function Tile({ category }: { category: StyleCategory }) {
+function Tile({ category, index }: { category: StyleCategory; index: number }) {
   return (
     <StyleTile
+      index={index}
       style={{ flex: 1 }}
       asset={coverFor(category.id, category.subtitle ?? category.title)}
       title={category.title}
@@ -168,7 +176,7 @@ function Header({
               <ThemedText
                 type="small"
                 style={{
-                  fontSize: 13,
+                  fontSize: FontSize.footnote,
                   color: active ? colors.background : colors.textSecondary,
                 }}>
                 {option.label}

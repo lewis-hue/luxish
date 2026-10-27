@@ -1,11 +1,10 @@
 import { Image } from 'expo-image';
-import * as Haptics from 'expo-haptics';
 import { useMemo, useState } from 'react';
+import Animated from 'react-native-reanimated';
 import {
   ActivityIndicator,
   Alert,
   FlatList,
-  Platform,
   Pressable,
   View,
   useWindowDimensions,
@@ -31,6 +30,12 @@ import { useWardrobe, type WardrobeEntry } from '@/features/wardrobe/store';
 import { SLOTS, SLOT_LABELS, type Slot } from '@/features/taxonomy';
 import { useScheme } from '@/hooks/use-theme';
 
+import {
+  MotionPressable,
+  successFeedback,
+  tapFeedback,
+  usePopMotion,
+} from '@/components/ui/motion';
 import { GarmentSheet } from '@/features/wardrobe/garment-sheet';
 
 type FilterId = 'all' | Slot | 'favourites';
@@ -80,7 +85,7 @@ export default function WardrobeScreen() {
     if (result === 'cancelled' || typeof result === 'string') return;
 
     await wardrobe.addMany(result);
-    if (Platform.OS !== 'web') void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    void successFeedback();
   };
 
   return (
@@ -111,14 +116,12 @@ export default function WardrobeScreen() {
             gutter={gutter}
           />
         }
-        renderItem={({ item }) => (
+        renderItem={({ item, index }) => (
           <GarmentCell
             entry={item}
+            index={index}
             onPress={() => setSelected(item)}
-            onToggleFavourite={() => {
-              if (Platform.OS !== 'web') void Haptics.selectionAsync();
-              void favourites.toggle(item.id);
-            }}
+            onToggleFavourite={() => void favourites.toggle(item.id)}
           />
         )}
         ListEmptyComponent={
@@ -147,23 +150,27 @@ export default function WardrobeScreen() {
 
 function GarmentCell({
   entry,
+  index,
   onPress,
   onToggleFavourite,
 }: {
   entry: WardrobeEntry;
+  index: number;
   onPress: () => void;
   onToggleFavourite: () => void;
 }) {
   const colors = Colors[useScheme()];
+  const favourite = usePopMotion();
   const unavailable = entry.availability !== 'available';
   const badge = AVAILABILITY_LABEL[entry.availability];
 
   return (
-    <Pressable
+    <MotionPressable
       accessibilityRole="button"
       accessibilityLabel={`${entry.name}${badge ? `. ${badge}` : ''}`}
+      index={index}
       onPress={onPress}
-      style={({ pressed }) => ({ flex: 1, gap: Spacing.one, opacity: pressed ? 0.7 : 1 })}>
+      style={{ flex: 1, gap: Spacing.one }}>
       <View
         style={{
           borderRadius: Radius.md,
@@ -191,6 +198,9 @@ function GarmentCell({
 
         {entry.status === 'pending' ? (
           <View
+            accessible
+            accessibilityLabel={`Sorting ${entry.name}`}
+            accessibilityState={{ busy: true }}
             style={{
               position: 'absolute',
               inset: 0,
@@ -210,8 +220,14 @@ function GarmentCell({
             entry.isFavourite ? `Remove ${entry.name} from favourites` : `Favourite ${entry.name}`
           }
           accessibilityState={{ selected: entry.isFavourite }}
-          onPress={onToggleFavourite}
-          hitSlop={10}
+          onPress={() => {
+            // Pop on the way *in* only. A heart that silently changes colour
+            // is easy to miss, and missing it means tapping twice.
+            if (!entry.isFavourite) favourite.pop();
+            void tapFeedback();
+            onToggleFavourite();
+          }}
+          hitSlop={12}
           style={{
             position: 'absolute',
             top: Spacing.one,
@@ -223,9 +239,15 @@ function GarmentCell({
             borderRadius: Radius.full,
             backgroundColor: 'rgba(16,12,11,0.5)',
           }}>
-          <ThemedText style={{ fontSize: 13, color: entry.isFavourite ? '#FF8FA8' : '#FFFFFF' }}>
-            {entry.isFavourite ? '♥' : '♡'}
-          </ThemedText>
+          <Animated.View style={favourite.style}>
+            <ThemedText
+              style={{
+                fontSize: FontSize.footnote,
+                color: entry.isFavourite ? '#FF8FA8' : '#FFFFFF',
+              }}>
+              {entry.isFavourite ? '♥' : '♡'}
+            </ThemedText>
+          </Animated.View>
         </Pressable>
 
         {badge ? (
@@ -261,7 +283,7 @@ function GarmentCell({
           </ThemedText>
         ) : null}
       </View>
-    </Pressable>
+    </MotionPressable>
   );
 }
 
