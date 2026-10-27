@@ -393,7 +393,7 @@ each verified from Celery and Kombu's own documentation and source on 2026-10-27
    `maxmemory-policy` evicts queue keys silently.
 3. **Recovery requires a live worker.** Abandoned messages are restored only by
    `restore_visible`, which runs inside a worker on a throttled ~100-second sweep.
-   With scale-to-zero there is no worker, so Celery's own recovery path is
+   With no worker alive on a queue there is no sweep, so Celery's own recovery path is
    *structurally unable to run*.
 4. **Cloud Run allows 10 seconds between SIGTERM and SIGKILL**, and that window is not
    configurable outside a private preview. Celery's warm shutdown waits for running
@@ -423,6 +423,53 @@ timeout is shorter than the sweeper's staleness threshold, Redis redelivers firs
 the sweeper later adds a *third* copy. So `visibility_timeout` is set deliberately
 **longer than any task could possibly run**, making Postgres the sole re-drive
 authority. This is the single most consequential setting in the configuration.
+
+**Correction, added after implementation.** `visibility_timeout` is a **per-consumer**
+setting, and where several consumers share a broker **the shortest value wins** —
+including the Kombu default of 3600 from a consumer that never sets it. So the
+"very high" value above is not a property of the queue; it is a property of every
+process that connects to it. A Flower instance, a metrics exporter, or a second
+service on the same Redis would silently reimpose a one-hour timeout and
+reintroduce exactly the double-dispatch this setting exists to prevent. The code
+comment in `app/queue/celery_app.py` records this; anything that connects to this
+broker must set the same number.
+
+**What actually makes duplicate delivery safe.** The setting above is belt and
+braces. The real guarantee is that a Celery message carries **nothing but a job
+id**, and `claim_job_by_id` is a single conditional `UPDATE … WHERE state =
+'queued'`. Of two workers handed the same message, exactly one row matches; the
+other sees no row and declines. Idempotency is therefore structural rather than
+configured, which matters because no Redis setting can provide it.
+
+**Two further corrections to the reasoning above.** First, the scale-to-zero
+argument is weaker than stated: Cloud Run worker pools do **not** autoscale at
+all, so an instance count is pinned and a live worker normally exists. The
+durability argument does not depend on it — a deploy, an eviction or an OOM kill
+still strands in-flight work, and `reclaim_stalled_jobs` is what recovers it.
+Second, the CPU-throttling concern applies to Cloud Run **services**, not worker
+pools, which are billed for the instance lifecycle and keep CPU allocated
+throughout.
+
+**Empirical status.** No published report of Celery running on Cloud Run worker
+pools could be found, successful or otherwise, in the six months since GA. The
+one worker-pools-specific Celery thread is an unresolved failure. The path is
+sound on the documented contracts and **undocumented in practice**, so treat the
+first deploy as a validation exercise rather than a routine one.
+
+**The surveyed alternatives, and why none of them removes this work.** Five
+libraries were examined against this stack. `dramatiq` has native async actors
+on a persistent per-worker loop, but its Redis broker recovers abandoned
+messages via a sweep with a **0.1% chance per command**, scoped to one queue, and
+with no upper bound at all when no worker is alive on that queue. `procrastinate`
+and `chancy` are Postgres-native but **psycopg-only**, so in-transaction enqueue
+is unavailable on our asyncpg session — which was the main reason to want them.
+`taskiq`'s Redis stream broker does not reclaim at all on Cluster or Sentinel,
+and ships Alpha metadata. `pgqueuer` is the only option supporting asyncpg
+transactional enqueue, and is 96% one author. Every one of them is at-least-once
+at best and requires an idempotent handler plus an external re-drive. The
+conclusion is that the Postgres-owned queue in this ADR is **not a workaround for
+Celery specifically**; it is the work any of these choices would require, which
+also means the dispatch layer can be swapped later without touching it.
 
 **Deployment.** Cloud Run **worker pools** (GA 2026-04-14), not services. Worker pools
 require no `$PORT` listener and never throttle CPU between requests — both of which
@@ -456,3 +503,155 @@ smallest migration and `procrastinate` the most aligned.
 released; Redis and RabbitMQ are rated identically in Celery's current broker table,
 which no longer has a durability column — the gap comes from the virtual-transport
 mechanism, not from a documented preference.
+
+## ADR-019: Visual direction, measured against what premium retail ships
+
+**Status.** Accepted. Implemented in `apps/mobile/src/constants/theme.ts`,
+`components/ui/skeleton.tsx`, `components/ui/motion.tsx`, and enforced by
+`constants/__tests__/theme.test.ts` and `components/ui/__tests__/copy.test.ts`.
+
+**Context.** The brief is warm, clean, professional and visually appealing, with
+no "AI slop" tells. That is a judgement, and judgements drift. Four of the
+decisions below are also counterintuitive enough that someone will reasonably
+try to undo them, so each records the evidence rather than the preference.
+
+Sources were the products themselves: CDN transform strings, shipped i18n
+dictionaries, App Store screenshots, Apple's HIG specification data, Material 3,
+WCAG Understanding documents and Nielsen Norman Group. The four design galleries
+originally named in the brief (appshots.design, mobbin.com, scrnshts.club,
+uxarchive.com) turned out to be unusable: one has a broken certificate, one
+returns 403 to any non-browser client, one has been acquired and redirected, and
+one is defunct. Reading the real products was better evidence anyway.
+
+### Garment cells are 3:4 and padded, never cropped
+
+Zero of eight measured fashion retailers ship a 1:1 garment grid tile. The split
+is 2:3 for SSENSE, Zara, COS and Alo Yoga; 3:4 for NET-A-PORTER, Farfetch and
+Uniqlo; 4:5 for Everlane. A square cell crops a coat or dress around the knee,
+and the wardrobe is the user's own clothes, where a wrong crop reads as a bug.
+
+3:4 rather than the taller 2:3 because our photographs come from a phone, and a
+phone shoots 3:4 portrait, so the common case needs no crop at all. Studio
+retail can force 2:3 because its masters are arbitrarily tall: SSENSE stores at
+1:2.045. Poshmark moved its grid from 1:1 to 3:4 in March 2026 and gave exactly
+this reason, that sellers' cameras already default to portrait.
+
+Pad rather than crop, after SSENSE. Across a full category page its Cloudinary
+transforms are 1865 `c_lpad` (letterbox pad) and zero `c_fill` or `c_crop`. It
+also anchors the pad to the bottom (`g_south`), which keeps shoulders and
+necklines at a consistent height across tiles. Uniqlo is the only measured
+retailer that crops, and only because it shoots a 1:1 master with roughly 11%
+flat grey margin each side specifically so the crop is throwaway.
+
+### Background removal must ship with a contact shadow
+
+Recorded because it is the most expensive thing to get wrong here. Depop A/B
+tested background removal alone and got 9% adoption with flat metrics. The
+published diagnosis was that "without a shadow, products looked like they were
+floating in space, unnatural and unconvincing. An image that looks too
+artificially edited can undermine the trust that peer-to-peer selling depends
+on." The same feature with generated drop shadows returned +1.5% items listed,
+about 6,000 more per day.
+
+So a hard cut-out on flat white is the version that failed. The cut-out is the
+enabling primitive, not the feature.
+
+### Semantic colours are warm, and there is no `info` token
+
+`success` is olive and `warning` is ochre, both in the same half of the wheel as
+the burgundy accent, each tuned just past AA on both grounds. A stock `#00C853`
+green or `#2196F3` blue would be the one cold thing on a warm page and reads
+immediately as a dropped-in component library. Every blue computed against this
+palette was tonally foreign, so `info` does not exist; informational text uses
+`textSecondary`.
+
+Two related rules. No tinted banner backgrounds: the washes compute to 1.02 to
+1.12 contrast against warm paper, so they add markup and no signal. No coloured
+left-border strip, which is independently one of the most reliable AI tells.
+Semantics are carried on text and a glyph, which also satisfies WCAG 1.4.1.
+
+`borderStrong` exists because the existing `border` is 1.32:1 against the page.
+That is fine for a divider and fails WCAG 1.4.11's 3:1 for anything bounding a
+control, so inputs and outlined buttons had no conforming boundary at all.
+
+### Skeletons do not shimmer
+
+Not a stylistic preference. WCAG 2.2.2's loading-animation exemption is
+conditioned on the animation being the only content on the page: "Because the
+moving content is not presented in parallel with other content, no mechanism to
+pause, stop or hide it needs to be provided." A shimmering grid under our live
+tab bar is by construction not the only content, so the criterion is met rather
+than escaped. The "essential" exception also fails, since it requires that
+interaction cannot occur during the phase.
+
+A static placeholder conveys loading perfectly well, so nothing was traded away.
+Honouring `prefers-reduced-motion` would not have been sufficient, because 2.2.2
+asks for a mechanism regardless of OS preference.
+
+Placeholders are also withheld for 400ms, because NN/g's guidance is that under
+one second no indicator should be shown, since "the quick flashing page can
+cause users to feel like they can't keep up."
+
+One caution for anyone revisiting this. A widely-circulated statistic
+attributing "400 milliseconds to 3 seconds" and "9 to 20% bounce reduction" to a
+2026 NN/g report is fabricated. It appears in no NN/g publication and only on
+undated content farms. The thresholds used here are quoted from the real
+article.
+
+### Type has an 11pt floor
+
+Apple publishes 11pt as the iOS minimum text size, stated independently of
+Caption 2 also being 11pt at the default setting. Four places rendered 9px,
+9.5px and 10px labels before this was enforced. `FontSize` mirrors the iOS scale
+(11/12/13/15/17/20/22/28/34) so a screen never picks a number.
+
+### Copy rules are tested, not documented
+
+Read out of SSENSE, NET-A-PORTER, MR PORTER, COS, Everlane, Arc'teryx, Aesop,
+Zara and Farfetch. They converge on a flat statement of fact plus at most one
+line saying what will fill the space or what to do next. Two patterns worth
+naming. Nobody apologises for an empty container: "Sorry" appears on
+no-search-results and nowhere else. And counts live in the label rather than in
+a coloured badge, as in `BAG 03`, `548 Results`, `ITEMS (558)`. That second one
+is both the terseness mechanism and a way to avoid the semantic-colour problem
+entirely.
+
+The mechanical rules live in `copy.test.ts` rather than in prose, because a
+guide nobody enforces drifts back one string at a time. It catches em and en
+dashes, type below 11pt, apology on an empty screen, exclamation marks in
+failure copy, "invalid" where Polaris asks for "not valid", "please" in a button
+label, and anything opening with "Let's". Three of those caught real defects on
+first run.
+
+One convention is deliberately not adopted. Polaris and Mailchimp both mandate
+sentence case for buttons, and every premium fashion retailer measured does the
+opposite. Those are admin and SaaS conventions; fashion retail is a separate
+tradition, and this app follows the latter.
+
+### Motion does one of three jobs
+
+Confirm a touch, explain where content came from, or mark a state the user
+caused. Anything else is decoration, and decoration competes with the
+photographs, which are the content.
+
+Presses compress to 0.975 rather than fading, because fading a photograph reads
+as "loading" rather than "pressed". The grid stagger is capped at 8 cells:
+uncapped, cell 30 would wait 1.2s and the grid would appear to load slowly when
+it had already loaded. Every primitive collapses to nothing under Reduce Motion
+rather than running faster, because a shortened version of an unwanted animation
+is still unwanted.
+
+### What was rejected
+
+Text overlaid on grid images. Every premium reference puts product text below
+the image on paper, and Material 3 states outright: "It isn't recommended to
+place text or icons on images. If it's necessary, ensure the background image
+provides sufficient contrast... Add a translucent scrim or bounding shape." The
+gradient scrim is retained only for the full-bleed editorial hero, where it is
+the single largest element and the contrast can be guaranteed.
+
+Fast-fashion urgency devices. Shein encodes cheapness as named card-level design
+tokens, including `--product-card_color-discount: #F93A00` against
+`--color_flashsale_primary: #FACF19`, plus sold counters and "{0} less than when
+added". The defence is simply to have no such tokens, so there is nothing to
+reach for.
