@@ -1,6 +1,6 @@
-# Atelier — Product Roadmap and Scope Register
+# LUXish — Product Roadmap and Scope Register
 
-Working name **Atelier** (ADR-002). Status date **2026-10-26**.
+Working name **LUXish** (ADR-002). Status date **2026-10-26**.
 Companion documents: [architecture/decisions.md](./architecture/decisions.md) ·
 [INTEGRATION-MATRIX.md](./INTEGRATION-MATRIX.md) ·
 [superpowers/plans/2026-10-26-phase-a-foundation.md](./superpowers/plans/2026-10-26-phase-a-foundation.md)

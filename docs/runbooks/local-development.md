@@ -1,6 +1,6 @@
 # Local development
 
-Working name **Atelier**. Repository layout and decisions: [`../architecture/`](../architecture/).
+Working name **LUXish**. Repository layout and decisions: [`../architecture/`](../architecture/).
 
 ---
 
@@ -79,23 +79,23 @@ Nothing in the repository holds a credential. Copy the example and fill in what 
 have; every integration degrades to a labelled unavailable state rather than failing.
 
 ```bash
-cp .env.example services/api/.env    # then prefix every backend var with ATELIER_
+cp .env.example services/api/.env    # then prefix every backend var with LUXISH_
 cp .env.example apps/mobile/.env     # only EXPO_PUBLIC_* matters here
 ```
 
 **The backend reads `services/api/.env`, not the repository root, and its Settings
-use `env_prefix = "ATELIER_"`.** So the variable is `ATELIER_DATABASE_URL`, not
+use `env_prefix = "LUXISH_"`.** So the variable is `LUXISH_DATABASE_URL`, not
 `DATABASE_URL`. Getting this wrong presents as a pydantic "Field required" error
 listing variables you believe you have already set.
 
 | Variable | Needed for | Without it |
 |---|---|---|
-| `ATELIER_DATABASE_URL` | everything | API will not start |
-| `ATELIER_REDIS_URL` | rate limits, usage reservation | API will not start |
-| `ATELIER_META_API_KEY` | the stylist, segmentation, lookbooks | Stylist reports `blocked`; nothing is simulated |
-| `ATELIER_GCS_BUCKET` | real uploads | Upload authorization reports `storage_mode: simulated` |
-| `ATELIER_KEYCLOAK_ISSUER` | sign-in | Protected routes reject every token |
-| `ATELIER_KEYCLOAK_CLIENT_ID` | token `azp` check | API will not start |
+| `LUXISH_DATABASE_URL` | everything | API will not start |
+| `LUXISH_REDIS_URL` | rate limits, usage reservation | API will not start |
+| `LUXISH_META_API_KEY` | the stylist, segmentation, lookbooks | Stylist reports `blocked`; nothing is simulated |
+| `LUXISH_GCS_BUCKET` | real uploads | Upload authorization reports `storage_mode: simulated` |
+| `LUXISH_KEYCLOAK_ISSUER` | sign-in | Protected routes reject every token |
+| `LUXISH_KEYCLOAK_CLIENT_ID` | token `azp` check | API will not start |
 | `GOOGLE_CLIENT_ID` / `_SECRET` | Google sign-in (read by Keycloak, unprefixed) | Button appears but cannot complete |
 | `EXPO_PUBLIC_API_BASE_URL` | the app reaching the API | Falls back to 10.0.2.2 (Android) or 127.0.0.1 |
 
@@ -131,7 +131,7 @@ python scripts/check_no_committed_secrets.py
 ### The two tests that do not run locally
 
 ```bash
-ATELIER_TEST_PG_URL=postgresql+asyncpg://atelier:atelier@localhost:55432/atelier \
+LUXISH_TEST_PG_URL=postgresql+asyncpg://luxish:luxish@localhost:55432/luxish \
   .venv/Scripts/python -m pytest -m postgres
 ```
 
@@ -164,7 +164,7 @@ with a single head — three revisions sharing a parent produces
 ## Keycloak
 
 Admin console at http://localhost:55080 (`admin` / `admin`). The realm imports from
-`infra/keycloak/import/atelier-realm.json` on first start only — **if the realm
+`infra/keycloak/import/luxish-realm.json` on first start only — **if the realm
 already exists the import is skipped**, deliberately, so restarts do not wipe state.
 To re-apply realm changes, delete the realm through the Admin API and restart.
 
@@ -173,7 +173,7 @@ Two fields in that file are security controls, not configuration preferences:
 [`../../infra/keycloak/README.md`](../../infra/keycloak/README.md) before touching
 either; both are pinned by tests in `tests/test_keycloak_realm.py`.
 
-Discovery: `http://localhost:55080/realms/atelier/.well-known/openid-configuration`
+Discovery: `http://localhost:55080/realms/luxish/.well-known/openid-configuration`
 (note: **no `/auth` prefix** — removed in Keycloak 17).
 Readiness lives on the **management port**: `http://localhost:55000/health/ready`.
 
@@ -210,7 +210,7 @@ Running), so this is Docker Desktop's container runtime rather than WSL.
 
 **Nothing in the repository depends on Docker to develop.** The unit suites need no
 server, and the API runs against SQLite — set
-`ATELIER_DATABASE_URL=sqlite+aiosqlite:///C:/tmp/atelier_dev.sqlite3`. What you lose
+`LUXISH_DATABASE_URL=sqlite+aiosqlite:///C:/tmp/luxish_dev.sqlite3`. What you lose
 is Keycloak (so no real sign-in, and no authenticated endpoint can be exercised by
 hand) and the two Postgres-only tests.
 

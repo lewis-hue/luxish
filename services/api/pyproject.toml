@@ -3,9 +3,9 @@ requires = ["setuptools>=69"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "atelier-api"
+name = "luxish-api"
 version = "0.1.0"
-description = "Atelier backend API — modular FastAPI service with durable workers (ADR-003)"
+description = "LUXish backend API — modular FastAPI service with durable workers (ADR-003)"
 requires-python = ">=3.12,<3.13"
 license = { text = "SEE LICENSE IN ../../LICENSE" }
 dependencies = [
@@ -69,7 +69,7 @@ asyncio_default_fixture_loop_scope = "function"
 filterwarnings = ["error::DeprecationWarning:app.*"]
 addopts = "-m 'not postgres and not live'"
 markers = [
-  "postgres: requires a live PostgreSQL 16 server (set ATELIER_TEST_PG_URL); excluded by default",
+  "postgres: requires a live PostgreSQL 16 server (set LUXISH_TEST_PG_URL); excluded by default",
   "live: makes real, billable calls to the Meta Model API (set MODEL_API_KEY); excluded by default",
 ]
 

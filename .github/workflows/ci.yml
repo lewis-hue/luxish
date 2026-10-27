@@ -65,12 +65,12 @@ jobs:
       postgres:
         image: postgres:16
         env:
-          POSTGRES_USER: atelier
-          POSTGRES_PASSWORD: atelier
-          POSTGRES_DB: atelier_test
+          POSTGRES_USER: luxish
+          POSTGRES_PASSWORD: luxish
+          POSTGRES_DB: luxish_test
         ports: ['5432:5432']
         options: >-
-          --health-cmd "pg_isready -U atelier -d atelier_test"
+          --health-cmd "pg_isready -U luxish -d luxish_test"
           --health-interval 5s --health-timeout 5s --health-retries 20
       redis:
         image: redis:7-alpine
@@ -83,7 +83,7 @@ jobs:
       # CI is the only place the postgres-marked tests can run — they cover native
       # enums, JSONB, and real SELECT ... FOR UPDATE SKIP LOCKED concurrency, none of
       # which SQLite can exercise.
-      ATELIER_TEST_PG_URL: postgresql+asyncpg://atelier:atelier@localhost:5432/atelier_test
+      LUXISH_TEST_PG_URL: postgresql+asyncpg://luxish:luxish@localhost:5432/luxish_test
 
     steps:
       - uses: actions/checkout@v4
@@ -113,9 +113,9 @@ jobs:
         # A migration that cannot be rolled back is a migration we cannot deploy
         # safely, so both directions are exercised against real Postgres.
         run: |
-          alembic -x url="$ATELIER_TEST_PG_URL" upgrade head
-          alembic -x url="$ATELIER_TEST_PG_URL" downgrade base
-          alembic -x url="$ATELIER_TEST_PG_URL" upgrade head
+          alembic -x url="$LUXISH_TEST_PG_URL" upgrade head
+          alembic -x url="$LUXISH_TEST_PG_URL" downgrade base
+          alembic -x url="$LUXISH_TEST_PG_URL" upgrade head
         working-directory: services/api
 
   cross-cutting:

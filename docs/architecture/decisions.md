@@ -25,7 +25,7 @@ doing it after Phase B costs a week of import churn.
 
 **Decision.** One module — `apps/mobile/src/branding/index.ts` — owns display name,
 tagline, legal entity, support URLs and store identifiers. No user-facing string
-hardcodes a product name. Working name **Atelier**; package scope stays `@fashion/*`.
+hardcodes a product name. Working name **LUXish**; package scope stays `@fashion/*`.
 
 **Why.** The brand is not final. Separating package identity from brand identity makes
 the eventual rename a one-file diff instead of a dependency-graph migration.
@@ -187,7 +187,7 @@ truthfully and offers the working alternative.
 *receiving* shares via `useIncomingShare()` plus a share-extension config plugin. Shares
 arrive as a deep link with hostname `expo-sharing`, routed in `+native-intent.ts`
 (`https://docs.expo.dev/versions/v58.0.0/sdk/sharing/`). The native share sheet from
-Instagram or TikTok into Atelier is therefore a supported path, not a workaround. The
+Instagram or TikTok into LUXish is therefore a supported path, not a workaround. The
 docs do note the iOS share extension is experimental.
 
 **Hardening.** Every server-side URL touch goes through one SSRF-guarded fetcher:

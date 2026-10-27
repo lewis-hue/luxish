@@ -3,22 +3,22 @@
 # Ports are offset into the 55xxx range so this stack never collides with another
 # project's Postgres/Redis/Keycloak already running on the standard ports.
 
-name: atelier
+name: luxish
 
 services:
   postgres:
     image: postgres:16
     environment:
-      POSTGRES_USER: atelier
-      POSTGRES_PASSWORD: atelier
-      POSTGRES_DB: atelier
+      POSTGRES_USER: luxish
+      POSTGRES_PASSWORD: luxish
+      POSTGRES_DB: luxish
     ports:
       - '55432:5432'
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U atelier -d atelier']
+      test: ['CMD-SHELL', 'pg_isready -U luxish -d luxish']
       interval: 5s
       timeout: 5s
       retries: 20
@@ -51,11 +51,11 @@ services:
       KC_BOOTSTRAP_ADMIN_PASSWORD: admin
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
-      KC_DB_USERNAME: atelier
-      KC_DB_PASSWORD: atelier
+      KC_DB_USERNAME: luxish
+      KC_DB_PASSWORD: luxish
       KC_HEALTH_ENABLED: 'true'
-      # Placeholders referenced by atelier-realm.json, so no secret is committed.
-      ATELIER_API_CLIENT_SECRET: local-dev-only-not-a-real-secret
+      # Placeholders referenced by luxish-realm.json, so no secret is committed.
+      LUXISH_API_CLIENT_SECRET: local-dev-only-not-a-real-secret
       GOOGLE_CLIENT_ID: unset
       GOOGLE_CLIENT_SECRET: unset
     ports:

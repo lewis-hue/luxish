@@ -16,14 +16,14 @@ from typing import Any
 
 # Settings carries no secret defaults (Task 3), so the suite supplies them
 # before anything imports app.config.
-os.environ.setdefault("ATELIER_DATABASE_URL", "sqlite+aiosqlite:///:memory:")
-os.environ.setdefault("ATELIER_REDIS_URL", "redis://localhost:6379/1")
-os.environ.setdefault("ATELIER_META_API_KEY", "LLM_test-key-not-a-real-credential")
-os.environ.setdefault("ATELIER_GCS_BUCKET", "atelier-test")
-os.environ.setdefault("ATELIER_ENVIRONMENT", "test")
-os.environ.setdefault("ATELIER_KEYCLOAK_ISSUER", "https://id.atelier.test/realms/atelier")
-os.environ.setdefault("ATELIER_KEYCLOAK_AUDIENCE", "atelier-api")
-os.environ.setdefault("ATELIER_KEYCLOAK_CLIENT_ID", "atelier-mobile")
+os.environ.setdefault("LUXISH_DATABASE_URL", "sqlite+aiosqlite:///:memory:")
+os.environ.setdefault("LUXISH_REDIS_URL", "redis://localhost:6379/1")
+os.environ.setdefault("LUXISH_META_API_KEY", "LLM_test-key-not-a-real-credential")
+os.environ.setdefault("LUXISH_GCS_BUCKET", "luxish-test")
+os.environ.setdefault("LUXISH_ENVIRONMENT", "test")
+os.environ.setdefault("LUXISH_KEYCLOAK_ISSUER", "https://id.luxish.test/realms/luxish")
+os.environ.setdefault("LUXISH_KEYCLOAK_AUDIENCE", "luxish-api")
+os.environ.setdefault("LUXISH_KEYCLOAK_CLIENT_ID", "luxish-mobile")
 
 import base64
 import hashlib
@@ -63,9 +63,9 @@ def _hmac_jws(claims: dict[str, Any], *, secret: bytes, alg: str, kid: str) -> s
     return (signing_input + b"." + signature).decode()
 
 
-ISSUER = "https://id.atelier.test/realms/atelier"
-AUDIENCE = "atelier-api"
-CLIENT_ID = "atelier-mobile"
+ISSUER = "https://id.luxish.test/realms/luxish"
+AUDIENCE = "luxish-api"
+CLIENT_ID = "luxish-mobile"
 KID = "test-key-1"
 OTHER_KID = "attacker-key"
 

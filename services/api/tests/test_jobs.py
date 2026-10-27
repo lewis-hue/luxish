@@ -166,9 +166,9 @@ def test_idempotency_key_is_unique_in_the_schema() -> None:
 async def test_two_concurrent_claims_never_get_the_same_job() -> None:
     import os
 
-    url = os.environ.get("ATELIER_TEST_PG_URL")
+    url = os.environ.get("LUXISH_TEST_PG_URL")
     if not url:
-        pytest.skip("ATELIER_TEST_PG_URL is not set")
+        pytest.skip("LUXISH_TEST_PG_URL is not set")
 
     from app.db.base import Base
     from app.db.session import build_engine, session_factory

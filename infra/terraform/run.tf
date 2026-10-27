@@ -13,7 +13,7 @@ locals {
   app_secret_env = {
     DATABASE_URL              = "database-url"
     MODEL_API_KEY             = "model-api-key"
-    ATELIER_API_CLIENT_SECRET = "keycloak-api-client-secret"
+    LUXISH_API_CLIENT_SECRET = "keycloak-api-client-secret"
   }
 
   worker_secret_env = {

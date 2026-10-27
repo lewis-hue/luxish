@@ -1,7 +1,7 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "Atelier API",
+    "title": "LUXish API",
     "description": "Wardrobe, stylist, shopping and community backend.",
     "version": "0.1.0"
   },

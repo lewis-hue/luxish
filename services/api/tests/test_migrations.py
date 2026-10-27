@@ -1,7 +1,7 @@
 """Every migration must be reversible, and must agree with the models.
 
 These tests run the real Alembic chain. By default they run on SQLite, which is
-what keeps them runnable with no server; set ``ATELIER_TEST_PG_URL`` and select
+what keeps them runnable with no server; set ``LUXISH_TEST_PG_URL`` and select
 the ``postgres`` marker to run the same chain against PostgreSQL 16, where the
 native enum and JSONB paths are actually exercised.
 """
@@ -110,9 +110,9 @@ def test_migrations_cover_every_model_table(tmp_path: Path) -> None:
 
 @pytest.mark.postgres
 def test_upgrade_head_then_downgrade_base_on_postgres() -> None:
-    url = os.environ.get("ATELIER_TEST_PG_URL")
+    url = os.environ.get("LUXISH_TEST_PG_URL")
     if not url:
-        pytest.skip("ATELIER_TEST_PG_URL is not set")
+        pytest.skip("LUXISH_TEST_PG_URL is not set")
     cfg = _config(url)
     command.upgrade(cfg, "head")
     assert "garments" in _tables(url)

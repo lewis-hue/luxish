@@ -7,9 +7,9 @@ rather than silently fall back to something that looks like a credential.
 from __future__ import annotations
 
 from functools import lru_cache
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 Environment = Literal["local", "test", "staging", "production"]
@@ -17,7 +17,7 @@ Environment = Literal["local", "test", "staging", "production"]
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_prefix="ATELIER_",
+        env_prefix="LUXISH_",
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
@@ -90,12 +90,48 @@ class Settings(BaseSettings):
     #: faking (ADR-017).
     segmentation_provider: Literal["meta_sam", "birefnet"] = "meta_sam"
 
+    #: How long a claimed job may hold its lease before the sweeper assumes
+    #: the worker died. MUST exceed the slowest job's runtime: the reclaim
+    #: cannot tell "worker died" from "worker still working", so too low a
+    #: value re-dispatches healthy long jobs while they run.
+    job_lease_seconds: int = 30 * 60
+
+    # --- Celery (ADR-018) -------------------------------------------------- #
+    #: Defaults to `redis_url` so local dev needs no extra variable.
+    celery_broker_url: str = ""
+    #: Deliberately longer than any task can run, so Redis never redelivers
+    #: and PostgreSQL stays the only re-drive authority. The shortest value
+    #: across *all* broker consumers wins, so anything else connecting to this
+    #: Redis must use the same number or it silently reimposes its own.
+    celery_visibility_timeout_seconds: int = 24 * 60 * 60
+    #: Must stay under the platform's SIGTERM-to-SIGKILL window (10s on Cloud
+    #: Run, not configurable). This is the time a worker has to hand unacked
+    #: messages back instead of stranding them until the visibility timeout.
+    celery_soft_shutdown_seconds: float = 8.0
+    #: Soft limit raises a catchable exception; hard limit kills the child.
+    celery_task_soft_time_limit_seconds: int = 10 * 60
+    celery_task_time_limit_seconds: int = 12 * 60
+
     job_max_attempts: int = 5
 
     # SSRF-guarded fetcher (Task 10).
     urlfetch_max_redirects: int = 3
     urlfetch_max_bytes: int = 1 * 1024 * 1024
     urlfetch_timeout_seconds: float = 5.0
+
+    @model_validator(mode="before")
+    @classmethod
+    def _default_celery_broker_to_redis(cls, data: Any) -> Any:
+        """Point Celery at ``redis_url`` unless a broker is named explicitly.
+
+        Local dev and CI then need no extra variable, while production can
+        still split the broker onto its own instance. Done here rather than in
+        a property because Celery reads the value once at import.
+        """
+        if isinstance(data, dict) and not data.get("celery_broker_url"):
+            redis = data.get("redis_url") or cls.model_fields["redis_url"].default
+            data = {**data, "celery_broker_url": redis}
+        return data
 
     @property
     def is_production(self) -> bool:

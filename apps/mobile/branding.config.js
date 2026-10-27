@@ -1,5 +1,5 @@
 /**
- * Raw brand values — the one place a rebrand is edited. (ADR-002)
+ * Raw brand values. The one place a rebrand is edited (ADR-002).
  *
  * Deliberately CommonJS with no imports and no path aliases, because it is consumed
  * from two different runtimes that cannot share module resolution:
@@ -11,28 +11,37 @@
  * rename needs no code change at all.
  */
 
-const WORKING_NAME = 'Atelier';
-const WEB_ORIGIN = process.env.EXPO_PUBLIC_WEB_ORIGIN || 'https://atelier.example';
+const BRAND_NAME = 'LUXish';
+const WEB_ORIGIN = process.env.EXPO_PUBLIC_WEB_ORIGIN || 'https://luxish.example';
 
-/** Lowercased, URL/scheme-safe form of the display name. */
-const slug = (process.env.EXPO_PUBLIC_BRAND_NAME || WORKING_NAME)
+/**
+ * Lowercased, URL/scheme-safe form of the display name.
+ *
+ * "LUXish" slugs to "luxish", which is also the deep-link scheme and the
+ * default bundle id suffix. Keep it a single word: a scheme with a hyphen is
+ * legal but reads badly in the iOS permission prompt.
+ */
+const slug = (process.env.EXPO_PUBLIC_BRAND_NAME || BRAND_NAME)
   .toLowerCase()
   .replace(/[^a-z0-9]+/g, '-')
   .replace(/^-|-$/g, '');
 
 module.exports = {
-  name: process.env.EXPO_PUBLIC_BRAND_NAME || WORKING_NAME,
+  name: process.env.EXPO_PUBLIC_BRAND_NAME || BRAND_NAME,
   slug,
   scheme: slug,
-  tagline: process.env.EXPO_PUBLIC_BRAND_TAGLINE || 'Your wardrobe, styled',
+  tagline: process.env.EXPO_PUBLIC_BRAND_TAGLINE || 'Dress well, daily',
 
-  /** True while the name is a placeholder; surfaces a dev-only badge. */
-  isWorkingName: !process.env.EXPO_PUBLIC_BRAND_NAME,
+  /**
+   * False: "LUXish" is the chosen name, not a placeholder, so the dev-only
+   * working-name badge stays off.
+   */
+  isWorkingName: false,
 
   legalEntity: 'TBD — must be registered before store submission',
 
   support: {
-    email: process.env.EXPO_PUBLIC_SUPPORT_EMAIL || 'support@atelier.example',
+    email: process.env.EXPO_PUBLIC_SUPPORT_EMAIL || 'support@luxish.example',
     url: `${WEB_ORIGIN}/support`,
   },
 

@@ -1,4 +1,4 @@
-# Atelier — Phase A Foundation + Phase B Core Implementation Plan
+# LUXish — Phase A Foundation + Phase B Core Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development
 > (recommended) or superpowers:executing-plans to implement this plan task-by-task.
@@ -54,7 +54,7 @@ requirements implicitly include this section.
 - **Owned-garment IDs from a model are always re-validated** against the requesting
   user's current wardrobe before persist or render. (ADR-010)
 - **No user-facing string hardcodes a product name** — all brand copy comes from
-  `apps/mobile/src/branding`. Working name: Atelier. (ADR-002)
+  `apps/mobile/src/branding`. Working name: LUXish. (ADR-002)
 - **Private by default.** Wardrobes and conversations are private; publication to the
   community is always a separate explicit action.
 - **Label every capability** in UI and docs as implemented, simulated, blocked, or
@@ -160,7 +160,7 @@ test('body text meets WCAG AA against its surface in both schemes', () => {
   }
 })
 test('no screen hardcodes a product name', () => {
-  expect(grepRepo(/\bAtelier\b/, 'apps/mobile/src')).toEqual(['src/branding/index.ts'])
+  expect(grepRepo(/\bLUXish\b/, 'apps/mobile/src')).toEqual(['src/branding/index.ts'])
 })
 ```
 

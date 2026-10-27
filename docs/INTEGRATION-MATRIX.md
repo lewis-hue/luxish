@@ -1,4 +1,4 @@
-# Atelier — External Integration Matrix
+# LUXish — External Integration Matrix
 
 Status date **2026-10-26**. Companion to
 [architecture/decisions.md](./architecture/decisions.md) and

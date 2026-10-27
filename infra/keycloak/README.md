@@ -1,6 +1,6 @@
 # Keycloak realm — annotations and security controls
 
-The realm is config-as-code in [`import/atelier-realm.json`](import/atelier-realm.json).
+The realm is config-as-code in [`import/luxish-realm.json`](import/luxish-realm.json).
 That file is kept **strictly schema-valid** — no comment keys — because an unknown
 property risks the import failing or being silently skipped, which is an expensive
 thing to debug. The rationale therefore lives here, keyed by JSON path.
@@ -13,11 +13,11 @@ Verified against Keycloak **26.8.1** docs and source on 2026-10-26. See ADR-016.
 
 | Thing | Requirement | Why it bites |
 |---|---|---|
-| Filename | **must** be `atelier-realm.json` | Keycloak requires `<realm name>-realm.json`. Any other name and the realm is not imported, with no obvious error. |
+| Filename | **must** be `luxish-realm.json` | Keycloak requires `<realm name>-realm.json`. Any other name and the realm is not imported, with no obvious error. |
 | Import directory | `/opt/keycloak/data/import` | Only `.json` files directly in it are read — **subdirectories are ignored**. |
 | Import flag | `--import-realm` as a **CLI argument** | There is **no `KC_IMPORT_REALM` environment variable**. It is a plain picocli flag, so it must go in `command:`, not `environment:`. |
 | Version floor | **≥ 26.8.1** | 26.8.1 fixed 22 CVEs, three in our blast radius: CVE-2026-82968 (persistent wrong-account linking), CVE-2026-15943 (masked client-secret reuse), CVE-2026-18569 (forged unsigned backchannel logout tokens). |
-| Endpoint paths | **no `/auth` prefix** | Removed in Keycloak 17 when Quarkus became the default distribution. Discovery is `/realms/atelier/.well-known/openid-configuration`. |
+| Endpoint paths | **no `/auth` prefix** | Removed in Keycloak 17 when Quarkus became the default distribution. Discovery is `/realms/luxish/.well-known/openid-configuration`. |
 | Secrets | only `${ENV_VAR}` placeholders | Keycloak resolves these at import. Note that **Admin Console exports mask secrets with asterisks** and are therefore unusable as config-as-code — only CLI exports round-trip. |
 | Re-import | safe to leave on | If the realm exists, import is skipped — deliberately, to avoid losing state across restarts. To re-apply changes, delete the realm via the Admin API first. |
 
@@ -74,7 +74,7 @@ without a code review.
 
 ---
 
-## `clients[atelier-mobile]`
+## `clients[luxish-mobile]`
 
 - **Public client, PKCE required.** A phone binary cannot keep a secret, so there is
   none. The attribute is `pkce.code.challenge.method: "S256"` — in the admin console
@@ -82,7 +82,7 @@ without a code review.
   older "Proof Key for Code Exchange Code Challenge Method" label. Keycloak's help
   text: "Public clients (client authentication disabled) should always require PKCE as
   they cannot securely store client secrets."
-- **`atelier://callback` must be listed explicitly.** Keycloak is specific that for
+- **`luxish://callback` must be listed explicitly.** Keycloak is specific that for
   non-http(s) custom schemes, "it should be an explicit part of the validation pattern…
   For security reasons a general pattern like `*` does not cover non http(s) schemes."
   Redirect matching is exact and case-sensitive. The `127.0.0.1:8081` entries exist
@@ -94,7 +94,7 @@ without a code review.
   API has to fall back to revoking every session belonging to `sub` — which works, but
   is coarser than necessary. `sub` is always present; `sid` is not.
 
-### The `atelier-api-audience` protocol mapper is not optional
+### The `luxish-api-audience` protocol mapper is not optional
 
 Without it, **token validation fails on every real request.** Keycloak deliberately
 omits the requesting client from an access token's audience: "the frontend client
@@ -170,7 +170,7 @@ documented as "intended only for development and testing purposes". Production n
 ```bash
 npm run dev:up                       # postgres + redis + keycloak
 # Admin console: http://localhost:55080  (admin / admin)
-# Discovery:     http://localhost:55080/realms/atelier/.well-known/openid-configuration
+# Discovery:     http://localhost:55080/realms/luxish/.well-known/openid-configuration
 # Readiness:     http://localhost:55000/health/ready
 ```
 

@@ -32,7 +32,7 @@ terraform apply -var-file=dev.tfvars
 Externally issued secrets are created **empty** and populated out of band:
 
 ```bash
-printf '%s' "$MODEL_API_KEY" | gcloud secrets versions add atelier-dev-model-api-key --data-file=-
+printf '%s' "$MODEL_API_KEY" | gcloud secrets versions add luxish-dev-model-api-key --data-file=-
 ```
 
 **Be precise about what that does and does not buy.** The Meta key, the Google OAuth
@@ -56,17 +56,17 @@ private IP, which CI does not have. Run it once per environment, from a host ins
 the VPC (Cloud SQL Studio or a bastion):
 
 ```sql
-REVOKE CONNECT ON DATABASE atelier  FROM PUBLIC;
+REVOKE CONNECT ON DATABASE luxish  FROM PUBLIC;
 REVOKE CONNECT ON DATABASE keycloak FROM PUBLIC;
-GRANT  CONNECT ON DATABASE atelier  TO atelier;
+GRANT  CONNECT ON DATABASE luxish  TO luxish;
 GRANT  CONNECT ON DATABASE keycloak TO keycloak;
 ```
 
 Verify it took effect by confirming the Keycloak role cannot reach the app database:
 
 ```sql
--- as the keycloak role; must fail with "permission denied for database atelier"
-\c atelier
+-- as the keycloak role; must fail with "permission denied for database luxish"
+\c luxish
 ```
 
 **Until this is run, treat database separation as convention rather than

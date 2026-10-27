@@ -227,7 +227,7 @@ async def test_alg_none_is_rejected(client: httpx.AsyncClient, tokens: Any) -> N
 @pytest.mark.parametrize(
     "overrides",
     [
-        {"iss": "https://id.evil.test/realms/atelier"},
+        {"iss": "https://id.evil.test/realms/luxish"},
         {"aud": ["someone-else"]},  # wrong, as opposed to absent
         {"azp": "another-client"},
         {"exp": int((datetime.now(UTC) - timedelta(minutes=10)).timestamp())},

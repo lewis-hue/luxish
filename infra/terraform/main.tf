@@ -1,5 +1,5 @@
 /**
- * Atelier infrastructure on GCP (ADR-013).
+ * LUXish infrastructure on GCP (ADR-013).
  *
  * Deliberately a single flat configuration rather than a module hierarchy: there are
  * three near-identical environments and one team, so modules would add indirection
@@ -300,12 +300,12 @@ resource "google_secret_manager_secret" "app" {
 
 resource "google_service_account" "api" {
   account_id   = substr("${local.name}-api", 0, 30)
-  display_name = "Atelier API (${var.environment})"
+  display_name = "LUXish API (${var.environment})"
 }
 
 resource "google_service_account" "worker" {
   account_id   = substr("${local.name}-worker", 0, 30)
-  display_name = "Atelier workers (${var.environment})"
+  display_name = "LUXish workers (${var.environment})"
 }
 
 resource "google_service_account" "keycloak" {

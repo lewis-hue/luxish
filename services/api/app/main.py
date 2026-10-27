@@ -30,7 +30,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             pass
 
     app = FastAPI(
-        title="Atelier API",
+        title="LUXish API",
         version="0.1.0",
         description="Wardrobe, stylist, shopping and community backend.",
         lifespan=lifespan,

@@ -142,6 +142,6 @@ async def test_gcs_signing_is_declared_unavailable_rather_than_faked(
     from app.errors import CapabilityUnavailable
 
     with pytest.raises(CapabilityUnavailable):
-        GcsSignedUrlAuthorizer(bucket="atelier-test").authorize(
+        GcsSignedUrlAuthorizer(bucket="luxish-test").authorize(
             asset_id=uuid.uuid4(), content_type="image/jpeg", max_bytes=1024, ttl_seconds=900
         )

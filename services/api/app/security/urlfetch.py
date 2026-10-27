@@ -281,7 +281,7 @@ async def safe_fetch(
             request_headers = {
                 "Host": target.host_header,
                 "Accept-Encoding": "identity",
-                "User-Agent": "Atelier-LinkPreview/0.1",
+                "User-Agent": "LUXish-LinkPreview/0.1",
                 **(headers or {}),
             }
             request = client.build_request(

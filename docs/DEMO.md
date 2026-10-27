@@ -94,7 +94,7 @@ than burning six retries, and an uploaded item can never be cancelled.
 
 ## 5. Sign-in — `WORKS WITH KEY`
 
-Keycloak at http://localhost:55080, realm `atelier`, Google brokered.
+Keycloak at http://localhost:55080, realm `luxish`, Google brokered.
 
 Google sign-in needs `GOOGLE_CLIENT_ID` / `_SECRET`; without them the button appears
 and cannot complete, which is the honest state rather than a hidden one.

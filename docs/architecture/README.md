@@ -1,6 +1,6 @@
 # Architecture & Decision Record
 
-Working name: **Atelier** (placeholder — see [Branding](#adr-002-centralised-configurable-branding)).
+Working name: **LUXish** (placeholder — see [Branding](#adr-002-centralised-configurable-branding)).
 Status date: 2026-10-26. Target build window closes 2026-11-04 21:00 US Eastern / 2026-11-05 05:00 Nairobi.
 
 > Every claim in this document is labelled. **Verified** = fetched from the vendor's

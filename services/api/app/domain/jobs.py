@@ -20,7 +20,9 @@ Three things live here:
 
 from __future__ import annotations
 
+import logging
 import uuid
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -32,6 +34,8 @@ from app.errors import ApiError
 from app.models.job import JOB_STATES, Job
 from app.models.media_asset import MediaAsset, MediaDerivative
 from app.models.tombstone import Tombstone
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_MAX_ATTEMPTS = 5
 #: Exponential backoff, capped. ASSUMED; revisit with measured failure data.
@@ -67,6 +71,41 @@ def _supports_row_locking(session: AsyncSession) -> bool:
 # --------------------------------------------------------------------------- #
 # queue
 # --------------------------------------------------------------------------- #
+#: Called after a job row commits, to wake a worker. Set by the queue layer at
+#: import; a no-op otherwise.
+#:
+#: A hook rather than a direct import, for two reasons. This module must stay
+#: free of Celery so the queue is replaceable and so the test suite needs no
+#: broker. And the call must happen *after* the commit: a message sent inside
+#: the transaction can reach a worker before the row is visible, and the worker
+#: would then find nothing and decline.
+_dispatcher: Callable[[uuid.UUID, str], object] | None = None
+
+
+def set_dispatcher(dispatcher: Callable[[uuid.UUID, str], object] | None) -> None:
+    """Register the function that wakes a worker. Pass None to unregister."""
+    global _dispatcher
+    _dispatcher = dispatcher
+
+
+def _notify(job: Job) -> None:
+    """Wake a worker for ``job``. Never raises.
+
+    A failure here is latency, not loss: the job is already committed and the
+    sweeper will find it. So a broker outage must not fail the user's request.
+    """
+    if _dispatcher is None:
+        return
+    try:
+        _dispatcher(job.id, job.kind)
+    except Exception:  # noqa: BLE001 - the sweeper is the fallback
+        logger.warning(
+            "job dispatch failed; the sweeper will pick it up",
+            extra={"job_id": str(job.id), "kind": job.kind},
+            exc_info=True,
+        )
+
+
 async def enqueue(
     session: AsyncSession,
     kind: str,
@@ -75,6 +114,7 @@ async def enqueue(
     idempotency_key: str | None = None,
     max_attempts: int = DEFAULT_MAX_ATTEMPTS,
     available_at: datetime | None = None,
+    notify: bool = True,
 ) -> Job:
     """Enqueue one job. With a key, enqueuing twice yields the same job.
 
@@ -86,6 +126,8 @@ async def enqueue(
             sa.select(Job).where(Job.idempotency_key == idempotency_key)
         )
         if existing is not None:
+            # Already enqueued. Do not dispatch again: the first enqueue did,
+            # and the sweeper covers the case where that dispatch was lost.
             return existing
 
     job = Job(
@@ -112,6 +154,8 @@ async def enqueue(
             raise
         return existing
     await session.refresh(job)
+    if notify:
+        _notify(job)
     return job
 
 
@@ -165,6 +209,148 @@ async def claim_job(
     await session.commit()
     await session.refresh(job)
     return job
+
+
+#: How long a claimed job may hold its lease before the sweeper assumes the
+#: worker died and returns the job to the queue.
+#:
+#: ASSUMED, and the most dangerous number in this module. It must exceed the
+#: runtime of the slowest job, because the reclaim cannot distinguish "the
+#: worker died" from "the worker is still working" — it sees only a stale
+#: timestamp. Set it too low and a healthy long-running job is re-dispatched
+#: *while it is still running*. The AI and media jobs are minutes, so this is
+#: generous on purpose; lower it only alongside measured runtimes.
+DEFAULT_LEASE_SECONDS = 30 * 60
+
+
+async def claim_job_by_id(
+    session: AsyncSession,
+    job_id: uuid.UUID,
+    *,
+    worker: str | None = None,
+    now: datetime | None = None,
+) -> Job | None:
+    """Claim one *named* job, or return None if it is not claimable.
+
+    This is the claim a push dispatcher needs: a broker message names a job,
+    and the worker must either take that exact job or decline. Returning None
+    rather than raising is the whole point — it is the normal, expected outcome
+    of a duplicate delivery, and it is what makes duplicate delivery harmless.
+
+    Implemented as a single conditional UPDATE rather than a locking SELECT
+    followed by a write. Both are atomic, but the UPDATE needs no transaction
+    to abandon when the job turns out to be unclaimable: a ``rollback`` on the
+    decline path would expire every other object in the caller's session, which
+    is a surprising thing for a function that did nothing to do.
+
+    Of two workers handed the same message, the ``state = 'queued'`` predicate
+    means exactly one row matches and the other sees no row and declines. No
+    deduplication at the broker is required, which matters because the broker
+    cannot provide any.
+    """
+    moment = now or _now()
+    claimed = await session.scalar(
+        sa.update(Job)
+        .where(
+            Job.id == job_id,
+            Job.state == "queued",
+            Job.available_at <= moment,
+        )
+        .values(
+            state="running",
+            attempts=Job.attempts + 1,
+            locked_at=moment,
+            locked_by=worker,
+        )
+        .returning(Job)
+        .execution_options(synchronize_session=False)
+    )
+    if claimed is None:
+        return None
+    await session.commit()
+    await session.refresh(claimed)
+    return claimed
+
+
+async def reclaim_stalled_jobs(
+    session: AsyncSession,
+    *,
+    lease_seconds: int = DEFAULT_LEASE_SECONDS,
+    limit: int = 100,
+    now: datetime | None = None,
+) -> list[Job]:
+    """Return jobs whose worker died mid-run to the queue.
+
+    Without this a job that was claimed and then lost — SIGKILL, a pod
+    evicted, a Cloud Run instance replaced during a deploy — stays ``running``
+    forever. Nothing retries it and nothing reports it: the user watches a
+    spinner and the queue looks healthy. This is the single most common way a
+    queue silently stops being a queue.
+
+    Reclaiming costs an attempt rather than resetting the counter, so a job
+    that kills its worker every time walks to ``dead_letter`` instead of
+    looping. That bound is deliberate: it is the backstop Redis does not have.
+    """
+    moment = now or _now()
+    cutoff = moment - timedelta(seconds=lease_seconds)
+
+    query = (
+        sa.select(Job)
+        .where(
+            Job.state == "running",
+            Job.locked_at.is_not(None),
+            Job.locked_at < cutoff,
+        )
+        .order_by(Job.locked_at.asc())
+        .limit(limit)
+    )
+    if _supports_row_locking(session):
+        query = query.with_for_update(skip_locked=True)
+
+    stalled = list((await session.scalars(query)).all())
+    for job in stalled:
+        if job.attempts >= job.max_attempts:
+            job.state = "dead_letter"
+            job.finished_at = moment
+            job.last_error = (
+                f"lease expired after {lease_seconds}s with no completion, "
+                f"and attempts ({job.attempts}) reached max_attempts"
+            )
+        else:
+            job.state = "queued"
+            job.locked_at = None
+            job.locked_by = None
+            job.available_at = moment
+            job.last_error = f"lease expired after {lease_seconds}s; requeued"
+    if stalled:
+        await session.commit()
+    return stalled
+
+
+async def ready_job_ids(
+    session: AsyncSession,
+    *,
+    kinds: list[str] | None = None,
+    limit: int = 100,
+    now: datetime | None = None,
+) -> list[uuid.UUID]:
+    """Ids of jobs that are ready to run and that nobody is running.
+
+    The polling publisher's read. It claims nothing and locks nothing: it only
+    reports what the queue believes is outstanding, so that a dispatcher can
+    push those ids at the broker. Safe to run concurrently with workers, and
+    safe to dispatch an id twice — ``claim_job_by_id`` resolves that.
+    """
+    moment = now or _now()
+    query = (
+        sa.select(Job.id)
+        .where(Job.state == "queued", Job.available_at <= moment)
+        .order_by(Job.available_at.asc(), Job.created_at.asc())
+        .limit(limit)
+    )
+    if kinds:
+        query = query.where(Job.kind.in_(kinds))
+    return list((await session.scalars(query)).all())
 
 
 async def update_progress(session: AsyncSession, job: Job, progress: float) -> None:
@@ -314,19 +500,24 @@ async def count_derivatives(session: AsyncSession, asset_id: uuid.UUID) -> int:
 
 
 __all__ = [
+    "DEFAULT_LEASE_SECONDS",
     "DEFAULT_MAX_ATTEMPTS",
     "JOB_STATES",
     "AssetGone",
     "backoff_seconds",
     "claim_job",
+    "claim_job_by_id",
     "claim_statement",
     "complete_job",
     "count_derivatives",
     "delete_asset",
     "enqueue",
+    "set_dispatcher",
     "fail_job",
     "guard_statement",
     "guard_write",
+    "ready_job_ids",
+    "reclaim_stalled_jobs",
     "tombstone_exists",
     "update_progress",
 ]

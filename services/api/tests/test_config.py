@@ -12,7 +12,7 @@ from app.config import Settings
 
 def _clear(monkeypatch: pytest.MonkeyPatch) -> None:
     for key in list(os.environ):
-        if key.startswith("ATELIER_"):
+        if key.startswith("LUXISH_"):
             monkeypatch.delenv(key, raising=False)
 
 
@@ -52,14 +52,14 @@ def test_no_credential_shaped_field_carries_a_literal_default() -> None:
         )
 
 
-def test_settings_reads_the_atelier_prefix(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_settings_reads_the_luxish_prefix(monkeypatch: pytest.MonkeyPatch) -> None:
     _clear(monkeypatch)
-    monkeypatch.setenv("ATELIER_DATABASE_URL", "postgresql+asyncpg://u:p@h/db")
-    monkeypatch.setenv("ATELIER_META_API_KEY", "LLM_abc")
-    monkeypatch.setenv("ATELIER_GCS_BUCKET", "bucket")
-    monkeypatch.setenv("ATELIER_KEYCLOAK_ISSUER", "https://id.test/realms/a")
-    monkeypatch.setenv("ATELIER_KEYCLOAK_AUDIENCE", "atelier-api")
-    monkeypatch.setenv("ATELIER_KEYCLOAK_CLIENT_ID", "atelier-mobile")
+    monkeypatch.setenv("LUXISH_DATABASE_URL", "postgresql+asyncpg://u:p@h/db")
+    monkeypatch.setenv("LUXISH_META_API_KEY", "LLM_abc")
+    monkeypatch.setenv("LUXISH_GCS_BUCKET", "bucket")
+    monkeypatch.setenv("LUXISH_KEYCLOAK_ISSUER", "https://id.test/realms/a")
+    monkeypatch.setenv("LUXISH_KEYCLOAK_AUDIENCE", "luxish-api")
+    monkeypatch.setenv("LUXISH_KEYCLOAK_CLIENT_ID", "luxish-mobile")
     s = Settings(_env_file=None)
     assert s.database_url == "postgresql+asyncpg://u:p@h/db"
     assert s.environment == "local"
@@ -80,14 +80,14 @@ def test_keycloak_audience_is_optional_because_keycloak_omits_aud() -> None:
 
 def test_jwks_url_is_derived_from_the_issuer(monkeypatch: pytest.MonkeyPatch) -> None:
     _clear(monkeypatch)
-    monkeypatch.setenv("ATELIER_DATABASE_URL", "postgresql+asyncpg://u:p@h/db")
-    monkeypatch.setenv("ATELIER_META_API_KEY", "LLM_abc")
-    monkeypatch.setenv("ATELIER_GCS_BUCKET", "bucket")
-    monkeypatch.setenv("ATELIER_KEYCLOAK_ISSUER", "https://id.test/realms/atelier/")
-    monkeypatch.setenv("ATELIER_KEYCLOAK_AUDIENCE", "atelier-api")
-    monkeypatch.setenv("ATELIER_KEYCLOAK_CLIENT_ID", "atelier-mobile")
+    monkeypatch.setenv("LUXISH_DATABASE_URL", "postgresql+asyncpg://u:p@h/db")
+    monkeypatch.setenv("LUXISH_META_API_KEY", "LLM_abc")
+    monkeypatch.setenv("LUXISH_GCS_BUCKET", "bucket")
+    monkeypatch.setenv("LUXISH_KEYCLOAK_ISSUER", "https://id.test/realms/luxish/")
+    monkeypatch.setenv("LUXISH_KEYCLOAK_AUDIENCE", "luxish-api")
+    monkeypatch.setenv("LUXISH_KEYCLOAK_CLIENT_ID", "luxish-mobile")
     s = Settings(_env_file=None)
-    assert s.keycloak_jwks_url == "https://id.test/realms/atelier/protocol/openid-connect/certs"
+    assert s.keycloak_jwks_url == "https://id.test/realms/luxish/protocol/openid-connect/certs"
 
 
 def test_hmac_algorithms_are_not_acceptable() -> None:
@@ -99,11 +99,11 @@ def test_hmac_algorithms_are_not_acceptable() -> None:
 def test_the_jwks_url_has_no_auth_prefix(monkeypatch: pytest.MonkeyPatch) -> None:
     """The `/auth` path prefix was removed in Keycloak 17."""
     _clear(monkeypatch)
-    monkeypatch.setenv("ATELIER_DATABASE_URL", "postgresql+asyncpg://u:p@h/db")
-    monkeypatch.setenv("ATELIER_META_API_KEY", "LLM_abc")
-    monkeypatch.setenv("ATELIER_GCS_BUCKET", "bucket")
-    monkeypatch.setenv("ATELIER_KEYCLOAK_ISSUER", "https://id.test/realms/atelier")
-    monkeypatch.setenv("ATELIER_KEYCLOAK_CLIENT_ID", "atelier-mobile")
+    monkeypatch.setenv("LUXISH_DATABASE_URL", "postgresql+asyncpg://u:p@h/db")
+    monkeypatch.setenv("LUXISH_META_API_KEY", "LLM_abc")
+    monkeypatch.setenv("LUXISH_GCS_BUCKET", "bucket")
+    monkeypatch.setenv("LUXISH_KEYCLOAK_ISSUER", "https://id.test/realms/luxish")
+    monkeypatch.setenv("LUXISH_KEYCLOAK_CLIENT_ID", "luxish-mobile")
     url = Settings(_env_file=None).keycloak_jwks_url
     assert "/auth/" not in url
-    assert url.endswith("/realms/atelier/protocol/openid-connect/certs")
+    assert url.endswith("/realms/luxish/protocol/openid-connect/certs")

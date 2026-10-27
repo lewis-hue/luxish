@@ -1,7 +1,7 @@
 {
-  "realm": "atelier",
+  "realm": "luxish",
   "enabled": true,
-  "displayName": "Atelier",
+  "displayName": "LUXish",
 
   "sslRequired": "external",
   "registrationAllowed": true,
@@ -28,8 +28,8 @@
 
   "clients": [
     {
-      "clientId": "atelier-mobile",
-      "name": "Atelier mobile app",
+      "clientId": "luxish-mobile",
+      "name": "LUXish mobile app",
       "enabled": true,
       "protocol": "openid-connect",
       "publicClient": true,
@@ -39,26 +39,26 @@
       "serviceAccountsEnabled": false,
       "frontchannelLogout": false,
       "redirectUris": [
-        "atelier://callback",
+        "luxish://callback",
         "http://127.0.0.1:8081/*",
         "http://localhost:8081/*"
       ],
       "webOrigins": ["http://127.0.0.1:8081", "http://localhost:8081"],
       "attributes": {
         "pkce.code.challenge.method": "S256",
-        "post.logout.redirect.uris": "atelier://signed-out",
+        "post.logout.redirect.uris": "luxish://signed-out",
         "backchannel.logout.session.required": "true",
         "backchannel.logout.revoke.offline.tokens": "true",
         "backchannel.logout.url": "http://host.docker.internal:8000/v1/auth/backchannel-logout"
       },
       "protocolMappers": [
         {
-          "name": "atelier-api-audience",
+          "name": "luxish-api-audience",
           "protocol": "openid-connect",
           "protocolMapper": "oidc-audience-mapper",
           "consentRequired": false,
           "config": {
-            "included.client.audience": "atelier-api",
+            "included.client.audience": "luxish-api",
             "id.token.claim": "false",
             "access.token.claim": "true",
             "introspection.token.claim": "true"
@@ -69,12 +69,12 @@
       "optionalClientScopes": ["offline_access"]
     },
     {
-      "clientId": "atelier-api",
-      "name": "Atelier API",
+      "clientId": "luxish-api",
+      "name": "LUXish API",
       "enabled": true,
       "protocol": "openid-connect",
       "publicClient": false,
-      "secret": "${ATELIER_API_CLIENT_SECRET}",
+      "secret": "${LUXISH_API_CLIENT_SECRET}",
       "standardFlowEnabled": false,
       "implicitFlowEnabled": false,
       "directAccessGrantsEnabled": false,

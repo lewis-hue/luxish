@@ -37,12 +37,12 @@ def resolve_url() -> str:
         # option, then the environment the service itself runs against.
         overrides.get("url")
         or config.get_main_option("sqlalchemy.url")
-        or os.environ.get("ATELIER_ALEMBIC_URL")
-        or os.environ.get("ATELIER_DATABASE_URL")
+        or os.environ.get("LUXISH_ALEMBIC_URL")
+        or os.environ.get("LUXISH_DATABASE_URL")
     )
     if not url:
         raise RuntimeError(
-            "No database URL. Set ATELIER_DATABASE_URL or pass -x url=<dsn>."
+            "No database URL. Set LUXISH_DATABASE_URL or pass -x url=<dsn>."
         )
     return url
 

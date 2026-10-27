@@ -15,7 +15,7 @@ variable "environment" {
 variable "app_name" {
   description = "Resource name prefix. Independent of the display brand (ADR-002)."
   type        = string
-  default     = "atelier"
+  default     = "luxish"
 }
 
 variable "region" {

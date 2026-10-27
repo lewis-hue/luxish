@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from functools import lru_cache
 
 from sqlalchemy.ext.asyncio import (
@@ -70,6 +71,25 @@ def get_session_factory() -> async_sessionmaker[AsyncSession]:
 
 async def get_session() -> AsyncIterator[AsyncSession]:
     """FastAPI dependency: one session per request, rolled back on error."""
+    maker = get_session_factory()
+    async with maker() as session:
+        try:
+            yield session
+        except Exception:
+            await session.rollback()
+            raise
+
+
+@asynccontextmanager
+async def session_scope() -> AsyncIterator[AsyncSession]:
+    """One session, as a context manager, for code outside a request.
+
+    ``get_session`` is a FastAPI dependency and only works where FastAPI
+    resolves it. Workers need the same lifecycle without the framework, and
+    writing ``async with get_session_factory()() as s`` at every call site
+    loses the rollback-on-error that makes a failed job unable to poison the
+    next one.
+    """
     maker = get_session_factory()
     async with maker() as session:
         try:

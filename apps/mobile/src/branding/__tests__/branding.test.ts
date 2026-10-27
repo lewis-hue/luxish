@@ -1,5 +1,7 @@
 /**
- * ADR-002: a rebrand must be a one-file diff. The brand literal lives in
+ * ADR-002: a rebrand must be a one-file diff. Proven by the LUXish rename, which
+ * touched only `branding.config.js` and the two assertions here that named the
+ * old value. The brand literal lives in
  * `branding.config.js` at the app root, read by both `app.config.ts` (native binary)
  * and `src/branding` (JS bundle). These tests enforce that nothing under `src/`
  * names the product, and that the derived identifiers stay consistent.
@@ -22,7 +24,7 @@ function sourceFiles(dir: string): string[] {
 }
 
 describe('branding', () => {
-  it('keeps the working name out of src entirely', () => {
+  it('keeps the product name out of src entirely', () => {
     // Note for anyone tempted to satisfy this by deriving a value from BRAND:
     // storage keys and keychain services must NOT be brand-derived. They are
     // addresses, not labels, and a rebrand that changed them would silently sign
@@ -45,9 +47,17 @@ describe('branding', () => {
     expect(BRAND.support.url).toMatch(/^https:\/\//);
   });
 
-  it('flags that the name is still a placeholder', () => {
-    // Guards against shipping the working name as though it were decided.
-    expect(BRAND.isWorkingName).toBe(true);
+  it('carries the decided name, not a placeholder', () => {
+    // The name is LUXish. isWorkingName drives a dev-only badge, so leaving it
+    // true after the decision would keep shipping a "not final" marker.
+    expect(BRAND.name).toBe('LUXish');
+    expect(BRAND.isWorkingName).toBe(false);
+  });
+
+  it('slugs the name to a single scheme-safe word', () => {
+    // A hyphen here is legal but reads badly in the iOS permission prompt, and
+    // the slug is also the bundle-id suffix.
+    expect(BRAND.slug).toBe('luxish');
   });
 
   it('derives a scheme that is URI-safe and matches the slug', () => {
