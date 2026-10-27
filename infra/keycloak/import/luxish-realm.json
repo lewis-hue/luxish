@@ -36,7 +36,6 @@
       "frontchannelLogout": false,
       "redirectUris": [
         "luxish://callback",
-        "exp://*",
         "http://127.0.0.1:19000/*",
         "http://localhost:19000/*"
       ],
