@@ -54,6 +54,13 @@ services:
       KC_DB_USERNAME: luxish
       KC_DB_PASSWORD: luxish
       KC_HEALTH_ENABLED: 'true'
+      # Only set when Keycloak is reached through a tunnel or proxy in local
+      # development. Without KC_PROXY_HEADERS it cannot see that TLS was
+      # terminated upstream, so it advertises http:// URLs over an https://
+      # connection and every token carries an issuer the API will reject.
+      # Empty by default, which is correct for plain localhost.
+      KC_HOSTNAME: ${KC_HOSTNAME:-}
+      KC_PROXY_HEADERS: ${KC_PROXY_HEADERS:-}
       # Referenced as ${...} inside luxish-realm.json, so no secret is ever
       # committed. Real values come from `infra/.env`, which is gitignored;
       # see infra/.env.example. The `:-unset` default keeps the stack bootable
