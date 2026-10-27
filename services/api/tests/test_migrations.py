@@ -108,12 +108,36 @@ def test_migrations_cover_every_model_table(tmp_path: Path) -> None:
     assert migrated - declared == set(), f"migrated but undeclared: {migrated - declared}"
 
 
+def _reset_schema(url: str) -> None:
+    """Drop everything, including the version table and the native enums.
+
+    Needed because `Base.metadata.drop_all` (used by the other PostgreSQL
+    test) removes the model tables but leaves `alembic_version` behind, and a
+    version table claiming head makes `upgrade head` a no-op against an empty
+    database. Dropping the schema also clears the native enum types, which
+    outlive their tables and would otherwise collide on the next upgrade.
+
+    Safe because this only ever runs against LUXISH_TEST_PG_URL, which is a
+    database the test suite owns.
+    """
+    engine = sa.create_engine(_sync_url(url), isolation_level="AUTOCOMMIT")
+    try:
+        with engine.connect() as conn:
+            conn.execute(sa.text("DROP SCHEMA public CASCADE"))
+            conn.execute(sa.text("CREATE SCHEMA public"))
+    finally:
+        engine.dispose()
+
+
 @pytest.mark.postgres
 def test_upgrade_head_then_downgrade_base_on_postgres() -> None:
     url = os.environ.get("LUXISH_TEST_PG_URL")
     if not url:
         pytest.skip("LUXISH_TEST_PG_URL is not set")
     cfg = _config(url)
+    # Independent of whatever ran before, including a sibling test that
+    # dropped the tables without resetting the version.
+    _reset_schema(url)
     command.upgrade(cfg, "head")
     assert "garments" in _tables(url)
     command.downgrade(cfg, "base")

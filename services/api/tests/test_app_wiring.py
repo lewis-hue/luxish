@@ -57,6 +57,14 @@ def _declared() -> list[tuple[str, str, str]]:
         for route in module.router.routes:
             if not isinstance(route, APIRoute):
                 continue
+            # A route hidden from the schema on purpose is not part of the
+            # product's contract and cannot be checked against the OpenAPI
+            # document. The local upload receiver is the only one: in a
+            # deployment the client PUTs straight to object storage and the
+            # service never sees the bytes, so publishing it would invite a
+            # client to depend on it.
+            if not route.include_in_schema:
+                continue
             # ``route.path`` already carries the router's own prefix; only the
             # app-level API prefix is added at include time.
             full = f"{API_PREFIX}{route.path}"

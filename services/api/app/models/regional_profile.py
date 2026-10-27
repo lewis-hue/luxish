@@ -115,9 +115,20 @@ class RegionalStyleProfile(Base, TimestampMixin):
         sa.Integer, nullable=False, default=1, server_default=sa.text("1")
     )
     #: The row this one replaces, so versions chain.
+    #:
+    #: The constraint is named explicitly because the convention's generated
+    #: name is `fk_<table>_<column>_<referred table>`, and this is a
+    #: self-reference on a long table name, so it comes out at 64 characters
+    #: against PostgreSQL's 63-character identifier limit. SQLite does not
+    #: enforce that limit, so the whole test suite passed while `alembic
+    #: upgrade head` failed on the first real database it met.
     supersedes_id: Mapped[uuid.UUID | None] = mapped_column(
         sa.Uuid(as_uuid=True),
-        sa.ForeignKey("regional_style_profiles.id", ondelete="SET NULL"),
+        sa.ForeignKey(
+            "regional_style_profiles.id",
+            ondelete="SET NULL",
+            name="fk_regional_style_profiles_supersedes_id",
+        ),
         nullable=True,
     )
     #: Set when a newer version takes over. Retired rows are kept, not deleted.

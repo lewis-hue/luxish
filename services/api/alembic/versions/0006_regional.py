@@ -81,7 +81,7 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(
             ["supersedes_id"],
             ["regional_style_profiles.id"],
-            name="fk_regional_style_profiles_supersedes_id_regional_style_profiles",
+            name="fk_regional_style_profiles_supersedes_id",
             ondelete="SET NULL",
         ),
         sa.PrimaryKeyConstraint("id", name="pk_regional_style_profiles"),

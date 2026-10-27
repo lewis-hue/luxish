@@ -86,9 +86,15 @@ class GcsSignedUrlAuthorizer:
         )
 
 
-def build_authorizer(*, mode: str, bucket: str) -> UploadAuthorizer:
+def build_authorizer(
+    *, mode: str, bucket: str, public_base_url: str = ""
+) -> UploadAuthorizer:
     if mode == "gcs_signed_url":
         return GcsSignedUrlAuthorizer(bucket=bucket)
+    if mode == "local_file":
+        from app.storage.local import LocalFileAuthorizer
+
+        return LocalFileAuthorizer(base_url=public_base_url)
     return StubUploadAuthorizer()
 
 

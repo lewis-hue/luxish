@@ -74,7 +74,17 @@ class Settings(BaseSettings):
     upload_max_bytes: int = 25 * 1024 * 1024
     #: "simulated" returns a labelled stub URL; "gcs_signed_url" is the real
     #: backend and is not implemented in Phase A (it refuses rather than faking).
-    upload_storage_mode: Literal["simulated", "gcs_signed_url"] = "simulated"
+    #: "local_file" stores bytes on this machine's disk and is refused
+    #: outside the local environment; "gcs_signed_url" is the real backend and
+    #: is not implemented yet (it refuses rather than faking).
+    upload_storage_mode: Literal["simulated", "local_file", "gcs_signed_url"] = (
+        "simulated"
+    )
+    #: Where "local_file" puts objects. Local development only.
+    local_media_root: str = "./.media"
+    #: Origin the local upload URL is built from. Must be the address a phone
+    #: on the LAN can reach, not 127.0.0.1, or the device cannot upload.
+    public_base_url: str = "http://127.0.0.1:8010"
     upload_allowed_content_types: tuple[str, ...] = (
         "image/jpeg",
         "image/png",
