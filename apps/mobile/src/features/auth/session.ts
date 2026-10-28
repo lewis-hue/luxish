@@ -254,6 +254,71 @@ export async function accessToken(): Promise<string | null> {
   return refresh();
 }
 
+/**
+ * Sign in with a username and password, without a browser.
+ *
+ * **Development only, and unreachable in a release build.** The `__DEV__`
+ * guard is compiled away by Metro, so this cannot ship: there is no runtime
+ * flag to get wrong.
+ *
+ * It exists because the browser flow needs its `exp://` callback to return to
+ * Expo Go, which does not always happen, and a development build (which owns
+ * the `luxish://` scheme and has no such problem) needs an Apple Developer
+ * account to install on a physical iPhone. Without this there is no way to
+ * obtain a token on-device at all.
+ *
+ * Everything after the grant is identical to the real flow: the same realm,
+ * the same signature and issuer validation, the same storage, the same
+ * refresh. Only the browser round trip is skipped — which is precisely why
+ * it must not ship, since the browser is what keeps the password out of the
+ * application and carries MFA, brokering and consent.
+ */
+export async function signInWithPassword(
+  username: string,
+  password: string,
+): Promise<void> {
+  if (!__DEV__) {
+    throw new AuthError('Password sign-in is not available.', 'failed');
+  }
+
+  const now = Date.now();
+  const response = await fetch(discovery.tokenEndpoint!, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: CLIENT_ID,
+      grant_type: 'password',
+      scope: SCOPES.join(' '),
+      username,
+      password,
+    }).toString(),
+  });
+
+  const payload = (await response.json()) as Record<string, unknown>;
+  if (!response.ok) {
+    // Keycloak distinguishes a bad password (`invalid_grant`) from the grant
+    // being switched off (`unauthorized_client`), and the second is a setup
+    // problem the developer needs told about plainly.
+    const code = String(payload.error ?? 'failed');
+    throw new AuthError(
+      code === 'unauthorized_client'
+        ? 'Password sign-in is not enabled on this realm. Run infra/keycloak/enable-dev-password-login.sh'
+        : String(payload.error_description ?? 'Those details were not accepted.'),
+      'failed',
+    );
+  }
+
+  await store(
+    {
+      accessToken: String(payload.access_token),
+      refreshToken: payload.refresh_token ? String(payload.refresh_token) : null,
+      expiresIn:
+        typeof payload.expires_in === 'number' ? payload.expires_in : undefined,
+    },
+    now,
+  );
+}
+
 /** Forget the tokens. Does not tell Keycloak. */
 async function signOutLocally(): Promise<void> {
   await secureSession.clear();

@@ -1,6 +1,6 @@
 import { Stack, router } from 'expo-router';
 import { useState } from 'react';
-import { View } from 'react-native';
+import { TextInput, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { MotionPressable, tapFeedback } from '@/components/ui/motion';
@@ -14,7 +14,7 @@ import {
   Tracking,
 } from '@/constants/theme';
 import { BRAND } from '@/branding';
-import { AuthError, signIn } from '@/features/auth/session';
+import { AuthError, signIn, signInWithPassword } from '@/features/auth/session';
 import { useScheme } from '@/hooks/use-theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -39,8 +39,24 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 export default function SignInScreen() {
   const colors = Colors[useScheme()];
   const insets = useSafeAreaInsets();
-  const [busy, setBusy] = useState<'google' | 'email' | null>(null);
+  const [busy, setBusy] = useState<'google' | 'email' | 'dev' | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [devEmail, setDevEmail] = useState('');
+  const [devPassword, setDevPassword] = useState('');
+
+  const devSignIn = async () => {
+    void tapFeedback();
+    setBusy('dev');
+    setError(null);
+    try {
+      await signInWithPassword(devEmail.trim(), devPassword);
+      router.replace('/(tabs)');
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Sign-in failed.');
+    } finally {
+      setBusy(null);
+    }
+  };
 
   const start = async (withGoogle: boolean) => {
     void tapFeedback();
@@ -176,8 +192,99 @@ export default function SignInScreen() {
             }}>
             Your wardrobe stays private to your account
           </ThemedText>
+
+          {/*
+            Development only. `__DEV__` is compiled away by Metro, so this
+            block does not exist in a release build and there is no runtime
+            flag to get wrong.
+
+            It is here because the browser callback does not reliably return
+            to Expo Go, and a development build (which would own the luxish://
+            scheme and not have the problem) needs an Apple Developer account
+            to install on a physical iPhone.
+          */}
+          {__DEV__ ? (
+            <View
+              style={{
+                gap: Spacing.two,
+                marginTop: Spacing.two,
+                paddingTop: Spacing.three,
+                borderTopWidth: 1,
+                borderTopColor: colors.border,
+              }}>
+              <ThemedText
+                type="small"
+                themeColor="textSecondary"
+                style={{
+                  fontSize: FontSize.meta,
+                  letterSpacing: Tracking.label,
+                  textTransform: 'uppercase',
+                }}>
+                Development sign-in
+              </ThemedText>
+              <TextInput
+                value={devEmail}
+                onChangeText={setDevEmail}
+                placeholder="email"
+                placeholderTextColor={colors.textSecondary}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="email-address"
+                accessibilityLabel="Development email"
+                style={devField(colors)}
+              />
+              <TextInput
+                value={devPassword}
+                onChangeText={setDevPassword}
+                placeholder="password"
+                placeholderTextColor={colors.textSecondary}
+                autoCapitalize="none"
+                autoCorrect={false}
+                secureTextEntry
+                accessibilityLabel="Development password"
+                style={devField(colors)}
+              />
+              <MotionPressable
+                accessibilityRole="button"
+                accessibilityLabel="Sign in with password"
+                accessibilityState={{ busy: busy === 'dev', disabled: busy !== null }}
+                disabled={busy !== null}
+                animateEntrance={false}
+                onPress={() => void devSignIn()}
+                style={{
+                  minHeight: TapTarget,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderRadius: Radius.md,
+                  borderCurve: 'continuous',
+                  borderWidth: 1,
+                  borderColor: colors.borderStrong,
+                  opacity: busy !== null ? 0.5 : 1,
+                }}>
+                <ThemedText type="small" style={{ color: colors.textSecondary }}>
+                  {busy === 'dev' ? 'Signing in' : 'Sign in with password'}
+                </ThemedText>
+              </MotionPressable>
+            </View>
+          ) : null}
         </View>
       </View>
     </>
   );
+}
+
+
+/** Shared style for the development-only credential fields. */
+function devField(colors: { borderStrong: string; backgroundElement: string; text: string }) {
+  return {
+    minHeight: TapTarget,
+    paddingHorizontal: Spacing.three,
+    borderRadius: Radius.md,
+    borderCurve: 'continuous' as const,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    backgroundColor: colors.backgroundElement,
+    color: colors.text,
+    fontSize: FontSize.subhead,
+  };
 }
