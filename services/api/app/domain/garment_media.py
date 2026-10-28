@@ -852,8 +852,22 @@ async def enqueue_media_pipeline(
         "asset_version": asset.version if asset else None,
         "user_id": str(user_id),
     }
+    # Outfit detection runs first and decides which shape this upload is.
+    #
+    # Not a user-facing choice. Asking "is this one garment or an outfit?"
+    # pushes a question onto the person that the model can answer from the
+    # photograph, and gets it wrong whenever they tap without reading. The
+    # detector reports `worn` and the number of garments it can see, and a
+    # photograph that turns out to hold one garment falls through to the
+    # single-garment path it would have taken anyway.
+    from app.workers.outfit import DETECT_OUTFIT_JOB_KIND
+
     queued: list[str] = []
-    for kind in (CATEGORISE_JOB_KIND, BACKGROUND_REMOVAL_JOB_KIND):
+    for kind in (
+        DETECT_OUTFIT_JOB_KIND,
+        CATEGORISE_JOB_KIND,
+        BACKGROUND_REMOVAL_JOB_KIND,
+    ):
         await enqueue(
             session, kind, payload, idempotency_key=f"{kind}:{garment.id}"
         )

@@ -35,6 +35,7 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import session_factory
+from app.workers.outfit import DETECT_OUTFIT_JOB_KIND
 from app.domain.garment_media import (
     CATEGORIES,
     CATEGORISATION_WRITABLE_COLUMNS,
@@ -1042,10 +1043,19 @@ async def test_a_bulk_create_queues_the_pipeline_and_never_runs_it_inline(
 
     assert [o.status for o in outcomes] == ["created"] * 3
     for outcome in outcomes:
-        assert outcome.jobs == (CATEGORISE_JOB_KIND, BACKGROUND_REMOVAL_JOB_KIND)
+        # Detection leads: it decides whether this photograph is one garment
+        # or a worn outfit, and the single-garment jobs run only when it says
+        # the former. Ordering is asserted, not just membership, because the
+        # two later jobs would overwrite a fan-out's work if they ran first.
+        assert outcome.jobs == (
+            DETECT_OUTFIT_JOB_KIND,
+            CATEGORISE_JOB_KIND,
+            BACKGROUND_REMOVAL_JOB_KIND,
+        )
 
     jobs = (await db.scalars(sa.select(Job))).all()
-    assert len(jobs) == 6
+    # Three garments, three jobs each: detect, categorise, remove background.
+    assert len(jobs) == 9
     assert {job.state for job in jobs} == {"queued"}
 
 
@@ -1099,7 +1109,9 @@ async def test_re_sending_a_batch_returns_the_same_records_and_no_new_jobs(
     assert second[0].status == "existing"
     assert second[0].garment_id == first[0].garment_id
     assert second[0].jobs == ()
-    assert len((await db.scalars(sa.select(Job))).all()) == 2
+    # Still one garment's worth of jobs: the idempotency key is derived from
+    # the garment, so re-sending the batch queues nothing and spends nothing.
+    assert len((await db.scalars(sa.select(Job))).all()) == 3
     assert len((await db.scalars(sa.select(Garment))).all()) == 1
 
 
@@ -1215,7 +1227,11 @@ async def test_bulk_create_over_http_reports_each_item_and_still_returns_200(
     assert body["succeeded"] == 1
     assert body["failed"] == 1
     assert [item["status"] for item in body["items"]] == ["created", "failed"]
-    assert body["items"][0]["jobs"] == [CATEGORISE_JOB_KIND, BACKGROUND_REMOVAL_JOB_KIND]
+    assert body["items"][0]["jobs"] == [
+        DETECT_OUTFIT_JOB_KIND,
+        CATEGORISE_JOB_KIND,
+        BACKGROUND_REMOVAL_JOB_KIND,
+    ]
 
 
 async def test_bulk_create_refuses_more_than_twenty_items(

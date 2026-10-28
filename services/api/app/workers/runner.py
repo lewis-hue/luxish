@@ -146,6 +146,11 @@ def wardrobe_media_handlers(
         CATEGORISE_JOB_KIND,
     )
     from app.providers.base import AIRunRecorder
+    from app.workers.outfit import (
+        DETECT_OUTFIT_JOB_KIND,
+        MetaOutfitDetector,
+        detect_outfit,
+    )
 
     cfg = get_settings()
     if store is None:
@@ -180,9 +185,23 @@ def wardrobe_media_handlers(
     async def _remove_background(session: AsyncSession, job: Job) -> dict | None:
         return await _bound(session)[BACKGROUND_REMOVAL_JOB_KIND](session, job)
 
+    async def _detect_outfit(session: AsyncSession, job: Job) -> dict | None:
+        # Same per-job provider construction, same reason: the detector makes
+        # a paid call and needs a recorder bound to this job's session.
+        recorder = AIRunRecorder(session)
+        return await detect_outfit(
+            session,
+            job,
+            detector=MetaOutfitDetector(MetaProvider(recorder=recorder)),
+            segmenter=segmenter
+            or SEGMENTATION_PROVIDERS[cfg.segmentation_provider](recorder=recorder),
+            store=store,
+        )
+
     return {
         CATEGORISE_JOB_KIND: _categorise,
         BACKGROUND_REMOVAL_JOB_KIND: _remove_background,
+        DETECT_OUTFIT_JOB_KIND: _detect_outfit,
     }
 
 

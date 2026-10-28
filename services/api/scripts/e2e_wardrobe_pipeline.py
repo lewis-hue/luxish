@@ -40,10 +40,10 @@ from app.models.media_asset import MediaAsset  # noqa: E402
 from app.workers.runner import all_handlers  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[3]
-IMAGES = REPO / "apps" / "mobile" / "assets" / "images" / "wardrobe"
+IMAGES = REPO / "apps" / "mobile" / "assets" / "images" / os.environ.get("E2E_DIR", "wardrobe")
 
 #: One garment is enough to prove the path, and each costs money.
-SAMPLE = "linen-shirt.webp"
+SAMPLE = os.environ.get("E2E_SAMPLE", "linen-shirt.webp")
 
 
 async def main() -> int:
@@ -154,10 +154,28 @@ async def main() -> int:
     async with session_scope() as session:
         pending_garment = await session.get(Garment, garment_id)
         assert pending_garment is not None
-        kinds = await garment_media.enqueue_media_pipeline(
-            session, garment=pending_garment, user_id=user_id
-        )
-        print(f"enqueued     : {list(kinds)}\n")
+        if os.environ.get("E2E_OUTFIT"):
+            from app.domain.jobs import enqueue
+            from app.workers.outfit import DETECT_OUTFIT_JOB_KIND
+
+            await enqueue(
+                session,
+                DETECT_OUTFIT_JOB_KIND,
+                {
+                    "garment_id": str(garment_id),
+                    "asset_id": str(auth.asset_id),
+                    "asset_version": 1,
+                    "user_id": str(user_id),
+                },
+                idempotency_key=f"outfit:{garment_id}",
+                notify=False,
+            )
+            print(f"enqueued     : ['{DETECT_OUTFIT_JOB_KIND}']\n")
+        else:
+            kinds = await garment_media.enqueue_media_pipeline(
+                session, garment=pending_garment, user_id=user_id
+            )
+            print(f"enqueued     : {list(kinds)}\n")
 
     # -------------------------------------------------------------- work
     handlers = all_handlers()
