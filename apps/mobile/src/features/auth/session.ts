@@ -179,6 +179,21 @@ export async function signIn(options: SignInOptions = {}): Promise<void> {
 }
 
 /**
+ * The refresh in flight, if any.
+ *
+ * Keycloak rotates refresh tokens: presenting one consumes it and returns a
+ * new one. So two concurrent refreshes are not merely wasteful, they are
+ * destructive — the first consumes the token, the second presents a token
+ * that no longer exists, fails, and tears down a session that was perfectly
+ * healthy. Anything that uploads several things at once hits this on the
+ * first expiry, which is exactly how it was found: a multi-photo upload
+ * reported "sign in to upload" to a signed-in user.
+ *
+ * One promise, shared by every caller, so the rotation happens once.
+ */
+let inFlightRefresh: Promise<string | null> | null = null;
+
+/**
  * Swap the refresh token for a new pair.
  *
  * Returns the new access token, or null when the refresh token is gone or
@@ -187,6 +202,15 @@ export async function signIn(options: SignInOptions = {}): Promise<void> {
  * the user to sign-in rather than retrying.
  */
 export async function refresh(): Promise<string | null> {
+  // Join the refresh already running rather than starting a competing one.
+  if (inFlightRefresh) return inFlightRefresh;
+  inFlightRefresh = performRefresh().finally(() => {
+    inFlightRefresh = null;
+  });
+  return inFlightRefresh;
+}
+
+async function performRefresh(): Promise<string | null> {
   const session = await secureSession.load();
   if (!session?.refreshToken) {
     await signOutLocally();
