@@ -172,9 +172,13 @@ export function useWardrobe(favourites: Set<string>) {
         confirmed: null,
         availability: 'available',
         isFavourite: false,
-        // Categorisation runs server-side; until then the item exists and is
-        // visible rather than being hidden behind a spinner.
-        status: 'pending',
+        // Deliberately not 'pending'. That state means "the server is working
+        // on this", and showing it before anything has been uploaded is a
+        // spinner that spins forever when the user is signed out: the sync
+        // returns early, nothing changes, and the garment claims to be
+        // sorting for the rest of its life. `serverId` being absent is what
+        // says "not uploaded yet", and the grid labels that honestly.
+        status: 'ready',
         addedAt: now + index,
       }));
 
@@ -226,11 +230,25 @@ export async function syncAll(
 ): Promise<void> {
   const pending = candidates.filter((item) => !item.serverId);
   if (pending.length === 0) return;
-  if (!(await canSync())) return;
+
+  if (!(await canSync())) {
+    // Signed out. Say so on each garment rather than returning quietly: the
+    // photographs are safe and will upload after sign-in, but the user needs
+    // to know why nothing is happening, and a silent return is how a queue
+    // becomes invisible.
+    for (const item of pending) {
+      patch(item.id, { syncError: 'Sign in to upload this.' });
+    }
+    return;
+  }
 
   await Promise.all(
     pending.map(async (item) => {
       try {
+        // 'pending' from here: the upload has genuinely started, so the
+        // spinner now means what it says.
+        patch(item.id, { status: 'pending', syncError: null });
+
         const serverId = await uploadGarment({
           uri: item.localUri,
           name: item.name,
@@ -249,7 +267,10 @@ export async function syncAll(
       } catch (error) {
         // Not `failed`: the photograph is intact and the upload can be
         // retried. Marking it failed would imply the garment is unusable.
+        // Back to 'ready' so the spinner stops; the error is what the grid
+        // shows instead.
         patch(item.id, {
+          status: 'ready',
           syncError:
             error instanceof Error ? error.message : 'Could not sync this item.',
         });

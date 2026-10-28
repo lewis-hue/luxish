@@ -197,23 +197,40 @@ function GarmentCell({
           }}
         />
 
-        {entry.syncError ? (
-          // Not an overlay: the photograph is fine and the garment is
-          // usable, only the upload failed. A dot in the corner says so
-          // without hiding what the user came to look at.
+        {entry.needsSync ? (
+          // Says what is actually true. A garment that has not reached the
+          // server is not "sorting" and must not borrow the spinner that
+          // means the server is working, or the wait looks like progress
+          // when nothing is happening at all.
           <View
             accessible
-            accessibilityLabel={`${entry.name} could not be uploaded`}
+            accessibilityLabel={`${entry.name}. ${entry.syncError ?? 'Not uploaded yet'}`}
             style={{
               position: 'absolute',
-              top: Spacing.one,
               left: Spacing.one,
-              width: 8,
-              height: 8,
+              top: Spacing.one,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: Spacing.one,
+              paddingHorizontal: Spacing.two,
+              paddingVertical: 3,
               borderRadius: Radius.full,
-              backgroundColor: colors.danger,
-            }}
-          />
+              backgroundColor: 'rgba(16,12,11,0.72)',
+            }}>
+            <View
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: Radius.full,
+                backgroundColor: toneColor(colors, entry.syncError ? 'warning' : 'muted'),
+              }}
+            />
+            <ThemedText
+              type="small"
+              style={{ fontSize: FontSize.meta, color: 'rgba(255,255,255,0.94)' }}>
+              {entry.syncError ? 'Sign in to upload' : 'Not uploaded'}
+            </ThemedText>
+          </View>
         ) : null}
 
         {entry.status === 'pending' ? (
