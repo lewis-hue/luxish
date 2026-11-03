@@ -1,7 +1,7 @@
 import { Image } from 'expo-image';
-import { SymbolView } from 'expo-symbols';
 import { MotiView } from 'moti';
-import { ActivityIndicator, View } from 'react-native';
+import { useState } from 'react';
+import { ActivityIndicator, Modal, Pressable, View } from 'react-native';
 
 import { howFar } from '@/api/queries/shops';
 import { ThemedText } from '@/components/themed-text';
@@ -17,6 +17,8 @@ import {
   Spacing,
   labelType,
 } from '@/constants/theme';
+import { BRAND } from '@/branding';
+import { PictureActions } from '@/features/avatar/picture-actions';
 import { canTryOn, type Turn } from '@/features/stylist/conversation';
 import { useScheme } from '@/hooks/use-theme';
 
@@ -89,6 +91,8 @@ export function Thread({
   onTryOn,
   shops,
   renders = [],
+  onEdit,
+  onForget,
 }: {
   turns: readonly Turn[];
   /** Ask for this turn's outfit on the figure. */
@@ -97,6 +101,10 @@ export function Thread({
   shops?: ShopsState;
   /** Every figure in flight or finished, polled elsewhere. */
   renders?: readonly RenderLike[];
+  /** Take a question back into the composer to ask it differently. */
+  onEdit?: (turn: Turn) => void;
+  /** Remove a question and the answer it produced. */
+  onForget?: (turn: Turn) => void;
 }) {
   if (turns.length === 0) return null;
   const lastGap = lastWithoutAMatch(turns);
@@ -118,6 +126,8 @@ export function Thread({
               ? renders.find((r) => r.id === turn.renderId)
               : undefined
           }
+          onEdit={onEdit}
+          onForget={onForget}
         />
       ))}
     </View>
@@ -138,11 +148,15 @@ function Bubble({
   onTryOn,
   shops,
   render,
+  onEdit,
+  onForget,
 }: {
   turn: Turn;
   onTryOn: (turn: Turn) => void;
   shops?: ShopsState;
   render?: RenderLike;
+  onEdit?: (turn: Turn) => void;
+  onForget?: (turn: Turn) => void;
 }) {
   const colors = Colors[useScheme()];
   const mine = turn.who === 'you';
@@ -154,16 +168,17 @@ function Bubble({
   // that only one of them is tinted.
   if (mine) {
     return (
-      <View
-        style={{
-          alignSelf: 'flex-end',
-          maxWidth: '82%',
-          paddingHorizontal: Spacing.three,
-          paddingVertical: Spacing.two,
-          borderRadius: Radius.lg,
-          borderCurve: 'continuous',
-          backgroundColor: colors.accent,
-        }}>
+      <View style={{ alignSelf: 'flex-end', maxWidth: '86%', gap: Spacing.one }}>
+        <Byline who="You" at={turn.at} align="right" />
+        <View
+          style={{
+            alignSelf: 'flex-end',
+            paddingHorizontal: Spacing.three,
+            paddingVertical: Spacing.two,
+            borderRadius: Radius.lg,
+            borderCurve: 'continuous',
+            backgroundColor: colors.accent,
+          }}>
         {/* What went up with the question, inside the question.
 
             It used to sit as a card above the composer and stay
@@ -188,30 +203,48 @@ function Bubble({
             accessibilityLabel="The picture you asked about"
           />
         ) : null}
-        <ThemedText
-          selectable
-          type="small"
-          style={{ fontSize: FontSize.subhead, color: colors.accentText }}>
-          {turn.text}
-        </ThemedText>
+          <ThemedText
+            selectable
+            type="small"
+            style={{ fontSize: FontSize.subhead, color: colors.accentText }}>
+            {turn.text}
+          </ThemedText>
+        </View>
+
+        {/* Take it back, or say it differently.
+
+            Both act on the question *and* what it produced: a reply
+            left under a deleted question answers nothing, and an
+            edited question whose old answer still sits below it reads
+            as the stylist replying to something nobody asked. */}
+        {onEdit || onForget ? (
+          <View
+            style={{
+              flexDirection: 'row',
+              justifyContent: 'flex-end',
+              gap: Spacing.three,
+            }}>
+            {onEdit ? (
+              <Quiet label="Edit" onPress={() => onEdit(turn)} />
+            ) : null}
+            {onForget ? (
+              <Quiet label="Delete" onPress={() => onForget(turn)} danger />
+            ) : null}
+          </View>
+        ) : null}
       </View>
     );
   }
 
   return (
     <View style={{ alignSelf: 'stretch', gap: Spacing.two }}>
-      {/* The mark, on its own line above the answer.
+      {/* Who is speaking, and when.
 
-          It was inline, first in a flex row with the text second. That
-          is what made the reply a two-column layout and cost it the
-          width it needed; above the text it costs one short line and
-          the paragraph gets the full measure. */}
-      <SymbolView
-        name={{ ios: 'sparkles', android: 'auto_awesome', web: 'auto_awesome' }}
-        size={15}
-        tintColor={colors.accent}
-        style={{ width: 15, height: 15 }}
-      />
+          A word rather than a glyph. The sparkle that stood here said
+          nothing a person could read, and three of them down a thread
+          read as decoration - which is what they were. A byline is
+          the convention for exactly this and costs the same line. */}
+      <Byline who={`${BRAND.name} AI`} at={turn.at} align="left" />
 
       {turn.streaming && !turn.text ? (
         <Thinking />
@@ -370,27 +403,33 @@ function Thinking() {
         flexDirection: 'row',
         alignItems: 'center',
         gap: Spacing.one,
-        // Room for the 6pt dot plus the 3pt it travels, so the row
-        // does not resize as they rise.
         height: Spacing.three,
       }}>
       {[0, 1, 2].map((at) => (
         <MotiView
           key={at}
-          from={{ opacity: 0.25, translateY: 0 }}
-          animate={{ opacity: 1, translateY: -3 }}
+          // **Scale and fade together, not a jump.**
+          //
+          // The first version only moved the dots up and down, which
+          // at three pixels reads as a twitch rather than as
+          // thinking. Growing and brightening on the same curve gives
+          // the group a visible travelling pulse at the same tiny
+          // size, and the eye reads a pulse as "working" where it
+          // reads a jitter as "broken".
+          from={{ opacity: 0.2, scale: 0.6 }}
+          animate={{ opacity: 1, scale: 1 }}
           transition={timing({
-            duration: 420,
-            // Each dot a beat behind the last, so the group reads as
-            // one travelling wave rather than three things blinking.
-            delay: at * 140,
+            duration: 520,
+            // Each dot a third of a cycle behind the last, so the
+            // wave travels rather than three things blinking at once.
+            delay: at * 170,
             loop: true,
             repeatReverse: true,
           })}
           style={{
-            width: 6,
-            height: 6,
-            borderRadius: 3,
+            width: 7,
+            height: 7,
+            borderRadius: 4,
             backgroundColor: colors.accent,
           }}
         />
@@ -414,16 +453,17 @@ function Listing({
   title: string;
   children: React.ReactNode;
 }) {
-  const colors = Colors[useScheme()];
   return (
-    <View
-      style={{
-        gap: Spacing.half,
-        paddingLeft: Spacing.three,
-        borderLeftWidth: 1,
-        borderLeftColor: colors.border,
-      }}>
-      <ThemedText type="smallBold" style={{ fontSize: FontSize.footnote }}>
+    // **Full measure, like the sentence above it.**
+    //
+    // This was indented behind a hairline at footnote size, which
+    // squeezed "brown suede trucker jacket with shearling collar"
+    // into a narrow column while the paragraph above it ran the full
+    // width. It is part of the same answer and reads as one only if
+    // it is set like one: same measure, same size, the heading doing
+    // the separating that the rule was doing.
+    <View style={{ alignSelf: 'stretch', gap: Spacing.one }}>
+      <ThemedText type="smallBold" style={{ fontSize: FontSize.subhead }}>
         {title}
       </ThemedText>
       {children}
@@ -434,11 +474,105 @@ function Listing({
 function Line({ children }: { children: React.ReactNode }) {
   return (
     <ThemedText
+      selectable
       type="small"
       themeColor="textSecondary"
-      style={labelType(FontSize.footnote, 400)}>
+      style={{
+        fontSize: FontSize.subhead,
+        lineHeight: Math.round(FontSize.subhead * 1.45),
+      }}>
       {children}
     </ThemedText>
+  );
+}
+
+/**
+ * Who said it, and when.
+ *
+ * One line, quiet, above every turn. Without it the two voices are
+ * told apart only by alignment and a tint, which is enough while a
+ * thread is short and stops being enough the moment it is scrolled
+ * back through.
+ */
+function Byline({
+  who,
+  at,
+  align,
+}: {
+  who: string;
+  at?: number;
+  align: 'left' | 'right';
+}) {
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'baseline',
+        gap: Spacing.two,
+        justifyContent: align === 'right' ? 'flex-end' : 'flex-start',
+      }}>
+      <ThemedText
+        type="smallBold"
+        themeColor="textSecondary"
+        style={{ fontSize: FontSize.meta }}>
+        {who}
+      </ThemedText>
+      {at ? (
+        <ThemedText
+          themeColor="textSecondary"
+          style={{ fontSize: FontSize.meta, fontVariant: ['tabular-nums'] }}>
+          {clockOf(at)}
+        </ThemedText>
+      ) : null}
+    </View>
+  );
+}
+
+/** `21:03`. The phone's own 12/24-hour preference is honoured. */
+export function clockOf(at: number): string {
+  try {
+    return new Date(at).toLocaleTimeString(undefined, {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch {
+    return '';
+  }
+}
+
+/** A plain text action. Used for Edit and Delete under a question. */
+function Quiet({
+  label,
+  onPress,
+  danger = false,
+}: {
+  label: string;
+  onPress: () => void;
+  danger?: boolean;
+}) {
+  const colors = Colors[useScheme()];
+  return (
+    <MotionPressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      animateEntrance={false}
+      onPress={() => {
+        void tapFeedback();
+        onPress();
+      }}
+      // The row is short, so the target is widened rather than made
+      // taller: a 44pt-tall band under every question would double
+      // the height of the thread.
+      hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
+      style={{ paddingVertical: Spacing.half }}>
+      <ThemedText
+        style={{
+          fontSize: FontSize.meta,
+          color: danger ? colors.danger : colors.textSecondary,
+        }}>
+        {label}
+      </ThemedText>
+    </MotionPressable>
   );
 }
 
@@ -479,6 +613,7 @@ function Action({ label, onPress }: { label: string; onPress: () => void }) {
  */
 function Rendered({ render }: { render?: RenderLike }) {
   const colors = Colors[useScheme()];
+  const [big, setBig] = useState(false);
 
   // **It said why, or it says why it cannot.**
   //
@@ -509,66 +644,108 @@ function Rendered({ render }: { render?: RenderLike }) {
     );
   }
 
+  const frame = {
+    width: 240,
+    aspectRatio: 3 / 4,
+    borderRadius: Radius.md,
+    borderCurve: 'continuous' as const,
+    overflow: 'hidden' as const,
+    backgroundColor: colors.backgroundElement,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  };
+
   return (
-    <View
-      style={{
-        // Wider than the 180 it was. A figure in an outfit is the
-        // thing being judged, and at 180 the clothes were too small
-        // to judge.
-        width: 220,
-        aspectRatio: 3 / 4,
-        borderRadius: Radius.md,
-        borderCurve: 'continuous',
-        overflow: 'hidden',
-        backgroundColor: colors.backgroundElement,
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}>
-      {render?.uri ? (
-        <Image
-          source={{ uri: render.uri }}
-          style={{ width: '100%', height: '100%' }}
-          contentFit="cover"
-          transition={160}
-          accessibilityLabel="The outfit, worn"
-        />
-      ) : (
-        <>
-          {/* The mannequin, held back so it reads as a placeholder
-              rather than as the finished picture. */}
+    // Centred. It sat hard against the left margin under a paragraph
+    // that ran the full width, which left a tall empty column beside
+    // it and made the picture look like an attachment rather than
+    // the answer.
+    <View style={{ alignSelf: 'center', alignItems: 'center' }}>
+      <MotionPressable
+        accessibilityRole="imagebutton"
+        accessibilityLabel={
+          render?.uri ? 'The outfit, worn. Opens it full screen.' : 'Dressing the figure'
+        }
+        accessibilityState={{ disabled: !render?.uri }}
+        disabled={!render?.uri}
+        animateEntrance={false}
+        scale={0.98}
+        onPress={() => {
+          void tapFeedback();
+          setBig(true);
+        }}
+        style={frame}>
+        {render?.uri ? (
           <Image
-            source={STAND_IN}
-            style={{
-              position: 'absolute',
-              width: '100%',
-              height: '100%',
-              opacity: 0.3,
-            }}
+            source={{ uri: render.uri }}
+            style={{ width: '100%', height: '100%' }}
             contentFit="cover"
-            // Decorative: the label below says what is happening.
-            accessibilityElementsHidden
-            importantForAccessibility="no-hide-descendants"
+            transition={160}
           />
-          <View style={{ alignItems: 'center', gap: Spacing.two }}>
-            <ActivityIndicator color={colors.accent} />
-            <ThemedText
-              type="small"
-              themeColor="textSecondary"
-              style={labelType(FontSize.footnote, 400)}>
-              Dressing the figure
-            </ThemedText>
-            {/* Said out loud, because a picture takes about half a
-                minute and a wheel with no number beside it reads as
-                stuck long before it is. */}
-            <ThemedText
-              type="small"
-              themeColor="textSecondary"
-              style={labelType(FontSize.footnote, 400)}>
-              about 30 seconds
-            </ThemedText>
+        ) : (
+          <>
+            {/* The mannequin, standing in.
+
+                At 0.3 it was invisible: these figures are pale on a
+                pale ground, laid over a pale card. Full strength with
+                a scrim over it reads as a figure waiting to be
+                dressed, which is what it is. */}
+            <Image
+              source={STAND_IN}
+              style={{ position: 'absolute', width: '100%', height: '100%' }}
+              contentFit="cover"
+              accessibilityElementsHidden
+              importantForAccessibility="no-hide-descendants"
+            />
+            <View
+              style={{
+                position: 'absolute',
+                width: '100%',
+                height: '100%',
+                backgroundColor: colors.background,
+                opacity: 0.55,
+              }}
+            />
+            <View style={{ alignItems: 'center', gap: Spacing.two }}>
+              <ActivityIndicator color={colors.accent} />
+              <ThemedText type="smallBold" style={{ fontSize: FontSize.footnote }}>
+                Dressing the figure
+              </ThemedText>
+            </View>
+          </>
+        )}
+      </MotionPressable>
+
+      {/* Full screen, with the things you can do to a picture.
+
+          A render used to be a 240pt thumbnail and nothing else: no
+          way to look at it properly and no way to keep it. */}
+      <Modal
+        visible={big && Boolean(render?.uri)}
+        animationType="fade"
+        onRequestClose={() => setBig(false)}>
+        <View style={{ flex: 1, backgroundColor: '#000' }}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Close"
+            onPress={() => setBig(false)}
+            style={{ flex: 1 }}>
+            <Image
+              source={{ uri: render?.uri ?? '' }}
+              style={{ flex: 1 }}
+              contentFit="contain"
+              accessibilityLabel="The outfit, worn"
+            />
+          </Pressable>
+          <View style={{ padding: Spacing.three }}>
+            <PictureActions
+              uri={render?.uri ?? ''}
+              on="dark"
+              onLeave={() => setBig(false)}
+            />
           </View>
-        </>
-      )}
+        </View>
+      </Modal>
     </View>
   );
 }

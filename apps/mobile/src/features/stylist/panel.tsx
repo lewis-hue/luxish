@@ -1,7 +1,13 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  ScrollView,
+  TextInput,
+  View,
+  type ScrollViewInstance,
+} from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -38,7 +44,9 @@ import {
   decided as chatDecided,
   drawing as chatDrawing,
   failed as chatFailed,
+  forget as chatForget,
   history as chatHistory,
+  rewind as chatRewind,
   settled as chatSettled,
   shopped as chatShopped,
   streamed as chatStreamed,
@@ -203,6 +211,7 @@ export function StylistPanel({
   onTurns?: (turns: readonly Turn[]) => void;
   sessionKey?: string;
 } = {}) {
+  const scroller = useRef<ScrollViewInstance | null>(null);
   const [attachment, setAttachment] = useState<StylistAttachment | null>(null);
   const [attachedFor, setAttachedFor] = useState<string | null>(null);
   const colors = Colors[useScheme()];
@@ -520,7 +529,7 @@ export function StylistPanel({
       </View>
   );
 
-  const body = (
+  const conversation = (
     <>
       {/* **The conversation, then the box under it.**
 
@@ -546,6 +555,21 @@ export function StylistPanel({
           note: shopsNote(shops.error?.reason ?? null, shops.data ?? null),
           looking: shops.isPending,
           find: () => shops.mutate({}),
+        }}
+        onEdit={(turn) => {
+          // The words come back to the composer and the thread is
+          // wound back to before them, so asking again replaces the
+          // exchange rather than appending a near-duplicate.
+          void tapFeedback();
+          setChat((was) => {
+            const { state, text } = chatRewind(was, turn.id);
+            setRequest(text);
+            return state;
+          });
+        }}
+        onForget={(turn) => {
+          void tapFeedback();
+          setChat((was) => chatForget(was, turn.id));
         }}
         onTryOn={(turn) => {
           // Asking for a picture is just another turn, so it goes
@@ -704,6 +728,22 @@ export function StylistPanel({
         ) : null}
       </View>
 
+    </>
+  );
+
+  /**
+   * The box, and only the box.
+   *
+   * **Separated from the thread so it can sit on the keyboard.** It
+   * used to be the last child of one long scroll view, which means
+   * it scrolled: typing pushed it up the page, a long thread left it
+   * below the fold, and the keyboard covered whatever it had reached.
+   * Pinned, it is always the thing above the keyboard and the thread
+   * scrolls behind it - which is how every messaging app on the
+   * phone behaves, and what the product owner asked for.
+   */
+  const composer = (
+    <>
       <View style={{ gap: Spacing.three }}>
         {/* What it is being asked about, when there is something.
 
@@ -906,15 +946,43 @@ export function StylistPanel({
     </>
   );
 
-  // Embedded, the page around this one owns the scroll view, the
-  // title and the way back. A second scroll view inside one of those
-  // is the classic way to make a list that will not scroll.
-  if (embedded) return body;
+  // **Embedded, this owns the whole remaining height.**
+  //
+  // It used to return a bare fragment for the page to drop into its
+  // own scroll view, which is what put the composer inside the
+  // scroll. Now the thread scrolls and the box does not: one flex
+  // column, the conversation taking what is left, the composer
+  // sitting on the keyboard. The page above still owns the header.
+  if (embedded) {
+    return (
+      <View style={{ flex: 1 }}>
+        <ScrollView
+          style={{ flex: 1 }}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
+          contentContainerStyle={{
+            paddingBottom: Spacing.three,
+            gap: Spacing.three,
+          }}
+          // Pinned to the newest turn, the way a thread behaves
+          // everywhere else on the phone.
+          ref={scroller}
+          onContentSizeChange={() =>
+            scroller.current?.scrollToEnd({ animated: true })
+          }>
+          {conversation}
+        </ScrollView>
+        <View style={{ paddingTop: Spacing.two }}>{composer}</View>
+      </View>
+    );
+  }
 
   return (
     <Screen scroll>
       {chrome}
-      {body}
+      {conversation}
+      {composer}
     </Screen>
   );
 }

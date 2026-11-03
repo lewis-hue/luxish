@@ -324,7 +324,15 @@ def specs(count: int) -> list[Spec]:
                 f"A high-quality editorial product photograph: {scene}. "
                 "Soft natural daylight, shallow depth of field, 50mm, "
                 "muted and realistic colour, fine film grain, no text, "
-                "no watermark, no people's faces. Photorealistic."
+                "no watermark, no people's faces. Photorealistic. "
+                # **Upright, like everything else.** Without saying so
+                # the model returned these 1440x960 while the outfit
+                # prompt - which does say it - came back vertical. The
+                # app draws every picture in one upright shell, so 60
+                # landscape close-ups sat in the grid letterboxed and
+                # wrong. Said twice, because one mention lost to a
+                # long prompt is what produced them.
+                "Vertical portrait orientation, 3:4, taller than wide."
             )
             out.append(
                 Spec(
@@ -361,7 +369,8 @@ def specs(count: int) -> list[Spec]:
             f"Editorial street-style photograph, full length, {who} wearing "
             f"{garments}, {setting}. Natural daylight, 35mm, shallow depth "
             "of field, muted realistic colour, fine film grain, candid pose, "
-            "no text, no watermark, no logos. Photorealistic, vertical."
+            "no text, no watermark, no logos. Photorealistic. "
+            "Vertical portrait orientation, 2:3, taller than wide."
         )
         extra = (
             ("menswear",)
@@ -383,11 +392,25 @@ def specs(count: int) -> list[Spec]:
     return out
 
 
+class NotUpright(Exception):
+    """The model drew it wider than it is tall.
+
+    A refusal rather than a crop. The app draws every picture in one
+    upright shell, so a landscape pin is letterboxed in the grid and
+    wrong on a pin page - and cropping a composition the model framed
+    horizontally would take the subject out of half of them. Rejecting
+    it means the retry draws a portrait one instead, which is the thing
+    actually wanted.
+    """
+
+
 def shrink(raw: bytes) -> bytes:
     """Down to something a repository can carry and a phone can show."""
     with Image.open(io.BytesIO(raw)) as im:
         im = im.convert("RGB")
         width, height = im.size
+        if width >= height:
+            raise NotUpright(f"{width}x{height}")
         scale = LONG_EDGE / max(width, height)
         if scale < 1:
             im = im.resize(
@@ -422,7 +445,11 @@ async def draw(provider: MetaProvider, spec: Spec) -> tuple[Spec, bool, str]:
 
             data = base64.b64decode(data)
         spec.file.parent.mkdir(parents=True, exist_ok=True)
-        spec.file.write_bytes(shrink(bytes(data)))
+        try:
+            body = shrink(bytes(data))
+        except NotUpright as wrong:
+            return spec, False, f"landscape ({wrong}); run again to retry"
+        spec.file.write_bytes(body)
         return spec, True, f"{spec.file.stat().st_size // 1024}KB"
     except Exception as caught:  # noqa: BLE001 - reported, never swallowed
         return spec, False, f"{type(caught).__name__}: {str(caught)[:80]}"

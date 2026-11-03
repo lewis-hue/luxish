@@ -66,6 +66,14 @@ export interface Turn {
    * does not need it re-sent.
    */
   shownWith?: string;
+  /**
+   * When it was said, in epoch milliseconds.
+   *
+   * Stamped on the turn rather than read from the clock at render
+   * time, or a conversation restored from history would show every
+   * turn as having happened the moment it was reopened.
+   */
+  at?: number;
 }
 
 export interface Conversation {
@@ -93,8 +101,14 @@ export function asked(
     next: state.next + 2,
     turns: [
       ...state.turns,
-      { id: `t${state.next}`, who: 'you', text: said, shownWith },
-      { id: `t${state.next + 1}`, who: 'stylist', text: '', streaming: true },
+      { id: `t${state.next}`, who: 'you', text: said, shownWith, at: Date.now() },
+      {
+        id: `t${state.next + 1}`,
+        who: 'stylist',
+        text: '',
+        streaming: true,
+        at: Date.now(),
+      },
     ],
   };
 }
@@ -203,4 +217,45 @@ function lastStylistAt(state: Conversation): number {
     if (state.turns[at].who === 'stylist') return at;
   }
   return -1;
+}
+
+/**
+ * Remove one of your own questions and the answer it produced.
+ *
+ * **A question and its reply are one unit.** Deleting the question
+ * and leaving the answer under it leaves a reply to nothing, which
+ * reads worse than either. The stylist turn immediately after goes
+ * with it; anything further down stays, because it was a separate
+ * exchange.
+ */
+export function forget(state: Conversation, turnId: string): Conversation {
+  const at = state.turns.findIndex((turn) => turn.id === turnId);
+  if (at < 0 || state.turns[at].who !== 'you') return state;
+  const next = state.turns[at + 1];
+  const drop = next && next.who === 'stylist' ? 2 : 1;
+  return {
+    ...state,
+    turns: [...state.turns.slice(0, at), ...state.turns.slice(at + drop)],
+  };
+}
+
+/**
+ * Take a question back so it can be asked again differently.
+ *
+ * Everything from that question onward goes, and its words are
+ * handed back for the composer. **Everything after, not just the
+ * one reply:** the turns below were answers to a conversation whose
+ * premise is being changed, and leaving them would make the thread
+ * read as though the stylist replied to a question nobody asked.
+ */
+export function rewind(
+  state: Conversation,
+  turnId: string,
+): { state: Conversation; text: string } {
+  const at = state.turns.findIndex((turn) => turn.id === turnId);
+  if (at < 0 || state.turns[at].who !== 'you') return { state, text: '' };
+  return {
+    state: { ...state, turns: state.turns.slice(0, at) },
+    text: state.turns[at].text,
+  };
 }
