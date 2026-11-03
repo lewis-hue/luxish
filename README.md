@@ -81,8 +81,8 @@ one person; what the vision model sees in the photograph is not.
 ## Tests
 
 ```bash
-cd services/api && python -m pytest tests/ -q     # ~1500 tests
-cd apps/mobile  && npx jest                        # ~745 tests
+cd services/api && python -m pytest tests/ -q     # 1515 tests
+cd apps/mobile  && npx jest                        # 742 tests
 cd apps/mobile  && npx tsc --noEmit && npx expo lint
 ```
 
