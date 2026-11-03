@@ -86,3 +86,7 @@ datasets/
 # `git add -A` from committing them.
 services/api/.media/
 .media/
+
+# Celery beat's own scheduler state. Written at runtime, meaningless
+# on another machine, and it churns on every start.
+celerybeat-schedule*
