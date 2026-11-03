@@ -36,10 +36,14 @@
       "frontchannelLogout": false,
       "redirectUris": [
         "luxish://callback",
+        "http://127.0.0.1:8081/*",
+        "http://localhost:8081/*",
         "http://127.0.0.1:19000/*",
         "http://localhost:19000/*"
       ],
       "webOrigins": [
+        "http://127.0.0.1:8081",
+        "http://localhost:8081",
         "http://127.0.0.1:19000",
         "http://localhost:19000"
       ],
@@ -128,5 +132,7 @@
       "defaultAction": false,
       "priority": 30
     }
-  ]
+  ],
+  "loginTheme": "luxish",
+  "accountTheme": "keycloak.v2"
 }

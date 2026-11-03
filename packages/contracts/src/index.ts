@@ -83,7 +83,17 @@ function authMiddleware(options: ClientOptions): Middleware {
     },
 
     async onResponse({ request, response }) {
-      if (response.ok) return response;
+      // Nothing is returned on the happy path, and that is deliberate.
+      //
+      // `openapi-fetch` treats any truthy return as a replacement response and
+      // rejects it unless it satisfies `instanceof Response`. The object a
+      // platform `fetch` hands back does not always satisfy that check against
+      // the `Response` binding the library resolves — React Native is one
+      // place it does not — so handing the untouched response straight back
+      // turned every successful call into
+      // "onResponse: must return new Response() when modifying the response".
+      // Returning nothing says "unmodified", which is what we mean.
+      if (response.ok) return;
 
       const requestId = response.headers.get(REQUEST_ID_HEADER);
 
@@ -103,9 +113,19 @@ function authMiddleware(options: ClientOptions): Middleware {
           const retried = request.clone();
           const token = await options.getToken?.();
           if (token) retried.headers.set('Authorization', `Bearer ${token}`);
-          // Returned whether or not it succeeded: a second 401 falls through
-          // to the normal error path below, which is the correct outcome.
-          return (options.fetch ?? globalThis.fetch)(retried);
+          const replayed = await (options.fetch ?? globalThis.fetch)(retried);
+          // Rebuilt rather than handed back as-is, for the same reason the
+          // happy path returns nothing: this value *is* a replacement, so it
+          // has to pass `instanceof Response`, and only a response built from
+          // the constructor in scope here reliably does.
+          //
+          // Returned whether or not it succeeded: a second 401 is reported to
+          // the caller as a failed request, which is the correct outcome.
+          return new Response(await replayed.text(), {
+            status: replayed.status,
+            statusText: replayed.statusText,
+            headers: replayed.headers,
+          });
         }
       }
 

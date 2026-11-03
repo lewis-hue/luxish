@@ -494,6 +494,20 @@ class ToolCall:
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
+class GeneratedImage:
+    """One image an adapter produced, with the type its bytes actually are.
+
+    ``content_type`` is read from the response rather than assumed: Meta's
+    image endpoint returns WEBP, not the PNG the OpenAI-shaped client makes it
+    easy to expect, and storing bytes under the wrong type gives a picture
+    that silently fails to render on some clients and not others.
+    """
+
+    data: bytes
+    content_type: str
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
 class AIResponse:
     provider: str
     model: str
@@ -501,6 +515,14 @@ class AIResponse:
     text: str | None = None
     tool_calls: tuple[ToolCall, ...] = ()
     images: int = 0
+    #: The generated images themselves, decoded, in the order returned.
+    #:
+    #: Carried rather than counted. ``images`` records how many were produced
+    #: and therefore what was charged; this is what was produced, which is the
+    #: only thing a caller that needs to store a picture can use. Empty for
+    #: every text completion, and for an adapter that reports a count without
+    #: returning data.
+    image_data: tuple[GeneratedImage, ...] = ()
     finish_reason: str | None = None
     response_id: str | None = None
     cost_micro_minor: int = 0
@@ -998,6 +1020,7 @@ __all__ = [
     "AIResponse",
     "AIRunRecorder",
     "Capabilities",
+    "GeneratedImage",
     "InMemoryUsageStore",
     "InvalidProviderRequest",
     "JsonSchemaFormat",

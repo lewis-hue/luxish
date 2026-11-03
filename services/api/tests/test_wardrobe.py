@@ -403,3 +403,72 @@ async def test_delete_is_a_soft_delete_and_leaves_the_row_invisible(
 
 async def test_wardrobe_requires_authentication(client: httpx.AsyncClient) -> None:
     assert (await client.get("/v1/wardrobe/garments")).status_code == 401
+
+
+async def test_creating_one_garment_queues_the_work_its_photograph_needs(
+    client: httpx.AsyncClient, db: AsyncSession, auth: Any
+) -> None:
+    """A single upload must start the pipeline, not only a bulk one.
+
+    This is the ordinary path through the app: one photograph, one garment.
+    It queued nothing, so the garment kept a null category for ever and the
+    client, which reads a null category as still-working, showed a spinner
+    that never resolved. Only the bulk endpoint was covered, which is exactly
+    how the gap survived a green suite.
+    """
+    from app.models.job import Job
+    from app.models.media_asset import MediaAsset
+
+    user_id = await make_user_via_token(client, auth(sub="kc-w-pipeline"))
+    asset = MediaAsset(
+        user_id=user_id,
+        kind="garment_photo",
+        status="uploaded",
+        content_type="image/jpeg",
+        max_bytes=1_000_000,
+        storage_key=f"originals/{uuid.uuid4().hex}.jpg",
+    )
+    db.add(asset)
+    await db.commit()
+    await db.refresh(asset)
+
+    created = await client.post(
+        "/v1/wardrobe/garments",
+        headers=auth(sub="kc-w-pipeline"),
+        json={"name": "Linen shirt", "media_asset_id": str(asset.id)},
+    )
+    assert created.status_code == 201, created.text
+    garment_id = created.json()["id"]
+
+    queued = (await db.execute(select(Job))).scalars().all()
+    kinds = {
+        job.kind
+        for job in queued
+        if (job.payload or {}).get("garment_id") == garment_id
+    }
+    assert kinds == {
+        "wardrobe.detect_outfit",
+        "wardrobe.categorise",
+        "wardrobe.remove_background",
+    }
+
+
+async def test_creating_a_garment_without_a_photograph_queues_nothing(
+    client: httpx.AsyncClient, db: AsyncSession, auth: Any
+) -> None:
+    """No photograph, no work. There is nothing for a model to look at."""
+    from app.models.job import Job
+
+    await make_user_via_token(client, auth(sub="kc-w-nophoto"))
+    created = await client.post(
+        "/v1/wardrobe/garments",
+        headers=auth(sub="kc-w-nophoto"),
+        json={"name": "Hand-entered trousers"},
+    )
+    assert created.status_code == 201, created.text
+    garment_id = created.json()["id"]
+
+    queued = (await db.execute(select(Job))).scalars().all()
+    assert not [
+        job for job in queued if (job.payload or {}).get("garment_id") == garment_id
+    ]

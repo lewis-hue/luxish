@@ -7,12 +7,11 @@ import { MotionPressable } from '@/components/ui/motion';
 import {
   AspectRatio,
   Colors,
-  Display,
   FontSize,
   Motion,
   Radius,
   Spacing,
-  Tracking,
+  labelType,
 } from '@/constants/theme';
 import { attributionLine, type InspirationAsset } from '@/features/discover/types';
 import { useScheme } from '@/hooks/use-theme';
@@ -24,6 +23,11 @@ type StyleTileProps = {
   meta?: string | null;
   /** Taller treatment for the lead tile. */
   feature?: boolean;
+  /**
+   * Height of the picture, for the masonry grid. Defaults to the editorial
+   * ratio; `features/discover/stagger` decides it per collection.
+   */
+  ratio?: number;
   /** Grid position, for the entrance stagger. */
   index?: number;
   onPress?: () => void;
@@ -49,6 +53,7 @@ export function StyleTile({
   subtitle,
   meta,
   feature,
+  ratio,
   index,
   onPress,
   style,
@@ -77,7 +82,13 @@ export function StyleTile({
       ]}>
       {asset ? (
         <Image
-          source={asset.localSource ?? { uri: asset.uri }}
+          // The featured tile spans the column and wants the master; every
+          // other tile is about 114 points wide and the master is 1120, so
+          // it was fetching four times the pixels it could draw.
+          source={
+            (feature ? asset.localSource : (asset.thumbSource ?? asset.localSource)) ??
+            { uri: asset.uri }
+          }
           placeholder={asset.blurhash ? { blurhash: asset.blurhash } : undefined}
           // `placeholderContentFit` defaults to 'scale-down' while
           // `contentFit` defaults to 'cover'; expo-image's own docs warn the
@@ -93,11 +104,11 @@ export function StyleTile({
           accessible={false}
           style={{
             width: '100%',
-            aspectRatio: feature ? 4 / 5 : AspectRatio.editorial,
+            aspectRatio: feature ? 4 / 5 : (ratio ?? AspectRatio.editorial),
           }}
         />
       ) : (
-        <TypographicCover title={title} feature={feature} />
+        <TypographicCover title={title} feature={feature} ratio={ratio} />
       )}
 
       {/*
@@ -150,8 +161,7 @@ export function StyleTile({
             <ThemedText
               numberOfLines={2}
               style={{
-                fontFamily: Display.regular,
-                fontSize: 30,
+                ...labelType(30, 800),
                 lineHeight: 34,
                 color: '#FFFFFF',
               }}>
@@ -189,14 +199,16 @@ export function StyleTile({
   return (
     <View style={[{ gap: Spacing.two }, style]}>
       {tile}
-      <View style={{ gap: 2, paddingHorizontal: Spacing.half }}>
+      <View style={{ gap: Spacing.half, paddingHorizontal: Spacing.half }}>
         {meta ? <TileMeta label={meta} /> : null}
+        {/* One line at reading size, not two at heading size. A 20px serif
+            wrapping twice under a 170px tile makes a board of twelve read as
+            a wall of text with pictures between it. */}
         <ThemedText
-          numberOfLines={2}
+          numberOfLines={1}
           style={{
-            fontFamily: Display.regular,
-            fontSize: FontSize.title3,
-            lineHeight: 23,
+            ...labelType(FontSize.body, 800),
+            lineHeight: 21,
             color: colors.text,
           }}>
           {title}
@@ -215,17 +227,28 @@ export function StyleTile({
   );
 }
 
-/** The small tracked caps label above a tile title. */
+/**
+ * The small line above a tile title.
+ *
+ * **Sentence case, not tracked caps.** A tracked-out uppercase eyebrow over
+ * every heading is one of the most reliable tells of a templated page, and on
+ * a narrow board tile it was also the congestion: twenty-three characters of
+ * caps with 1.2 of extra tracking wraps to two lines at 170px, so every tile
+ * carried three lines of text under its photograph.
+ *
+ * It survives at all because what it carries is real — how many of a look you
+ * own, how many people a trend rests on, when something happened. What it may
+ * not do is shout.
+ */
 function TileMeta({ label, onImage }: { label: string; onImage?: boolean }) {
   const colors = Colors[useScheme()];
   return (
     <ThemedText
       type="small"
+      numberOfLines={1}
       style={{
         fontSize: FontSize.meta,
-        letterSpacing: Tracking.label,
-        textTransform: 'uppercase',
-        color: onImage ? 'rgba(255,255,255,0.72)' : colors.textSecondary,
+        color: onImage ? 'rgba(255,255,255,0.82)' : colors.textSecondary,
       }}>
       {label}
     </ThemedText>
@@ -233,22 +256,29 @@ function TileMeta({ label, onImage }: { label: string; onImage?: boolean }) {
 }
 
 /** Editorial fallback while a cover is missing. */
-function TypographicCover({ title, feature }: { title: string; feature?: boolean }) {
+function TypographicCover({
+  title,
+  feature,
+  ratio,
+}: {
+  title: string;
+  feature?: boolean;
+  ratio?: number;
+}) {
   const colors = Colors[useScheme()];
   return (
     <View
       accessible={false}
       style={{
         width: '100%',
-        aspectRatio: feature ? 4 / 5 : AspectRatio.editorial,
+        aspectRatio: feature ? 4 / 5 : (ratio ?? AspectRatio.editorial),
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: colors.backgroundSelected,
       }}>
       <ThemedText
         style={{
-          fontFamily: Display.regular,
-          fontSize: feature ? 96 : 72,
+          ...labelType(feature ? 96 : 72, 800),
           lineHeight: feature ? 104 : 80,
           color: colors.accent,
         }}>
@@ -258,12 +288,18 @@ function TypographicCover({ title, feature }: { title: string; feature?: boolean
   );
 }
 
+/**
+ * The licence credit, where one is owed.
+ *
+ * Sentence case for the same reason `TileMeta` is: a tracked-caps pill on
+ * every photograph is chrome, and this is a credit rather than a label.
+ */
 function Badge({ label }: { label: string }) {
   return (
     <View
       style={{
         paddingHorizontal: Spacing.two,
-        paddingVertical: 3,
+        paddingVertical: Spacing.half,
         borderRadius: Radius.full,
         // Dark pill rather than a tinted one: it has to sit legibly on an
         // unpredictable photograph, and the accent does not always.
@@ -272,12 +308,7 @@ function Badge({ label }: { label: string }) {
       <ThemedText
         type="small"
         numberOfLines={1}
-        style={{
-          fontSize: FontSize.meta,
-          letterSpacing: Tracking.label,
-          textTransform: 'uppercase',
-          color: 'rgba(255,255,255,0.9)',
-        }}>
+        style={{ fontSize: FontSize.meta, color: 'rgba(255,255,255,0.9)' }}>
         {label}
       </ThemedText>
     </View>

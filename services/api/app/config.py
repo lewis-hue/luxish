@@ -24,6 +24,25 @@ class Settings(BaseSettings):
         frozen=True,
     )
 
+    # --- links out ----------------------------------------------------------
+    #: The app's deep-link scheme, matching the mobile `brand.scheme`.
+    #:
+    #: Read from the environment rather than written here, because the
+    #: product name lives in `apps/mobile/branding.config.js` and nothing
+    #: in this service may hardcode it. Empty disables deep links in
+    #: shared content rather than emitting a scheme nobody registered.
+    app_link_scheme: str = Field(
+        default="",
+        description="Deep-link scheme for shared content, e.g. the brand slug",
+    )
+    #: A public web surface for shared content, when one exists. Preferred
+    #: over the scheme: a link anybody can open beats one that only works
+    #: for people who already have the app.
+    public_web_base_url: str = Field(
+        default="",
+        description="Public base URL for shareable pages, if there is one",
+    )
+
     # --- required: no defaults, secret or otherwise -------------------------
     database_url: str = Field(description="SQLAlchemy async DSN, e.g. postgresql+asyncpg://…")
     meta_api_key: SecretStr = Field(description="Meta Model API key (prefixed LLM_), ADR-007")
@@ -53,6 +72,20 @@ class Settings(BaseSettings):
     # when the claim is absent, the check is skipped. `azp` is always present
     # and is the primary client binding.
     keycloak_audience: str | None = None
+    #: Where to fetch the realm's signing keys, when that is not the issuer.
+    #:
+    #: Issuer and key source are the same host in a deployment, and this stays
+    #: unset there. They diverge in local development, where the issuer has to
+    #: be a public https URL so a phone and Google can both reach it, while the
+    #: API sits next to Keycloak on the LAN. Routing key fetches through the
+    #: public tunnel then makes every request depend on a third party staying
+    #: up, and when it blinks the API rejects perfectly good tokens with
+    #: `jwks_unavailable`.
+    #:
+    #: This does not weaken validation: the `iss` claim is still checked
+    #: against `keycloak_issuer`. It only says where the keys for that issuer
+    #: are read from, which is operator configuration rather than user input.
+    keycloak_jwks_url_override: str | None = None
 
     # Token verification (Task 4).
     #
@@ -60,6 +93,26 @@ class Settings(BaseSettings):
     # enforceable until its own `exp`, so the access-token TTL is the width of
     # the revocation window. ASSUMED here; set on the realm, not by this service.
     assumed_access_token_ttl_seconds: int = 300
+
+    # -- model latency ----------------------------------------------------- #
+    #
+    #: How hard the model thinks before answering, per class of call.
+    #:
+    #: Measured on muse-spark-1.3 with an identical screening prompt:
+    #: unset 6.72s (380 reasoning tokens), "low" 2.17s (229), "minimal"
+    #: 1.93s (129). Left unset the model reasons at full effort on every
+    #: call, which is both the slow path and the expensive one, and for
+    #: structured extraction it buys nothing a schema was not already
+    #: going to enforce.
+    #:
+    #: Two values rather than one because the two jobs are different. A
+    #: classification or a safety verdict is a judgement against a closed
+    #: list, and "low" answers those in about two seconds. Composing an
+    #: outfit across a wardrobe with tool calls is reasoning that earns
+    #: its keep, so the stylist gets its own dial and a higher default.
+    model_reasoning_effort: str = "low"
+    stylist_reasoning_effort: str = "medium"
+
     jwks_cache_ttl_seconds: int = 300
     jwt_leeway_seconds: int = 10
     allowed_signing_algorithms: tuple[str, ...] = ("RS256", "ES256")
@@ -121,6 +174,30 @@ class Settings(BaseSettings):
     #: Soft limit raises a catchable exception; hard limit kills the child.
     celery_task_soft_time_limit_seconds: int = 10 * 60
     celery_task_time_limit_seconds: int = 12 * 60
+    #: How often the sweeper re-drives the queue from PostgreSQL.
+    #:
+    #: This is the upper bound on how long a job waits when its dispatch is
+    #: lost, so it is a user-visible number, not a housekeeping one: someone
+    #: who has just photographed a garment is watching a spinner for exactly
+    #: this long in the worst case. Thirty seconds is short enough to read as
+    #: a slow reply rather than a hang, and long enough that the two queries
+    #: it runs are irrelevant next to the model calls on the same database.
+    celery_sweep_interval_seconds: float = 30.0
+    #: How often the push outbox is drained.
+    #:
+    #: Nothing in this service opens a socket to the gateway except the
+    #: task on this schedule, so this is the whole latency of a
+    #: notification: the gap between somebody following you and your
+    #: phone saying so. A minute reads as prompt for a follow or a
+    #: finished shot, and it is the floor rather than the typical wait
+    #: for anything held by quiet hours, which leaves when its
+    #: `send_after` arrives.
+    #:
+    #: Shorter is not better. The drain is also the throttle - a large
+    #: fan-out deliberately leaves over several passes so the gateway
+    #: is not handed a flood, and so everybody does not open the app in
+    #: the same second.
+    push_drain_interval_seconds: float = 60.0
 
     job_max_attempts: int = 5
 
@@ -158,7 +235,13 @@ class Settings(BaseSettings):
         that guard refuses private addresses, and Keycloak is expected to be
         reachable on a private in-cluster address. This URL is operator
         configuration, never user input.
+
+        ``keycloak_jwks_url_override`` wins where it is set, for the local
+        case where the issuer is a public tunnel and the keys are next door.
+        The issuer claim is validated either way.
         """
+        if self.keycloak_jwks_url_override:
+            return self.keycloak_jwks_url_override
         return f"{self.keycloak_issuer.rstrip('/')}/protocol/openid-connect/certs"
 
 

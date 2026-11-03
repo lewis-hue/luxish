@@ -197,7 +197,7 @@ are the facts the architecture is allowed to rely on.
 | Per-model pricing for `muse-spark-1.3`, `muse-wonder-1.0`, `muse-image-1.0`, and `muse-voice-transcribe-1.0` | Every cost projection and the free tier's ceiling depend on it. Only `sam-3.1` pricing was captured on 2026-10-26 | Re-read `https://dev.meta.ai/docs/pricing-rate-limits` and record each figure with its date before publishing a budget |
 | The numeric value of Meta's per-team rate limits | The team-wide concurrency limiter needs a number, not a shape | Re-read the pricing/rate-limit page and record the figures |
 | Apple's and Google's exact store, billing, and review requirements | They gate the entire monetisation path and the store release | Read the canonical pages and record what they say; none of these were fetched on 2026-10-26 |
-| Instagram / TikTok / Pinterest embed terms | They govern what we may render, and the policy in ADR-009 is deliberately more conservative than any of them | Read each platform's embed terms before shipping embeds, and record the date |
+| third-party embed terms | They govern what we may render, and the policy in ADR-009 is deliberately more conservative than any of them | Read each platform's embed terms before shipping embeds, and record the date |
 | Cloud Run's request timeout ceiling | It is the stated constraint behind queueing all model work | Measure it; ADR-013 names this as the thing to verify |
 | `pool_size=10, max_overflow=5` for the database pool | A first guess, explicitly labelled an assumption in the plan | Revisit with the Task 15 load profile |
 | That any payout provider supports payouts to Kenya on acceptable terms | The whole creator-earnings path rests on it | Evaluate candidates and record the finding — this is the programme's most consequential unverified assumption |
@@ -223,7 +223,7 @@ around them.
    upload.
 4. **Image generation never routes to the ChatGPT-plan path, in any state.**
 5. **No platform media is downloaded, stored, or analysed.** Instagram, TikTok, and
-   Pinterest content is a reference plus attribution; analysis runs only on user-supplied
+   Third-party content is a reference plus attribution; analysis runs only on user-supplied
    media.
 6. **Every server-side URL touch goes through one SSRF-guarded fetcher** — scheme
    allowlist, DNS pinned and re-checked after each redirect, private / link-local /

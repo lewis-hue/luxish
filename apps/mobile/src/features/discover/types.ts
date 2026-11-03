@@ -71,6 +71,14 @@ export interface InspirationAsset {
    * When present it wins over `uri` — a local asset needs no network at all.
    */
   localSource?: number | import('expo-image').ImageSource | null;
+  /**
+   * A small copy, for tiles and rows.
+   *
+   * Everything that draws a cover at tile size should prefer this: the
+   * master is four times the pixels those views can display. Only the
+   * look-detail hero and the featured tile want `localSource`.
+   */
+  thumbSource?: number | null;
   /** Low-cost placeholder so the grid never flashes empty. */
   blurhash: string | null;
   width: number;

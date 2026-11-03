@@ -19,9 +19,9 @@ import { useScheme } from '@/hooks/use-theme';
  */
 const DESTINATIONS = [
   { name: 'index', href: '/', label: 'Discover' },
+  { name: 'search', href: '/search', label: 'Search' },
   { name: 'wardrobe', href: '/wardrobe', label: 'Wardrobe' },
   { name: 'stylist', href: '/stylist', label: 'Stylist' },
-  { name: 'community', href: '/community', label: 'Community' },
   { name: 'profile', href: '/profile', label: 'Profile' },
 ] as const;
 

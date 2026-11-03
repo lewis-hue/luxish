@@ -46,7 +46,7 @@ requirements implicitly include this section.
 - **Meta has no embeddings endpoint.** No task may introduce vector retrieval. (ADR-004)
 - **ChatGPT-plan inference ships `unavailable`** and must never carry image generation.
   Identity and inference are separate permissions. (ADR-008)
-- **No platform media download.** Instagram / TikTok / Pinterest links are stored as
+- **No platform media download.** third-party platform links are stored as
   references with attribution; garment analysis runs only on user-supplied media.
   (ADR-009)
 - **Money is `(amount_minor: int, currency: char(3))`** on an append-only ledger. No

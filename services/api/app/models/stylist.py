@@ -180,6 +180,37 @@ class StylistRun(Base, TimestampMixin):
     place: Mapped[str | None] = mapped_column(sa.String(160), nullable=True)
     styled_for: Mapped[date_type | None] = mapped_column(sa.Date, nullable=True)
 
+    # -- what the request is *about* --------------------------------------- #
+    # The assistant is the one surface where somebody already has a picture
+    # in hand, and what they can ask depends on which kind it is. These are
+    # ids, re-validated against the asker before anything is read: a client
+    # naming an asset is making a claim, not granting itself access.
+    #: A garment out of their own wardrobe.
+    subject_garment_id: Mapped[uuid.UUID | None] = mapped_column(
+        sa.Uuid(as_uuid=True),
+        sa.ForeignKey("garments.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    #: A photograph they uploaded, which may have no wardrobe row behind it.
+    subject_asset_id: Mapped[uuid.UUID | None] = mapped_column(
+        sa.Uuid(as_uuid=True),
+        sa.ForeignKey("media_assets.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    #: A fit somebody else published, used as inspiration or tried on.
+    subject_post_id: Mapped[uuid.UUID | None] = mapped_column(
+        sa.Uuid(as_uuid=True),
+        sa.ForeignKey("posts.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    #: What the asker turned out to be asking for, decided on the worker.
+    #: Null until the run has been read. ``style`` is the ordinary case.
+    intent: Mapped[str | None] = mapped_column(sa.String(24), nullable=True)
+    #: The answer when a run did something other than build an outfit:
+    #: started a shoot, a story or a try-on. In plain words, because that
+    #: is what the thread shows.
+    reply: Mapped[str | None] = mapped_column(sa.Text(), nullable=True)
+
     # -- what Python decided, re-derived on every turn --------------------- #
     #: ``ResolvedGuidance.excluded`` — hard constraints, re-applied after the
     #: model returns rather than trusted to have been obeyed.

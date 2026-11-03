@@ -16,32 +16,80 @@ from typing import Any
 
 # Settings carries no secret defaults (Task 3), so the suite supplies them
 # before anything imports app.config.
+#
+# Two classes of variable, and the difference matters.
+#
+# These are **pinned**, not defaulted. The suite signs its own tokens against
+# this issuer and audience, so a developer with a real deployment exported in
+# their shell was not configuring the tests, they were breaking them: every
+# token the suite minted was rejected by the real issuer's rules and 93 tests
+# failed with a 401 that looked like an application bug. The API key is pinned
+# for a sharper reason — a real one in the environment lets the suite make
+# billed model calls.
+os.environ["LUXISH_META_API_KEY"] = "LLM_test-key-not-a-real-credential"
+os.environ["LUXISH_ENVIRONMENT"] = "test"
+os.environ["LUXISH_KEYCLOAK_ISSUER"] = "https://id.luxish.test/realms/luxish"
+os.environ["LUXISH_KEYCLOAK_AUDIENCE"] = "luxish-api"
+os.environ["LUXISH_KEYCLOAK_CLIENT_ID"] = "luxish-mobile"
+# Storage mode is pinned for the same reason: tests assert which backend the
+# service reports and refuses, and a developer running against local files
+# would otherwise see those assertions fail as though the code were wrong.
+# The one fixture that genuinely needs filesystem media overrides the
+# dependency explicitly rather than relying on the ambient environment.
+os.environ["LUXISH_UPLOAD_STORAGE_MODE"] = "simulated"
+# A deep-link scheme, so the link a shared fit carries is exercised
+# rather than left empty. The unconfigured case has its own test.
+os.environ["LUXISH_APP_LINK_SCHEME"] = "luxish"
+# Pinned for the same reason: a developer pointing the API at a local
+# Keycloak while the issuer stays a public tunnel would otherwise have
+# that override decide what the suite thinks the default behaviour is.
+os.environ.pop("LUXISH_KEYCLOAK_JWKS_URL_OVERRIDE", None)
+
+# ...and the dotenv file, which that pop does not cover.
+#
+# `Settings` declares `env_file=".env"`, and pydantic-settings reads that file
+# itself rather than through `os.environ` — so clearing the variable above
+# left the developer's local `.env` still deciding the answer. The moment one
+# genuinely needed that override (issuer on a public tunnel, keys next door),
+# `test_the_jwks_source_follows_the_issuer_by_default` started failing on
+# their machine and nowhere else, which reads as a code fault and is not one.
+#
+# The suite sets every value it depends on explicitly above, so it has no use
+# for the file at all. Switching it off makes the result the same on a laptop
+# mid-debugging as in CI, which is the only way a config assertion means
+# anything.
+# **Every import below the settings block is late on purpose.**
+# The application reads its configuration at import time, so the
+# environment has to be set before any of it is imported - which
+# is exactly what a linter cannot distinguish from sloppiness.
+from app.config import Settings as _Settings  # noqa: E402
+
+_Settings.model_config["env_file"] = None
+
+# These stay overridable, deliberately: the Postgres-marked tests are pointed
+# at a real database through the environment, and nothing about a bucket name
+# or a Redis index can make a passing test lie.
 os.environ.setdefault("LUXISH_DATABASE_URL", "sqlite+aiosqlite:///:memory:")
 os.environ.setdefault("LUXISH_REDIS_URL", "redis://localhost:6379/1")
-os.environ.setdefault("LUXISH_META_API_KEY", "LLM_test-key-not-a-real-credential")
 os.environ.setdefault("LUXISH_GCS_BUCKET", "luxish-test")
-os.environ.setdefault("LUXISH_ENVIRONMENT", "test")
-os.environ.setdefault("LUXISH_KEYCLOAK_ISSUER", "https://id.luxish.test/realms/luxish")
-os.environ.setdefault("LUXISH_KEYCLOAK_AUDIENCE", "luxish-api")
-os.environ.setdefault("LUXISH_KEYCLOAK_CLIENT_ID", "luxish-mobile")
 
-import base64
-import hashlib
-import hmac
-import json
+import base64  # noqa: E402
+import hashlib  # noqa: E402
+import hmac  # noqa: E402
+import json  # noqa: E402
 
-import httpx
-import jwt
-import pytest
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
-from sqlalchemy.ext.asyncio import AsyncSession
+import httpx  # noqa: E402
+import jwt  # noqa: E402
+import pytest  # noqa: E402
+from cryptography.hazmat.primitives import serialization  # noqa: E402
+from cryptography.hazmat.primitives.asymmetric import rsa  # noqa: E402
+from sqlalchemy.ext.asyncio import AsyncSession  # noqa: E402
 
-from app import models as _models  # noqa: F401  (registers tables)
-from app.config import Settings, get_settings
-from app.db.base import Base
-from app.db.session import build_engine, session_factory
-from app.security.keycloak import JwksCache, TokenVerifier
+from app import models as _models  # noqa: F401, E402  (registers tables)
+from app.config import Settings, get_settings  # noqa: E402
+from app.db.base import Base  # noqa: E402
+from app.db.session import build_engine, session_factory  # noqa: E402
+from app.security.keycloak import JwksCache, TokenVerifier  # noqa: E402
 
 
 def _b64(raw: bytes) -> bytes:
@@ -253,6 +301,55 @@ async def client(engine: Any, verifier: TokenVerifier) -> AsyncIterator[httpx.As
 
     app.dependency_overrides[get_session] = _session
     app.dependency_overrides[get_token_verifier] = lambda: verifier
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
+        yield c
+
+
+@pytest.fixture
+def local_media_root(tmp_path: Any) -> Any:
+    """Where `local_media_client` keeps its bytes.
+
+    Its own fixture so a test can reach the files behind the rows — deleting
+    an object out from under a row is the only way to exercise what happens
+    when storage and the database disagree.
+    """
+    return tmp_path / "media"
+
+
+@pytest.fixture
+async def local_media_client(
+    engine: Any, verifier: TokenVerifier, local_media_root: Any
+) -> AsyncIterator[httpx.AsyncClient]:
+    """A client whose app may read and write media on a real filesystem.
+
+    ``build_local_store`` refuses to run outside a local environment, which is
+    deliberate: a deployment writing user media to a container's disk loses it
+    on the next revision, and that refusal is asserted elsewhere. The receiver
+    and the reader still need somewhere real to put bytes, so this fixture
+    grants exactly that, rooted in a directory pytest throws away.
+    """
+    from app.config import get_settings
+    from app.db.session import get_session
+    from app.deps import get_token_verifier
+    from app.main import create_app
+
+    app = create_app()
+    maker = session_factory(engine)
+
+    async def _session() -> AsyncIterator[AsyncSession]:
+        async with maker() as session:
+            yield session
+
+    base = get_settings()
+    local = base.model_copy(
+        update={"environment": "local", "local_media_root": str(local_media_root)}
+    )
+
+    app.dependency_overrides[get_session] = _session
+    app.dependency_overrides[get_token_verifier] = lambda: verifier
+    app.dependency_overrides[get_settings] = lambda: local
 
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -19,6 +20,28 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
+        # Point `enqueue` at Celery. Without this the whole queue is
+        # write-only: a job row lands in Postgres, `_notify` finds no
+        # dispatcher and returns, and no worker is ever told the work exists.
+        # The sweeper would eventually find it, but "eventually" is a user
+        # watching a spinner, so the dispatch is the fast path and the sweeper
+        # is the safety net.
+        #
+        # Here rather than at import time, so that importing the domain never
+        # drags in a broker and the test suite runs without one: an ASGI
+        # transport does not run lifespan events.
+        try:
+            from app.queue import install_dispatcher
+
+            install_dispatcher()
+        except Exception:  # dispatch is latency, not loss
+            # A broker that cannot be reached must not stop the API serving.
+            # Jobs still commit, and the sweeper re-drives them.
+            logging.getLogger(__name__).warning(
+                "job dispatch unavailable; the sweeper will re-drive queued work",
+                exc_info=True,
+            )
+
         yield
         from app.db.session import dispose_engine
 
@@ -50,10 +73,32 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
 def _install_routers(app: FastAPI) -> None:
     from app.routers import (
+        account_export,
         auth,
+        avatar,
+        billing,
+        brand_studio,
+        community,
+        collections,
+        consents,
+        feed,
+        garment_studio,
+        messages,
+        moodboards,
+        notifications,
+        planner,
+        posts,
+        profile,
+        profiles,
+        push,
         regional,
+        shopping,
+        shops,
         social_import,
+        speech,
+        studio,
         stylist,
+        taste,
         uploads,
         wardrobe,
         wardrobe_media,
@@ -63,13 +108,35 @@ def _install_routers(app: FastAPI) -> None:
     # spaces are disjoint, so registration order cannot change which handler a
     # request reaches — a test asserts that, rather than trusting the ordering.
     for module in (
+        account_export,
         auth,
+        avatar,
+        billing,
+        brand_studio,
+        community,
+        collections,
+        consents,
+        feed,
+        garment_studio,
+        messages,
+        moodboards,
+        notifications,
+        planner,
+        posts,
+        profile,
+        profiles,
+        push,
+        shopping,
+        shops,
+        speech,
         uploads,
         wardrobe,
         wardrobe_media,
         social_import,
         regional,
+        studio,
         stylist,
+        taste,
     ):
         app.include_router(module.router, prefix=API_PREFIX)
     # DELETE /v1/account sits outside the /auth prefix.

@@ -1,20 +1,21 @@
 import { Stack, router } from 'expo-router';
 import { useState } from 'react';
-import { TextInput, View } from 'react-native';
+import { useWindowDimensions, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
+import { DetailStrip } from '@/components/ui/detail-strip';
+import { Grain } from '@/components/ui/grain';
 import { MotionPressable, tapFeedback } from '@/components/ui/motion';
 import {
   Colors,
-  Display,
   FontSize,
   Radius,
   Spacing,
   TapTarget,
-  Tracking,
+  labelType,
 } from '@/constants/theme';
-import { BRAND } from '@/branding';
-import { AuthError, signIn, signInWithPassword } from '@/features/auth/session';
+import { AuthError, signIn } from '@/features/auth/session';
+import { hasAskedTaste } from '@/features/onboarding/taste';
 import { useScheme } from '@/hooks/use-theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -36,28 +37,26 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
  * everything it does is tied to the clothes you own, so a signed-out mode
  * would be an empty shell pretending to be a product.
  */
+/**
+ * Broken by hand, not by the container.
+ *
+ * Left to wrap, the line falls wherever the phone is wide — "Everything
+ * you own, in" over "one place" on one device and something else on the
+ * next. Broken on the comma it sets as two balanced lines on every
+ * screen, which is the whole of a display setting.
+ */
+const HEADLINE = 'Everything you own,\nin one place';
+
 export default function SignInScreen() {
   const colors = Colors[useScheme()];
   const insets = useSafeAreaInsets();
-  const [busy, setBusy] = useState<'google' | 'email' | 'dev' | null>(null);
+  // A third of the screen, and it runs under the status bar: the crops start
+  // at the very top of the display rather than below the notch, which is what
+  // makes them read as a printed page instead of a banner.
+  const { height: screenHeight } = useWindowDimensions();
+  const strip = Math.round(screenHeight * 0.34);
+  const [busy, setBusy] = useState<'google' | 'email' | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [devEmail, setDevEmail] = useState('');
-  const [devPassword, setDevPassword] = useState('');
-
-  const devSignIn = async () => {
-    void tapFeedback();
-    setBusy('dev');
-    setError(null);
-    try {
-      await signInWithPassword(devEmail.trim(), devPassword);
-      router.replace('/(tabs)');
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Sign-in failed.');
-    } finally {
-      setBusy(null);
-    }
-  };
-
   const start = async (withGoogle: boolean) => {
     void tapFeedback();
     setBusy(withGoogle ? 'google' : 'email');
@@ -66,7 +65,13 @@ export default function SignInScreen() {
       await signIn({ withGoogle, selectAccount: withGoogle });
       // `replace`, not `push`: the sign-in screen must not sit in the back
       // stack, or the hardware back button returns a signed-in user to it.
-      router.replace('/(tabs)');
+      router.replace('/');
+      // Then the taste questions, once, over the tabs rather than in front
+      // of them. Pushed after the replace so dismissing the sheet lands on
+      // Discover rather than back on sign-in, and only ever asked once —
+      // a one-time question that reappears every launch is nagging, and a
+      // person who skipped has already answered.
+      if (!hasAskedTaste()) router.push('/taste');
     } catch (caught) {
       // Backing out of the browser is a decision, not a failure, and showing
       // an error for it teaches people that the app is broken.
@@ -86,31 +91,55 @@ export default function SignInScreen() {
         style={{
           flex: 1,
           backgroundColor: colors.background,
-          paddingTop: insets.top + Spacing.six,
           paddingBottom: insets.bottom + Spacing.four,
-          paddingHorizontal: Spacing.three,
-          justifyContent: 'space-between',
+          // No horizontal padding: the crops bleed to both edges, which is
+          // the whole of the effect. The controls below re-add it.
+          gap: Spacing.four,
         }}>
-        <View style={{ gap: Spacing.two }}>
+        {/* The brand name and the strapline were here, at 56 and 15. They
+            were the same two strings the welcome screen had just shown, one
+            tap earlier, which is why this screen read as a repeat. The crops
+            say the same thing without saying it twice. */}
+        <DetailStrip height={strip} />
+
+        {/* One line, centred in whatever space is left between the pictures
+            and the buttons. `flex: 1` is what closes the gap the user saw:
+            the screen used to be `space-between`, which pinned the strip to
+            the top and the buttons to the bottom and left a dead band in the
+            middle with nothing in it. */}
+        <View
+          style={{
+            flex: 1,
+            justifyContent: 'center',
+            paddingHorizontal: Spacing.three,
+          }}>
+          {/* The roman, not the italic. This line was set in Bodoni italic
+              at 30 and could not be read: a didone italic is all hairline at
+              its thin strokes, and at body length on a textured ground it
+              stops being a flourish and starts being a guess. The italic had
+              no other home once the welcome strapline went, so it has been
+              removed from the type system rather than left as an export
+              waiting to catch somebody out. */}
           <ThemedText
             style={{
-              fontFamily: Display.regular,
-              fontSize: 56,
-              lineHeight: 60,
-              letterSpacing: -1,
+              // 900, the heavy end of the axis. At 400 this sat on the page
+              // as a caption rather than a statement.
+              ...labelType(30, 800),
+              // Explicit, or a heavy weight at this size clips its
+              // own ascenders.
+              lineHeight: 36,
               color: colors.text,
+              textAlign: 'center',
             }}>
-            {BRAND.name}
-          </ThemedText>
-          <ThemedText
-            type="small"
-            themeColor="textSecondary"
-            style={{ fontSize: FontSize.subhead }}>
-            {BRAND.tagline}
+            {/* No word here is emphasised differently from its
+                neighbours: a single accented word in a headline is one of
+                the most recognisable generated-page tells, and this type
+                system carries contrast between roles, not inside a line. */}
+            {HEADLINE}
           </ThemedText>
         </View>
 
-        <View style={{ gap: Spacing.three }}>
+        <View style={{ gap: Spacing.three, paddingHorizontal: Spacing.three }}>
           {error ? (
             <View
               style={{
@@ -126,7 +155,7 @@ export default function SignInScreen() {
                 style={{
                   width: 6,
                   height: 6,
-                  marginTop: 6,
+                  marginTop: Spacing.two,
                   borderRadius: Radius.full,
                   backgroundColor: colors.danger,
                 }}
@@ -182,109 +211,11 @@ export default function SignInScreen() {
             </ThemedText>
           </MotionPressable>
 
-          <ThemedText
-            type="small"
-            themeColor="textSecondary"
-            style={{
-              fontSize: FontSize.meta,
-              letterSpacing: Tracking.label,
-              textAlign: 'center',
-            }}>
-            Your wardrobe stays private to your account
-          </ThemedText>
-
-          {/*
-            Development only. `__DEV__` is compiled away by Metro, so this
-            block does not exist in a release build and there is no runtime
-            flag to get wrong.
-
-            It is here because the browser callback does not reliably return
-            to Expo Go, and a development build (which would own the luxish://
-            scheme and not have the problem) needs an Apple Developer account
-            to install on a physical iPhone.
-          */}
-          {__DEV__ ? (
-            <View
-              style={{
-                gap: Spacing.two,
-                marginTop: Spacing.two,
-                paddingTop: Spacing.three,
-                borderTopWidth: 1,
-                borderTopColor: colors.border,
-              }}>
-              <ThemedText
-                type="small"
-                themeColor="textSecondary"
-                style={{
-                  fontSize: FontSize.meta,
-                  letterSpacing: Tracking.label,
-                  textTransform: 'uppercase',
-                }}>
-                Development sign-in
-              </ThemedText>
-              <TextInput
-                value={devEmail}
-                onChangeText={setDevEmail}
-                placeholder="email"
-                placeholderTextColor={colors.textSecondary}
-                autoCapitalize="none"
-                autoCorrect={false}
-                keyboardType="email-address"
-                accessibilityLabel="Development email"
-                style={devField(colors)}
-              />
-              <TextInput
-                value={devPassword}
-                onChangeText={setDevPassword}
-                placeholder="password"
-                placeholderTextColor={colors.textSecondary}
-                autoCapitalize="none"
-                autoCorrect={false}
-                secureTextEntry
-                accessibilityLabel="Development password"
-                style={devField(colors)}
-              />
-              <MotionPressable
-                accessibilityRole="button"
-                accessibilityLabel="Sign in with password"
-                accessibilityState={{ busy: busy === 'dev', disabled: busy !== null }}
-                disabled={busy !== null}
-                animateEntrance={false}
-                onPress={() => void devSignIn()}
-                style={{
-                  minHeight: TapTarget,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  borderRadius: Radius.md,
-                  borderCurve: 'continuous',
-                  borderWidth: 1,
-                  borderColor: colors.borderStrong,
-                  opacity: busy !== null ? 0.5 : 1,
-                }}>
-                <ThemedText type="small" style={{ color: colors.textSecondary }}>
-                  {busy === 'dev' ? 'Signing in' : 'Sign in with password'}
-                </ThemedText>
-              </MotionPressable>
-            </View>
-          ) : null}
         </View>
+
+        {/* Over the content, not under it — see `Grain`. */}
+        <Grain />
       </View>
     </>
   );
-}
-
-
-/** Shared style for the development-only credential fields. */
-function devField(colors: { borderStrong: string; backgroundElement: string; text: string }) {
-  return {
-    minHeight: TapTarget,
-    paddingHorizontal: Spacing.three,
-    borderRadius: Radius.md,
-    borderCurve: 'continuous' as const,
-    borderWidth: 1,
-    borderColor: colors.borderStrong,
-    backgroundColor: colors.backgroundElement,
-    color: colors.text,
-    fontSize: FontSize.subhead,
-  };
 }

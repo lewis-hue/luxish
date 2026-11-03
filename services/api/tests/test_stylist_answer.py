@@ -1,0 +1,216 @@
+"""The stylist answering a question instead of rendering at it.
+
+The reported failure: somebody opened a fit, asked "Do I have any
+outfits that could match the fit above?", and got an avatar wearing
+clothes plus an offer of a photorealistic render. Nobody answered
+them.
+
+The two tests that carry the most weight here are the id
+re-validation ones. A model naming a garment this person does not own
+would put clothes they have never seen onto their own avatar and tell
+them they already had them, which is worse than any wrong outfit.
+"""
+
+from __future__ import annotations
+
+import json
+import uuid
+
+from app.domain.stylist_answer import (
+    MOST_GAPS,
+    Verdict,
+    parse,
+    plan_from,
+)
+
+MINE = [uuid.uuid4() for _ in range(4)]
+OWNED = set(MINE)
+
+
+def said(**payload) -> str:
+    return json.dumps(payload)
+
+
+# --------------------------------------------------------------------------- #
+# The id re-validation
+# --------------------------------------------------------------------------- #
+def test_a_garment_they_do_not_own_is_dropped() -> None:
+    """**An id a model returns is never trusted.**
+
+    Rendering a hallucinated id would dress somebody's avatar in
+    clothes they have never owned and tell them they already had
+    them.
+    """
+    stranger = uuid.uuid4()
+    got = parse(
+        said(
+            answer="Yes, you have this.",
+            has_match=True,
+            using=[str(MINE[0]), str(stranger)],
+            missing=[],
+        ),
+        owned=OWNED,
+    )
+    assert got.using == (MINE[0],)
+    assert stranger not in got.using
+
+
+def test_a_yes_with_nothing_behind_it_is_not_a_yes() -> None:
+    """**The shape of a confident wrong answer.**
+
+    The model says it matches and then names no garment it was
+    shown. Acting on that renders an empty avatar under the word
+    "yes", so the verdict is downgraded instead.
+    """
+    got = parse(
+        said(answer="Yes, easily.", has_match=True, using=[], missing=[]),
+        owned=OWNED,
+    )
+    assert got.has_match is False
+
+
+def test_a_yes_whose_every_id_was_invented_is_not_a_yes() -> None:
+    """The same failure arriving through the validator."""
+    got = parse(
+        said(
+            answer="Yes.",
+            has_match=True,
+            using=[str(uuid.uuid4()), str(uuid.uuid4())],
+            missing=[],
+        ),
+        owned=OWNED,
+    )
+    assert got.has_match is False
+    assert got.using == ()
+
+
+def test_a_malformed_id_does_not_break_the_answer() -> None:
+    got = parse(
+        said(
+            answer="Yes.",
+            has_match=True,
+            using=["not-a-uuid", str(MINE[1])],
+            missing=[],
+        ),
+        owned=OWNED,
+    )
+    assert got.using == (MINE[1],)
+    assert got.has_match is True
+
+
+def test_the_same_garment_twice_counts_once() -> None:
+    got = parse(
+        said(
+            answer="Yes.",
+            has_match=True,
+            using=[str(MINE[0]), str(MINE[0])],
+            missing=[],
+        ),
+        owned=OWNED,
+    )
+    assert got.using == (MINE[0],)
+
+
+# --------------------------------------------------------------------------- #
+# The verdict
+# --------------------------------------------------------------------------- #
+def test_a_no_carries_what_is_missing() -> None:
+    """The useful half of "no"."""
+    got = parse(
+        said(
+            answer="Not quite - you have no cream trousers.",
+            has_match=False,
+            using=[],
+            missing=["wide-leg cream trousers", "a tan leather tote"],
+        ),
+        owned=OWNED,
+    )
+    assert got.has_match is False
+    assert got.missing == ("wide-leg cream trousers", "a tan leather tote")
+    assert got.shops is True
+
+
+def test_a_match_does_not_also_go_shopping() -> None:
+    """Being told to buy something you already own is the feature
+    contradicting itself."""
+    got = parse(
+        said(
+            answer="Yes.",
+            has_match=True,
+            using=[str(MINE[0])],
+            missing=["a tan tote"],
+        ),
+        owned=OWNED,
+    )
+    assert got.has_match is True
+    assert got.missing == ()
+    assert got.shops is False
+
+
+def test_a_shopping_list_is_capped() -> None:
+    """Ten things to buy is a trip nobody takes."""
+    got = parse(
+        said(
+            answer="You would need a few things.",
+            has_match=False,
+            using=[],
+            missing=[f"item {i}" for i in range(10)],
+        ),
+        owned=OWNED,
+    )
+    assert len(got.missing) == MOST_GAPS
+
+
+def test_an_unreadable_reply_still_answers_in_words() -> None:
+    """They asked a question. They get words back, not a failure."""
+    got = parse("not json at all", owned=OWNED)
+    assert got.answer
+    assert got.has_match is False
+
+
+def test_an_empty_answer_is_filled_in() -> None:
+    """A blank bubble is worse than a plain sentence."""
+    got = parse(
+        said(answer="   ", has_match=False, using=[], missing=[]),
+        owned=OWNED,
+    )
+    assert got.answer.strip()
+
+
+def test_an_empty_wardrobe_cannot_match() -> None:
+    got = parse(
+        said(answer="Yes.", has_match=True, using=[str(MINE[0])], missing=[]),
+        owned=set(),
+    )
+    assert got.has_match is False
+
+
+# --------------------------------------------------------------------------- #
+# What follows the verdict
+# --------------------------------------------------------------------------- #
+def test_yes_wears_what_they_own() -> None:
+    plan = plan_from(
+        Verdict(answer="Yes.", has_match=True, using=(MINE[0], MINE[1]))
+    )
+    assert plan.wear == (MINE[0], MINE[1])
+    assert plan.look_for == ()
+    assert plan.renders
+
+
+def test_no_goes_shopping_and_still_draws_it() -> None:
+    """**"What would this look like on me" is the question underneath.**
+
+    A "no" that only lists things to buy has answered half of it.
+    """
+    plan = plan_from(
+        Verdict(answer="No.", has_match=False, missing=("cream trousers",))
+    )
+    assert plan.wear == ()
+    assert plan.look_for == ("cream trousers",)
+    assert plan.renders, "a no still ends in a picture of them in it"
+
+
+def test_a_no_with_nothing_to_suggest_renders_nothing() -> None:
+    """Rather than an empty avatar or an empty shopping list."""
+    plan = plan_from(Verdict(answer="No idea, sorry.", has_match=False))
+    assert not plan.renders

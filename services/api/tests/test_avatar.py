@@ -1,0 +1,351 @@
+"""The avatar, and the rule that keeps it honest.
+
+A feature that shows somebody how they would look in an outfit has to know
+something about how they look. The only safe way to get that is to ask: every
+other prompt in this service forbids reading identity off clothing, and a
+model whose inputs force it to guess presentation from a wardrobe cannot
+honour that rule at inference time.
+
+So the tests that matter here are not about image quality. They are about
+where the appearance comes from, what the stored picture is labelled, and
+whether a try-on can reach somebody else's avatar.
+"""
+
+from __future__ import annotations
+
+import uuid
+from typing import Any
+
+import httpx
+from unittest import mock
+
+import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.domain import avatar as domain
+from app.providers.base import GeneratedImage
+from app.workers.avatar import (
+    Appearance,
+    UnknownAppearance,
+    avatar_prompt,
+    try_on_prompt,
+)
+
+
+class StubRenderer:
+    """Records what it was asked for, returns a byte string."""
+
+    def __init__(self) -> None:
+        self.generated: list[Appearance] = []
+        self.tried: list[tuple[bytes, str]] = []
+
+    async def generate(self, *, appearance: Appearance, **_: Any) -> GeneratedImage:
+        self.generated.append(appearance)
+        return GeneratedImage(data=b"RIFFavatar", content_type="image/webp")
+
+    async def try_on(self, *, avatar: bytes, outfit: str, **_: Any) -> GeneratedImage:
+        self.tried.append((avatar, outfit))
+        return GeneratedImage(data=b"RIFFdressed", content_type="image/webp")
+
+
+async def _user(db: AsyncSession) -> uuid.UUID:
+    from app.models import User
+
+    user = User(id=uuid.uuid4(), email=f"{uuid.uuid4().hex[:8]}@example.test")
+    db.add(user)
+    await db.commit()
+    return user.id
+
+
+# --------------------------------------------------------------------------- #
+# appearance is stated, never derived
+# --------------------------------------------------------------------------- #
+async def test_an_unanswered_appearance_still_draws_someone(
+    db: AsyncSession,
+) -> None:
+    """Every field is optional, and the prompt simply omits what was not said.
+
+    Describing somebody as "of unspecified build" would put the gap in the
+    picture.
+    """
+    user_id = await _user(db)
+    appearance = await domain.read_appearance(db, user_id=user_id)
+
+    assert appearance == Appearance()
+    assert appearance.describe() == "a person"
+    assert "unspecified" not in avatar_prompt(appearance)
+
+
+async def test_what_was_said_reaches_the_prompt(db: AsyncSession) -> None:
+    user_id = await _user(db)
+    await domain.write_appearance(
+        db,
+        user_id=user_id,
+        appearance=Appearance(
+            presentation="feminine",
+            body_type="curvy",
+            age_band="40s",
+            skin_tone="dark_brown",
+        ),
+    )
+
+    described = (await domain.read_appearance(db, user_id=user_id)).describe()
+    # Adjectives before the noun, which is where English puts them. The naive
+    # concatenation produced "a woman curvy in their forties", and an image
+    # model handed a sentence that reads as broken draws accordingly.
+    assert described == "a curvy woman in their forties with dark brown skin"
+
+
+def test_height_joins_the_sentence_as_an_adjective() -> None:
+    """Bands rather than a measurement.
+
+    A number would be a measurement of a person held on a server, and the
+    prompt can only act on the difference anyway: an image model draws "tall"
+    and "short", not 174cm.
+    """
+    assert (
+        Appearance(presentation="feminine", body_type="athletic", height="tall")
+        .describe()
+        == "a tall athletic woman"
+    )
+    assert Appearance(presentation="masculine", height="short").describe() == (
+        "a short man"
+    )
+
+
+def test_average_is_stored_but_says_nothing_to_the_model() -> None:
+    """Two different questions.
+
+    An image model handed "a person" already draws an average build at an
+    average height, so "of average build" adds words without adding
+    information — and does not compose into a sentence ("an of average height
+    of average build person"). What somebody stated is still recorded.
+    """
+    stated = Appearance(body_type="average", height="average")
+    assert stated.describe() == "a person"
+    assert stated.as_stored()["body_type"] == "average"
+    assert stated.as_stored()["height"] == "average"
+
+
+def test_the_article_agrees_with_what_follows_it() -> None:
+    """an athletic man, not a athletic man."""
+    assert Appearance(presentation="masculine", body_type="athletic").describe() == (
+        "an athletic man"
+    )
+    assert Appearance(presentation="feminine", body_type="slim").describe() == (
+        "a slim woman"
+    )
+
+
+async def test_a_value_outside_the_vocabulary_is_refused() -> None:
+    """A closed set, so nothing unreviewed reaches an image prompt."""
+    with pytest.raises(UnknownAppearance):
+        Appearance(presentation="something-else")
+
+
+async def test_a_stored_value_that_is_no_longer_valid_reads_as_unsaid(
+    db: AsyncSession,
+) -> None:
+    """The vocabulary can change; somebody's old row should not crash them."""
+    recovered = Appearance.from_stored(
+        {"presentation": "retired-value", "age_band": "30s"}
+    )
+    assert recovered.presentation == "unspecified"
+    assert recovered.age_band == "30s"
+
+
+async def test_setting_appearance_twice_overwrites_rather_than_accumulating(
+    db: AsyncSession,
+) -> None:
+    user_id = await _user(db)
+    await domain.write_appearance(
+        db, user_id=user_id, appearance=Appearance(presentation="masculine")
+    )
+    await domain.write_appearance(
+        db, user_id=user_id, appearance=Appearance(presentation="androgynous")
+    )
+
+    assert (await domain.read_appearance(db, user_id=user_id)).presentation == (
+        "androgynous"
+    )
+
+
+# --------------------------------------------------------------------------- #
+# the picture, and what it is labelled
+# --------------------------------------------------------------------------- #
+async def test_an_avatar_is_stored_as_an_avatar_not_a_photograph(
+    db: AsyncSession,
+) -> None:
+    """It is a drawing of somebody who looks like the user, not the user."""
+    from tests.test_garment_media import InMemoryMediaStore
+
+    user_id = await _user(db)
+    asset = await domain.generate_avatar(
+        db, user_id=user_id, renderer=StubRenderer(), store=InMemoryMediaStore()
+    )
+
+    assert asset.kind == "avatar"
+    assert asset.kind != "garment_photo"
+    assert asset.status == "ready"
+    assert asset.publication_consent is False
+
+
+async def test_trying_on_edits_the_existing_avatar_rather_than_drawing_a_new_one(
+    db: AsyncSession,
+) -> None:
+    """A fresh figure each time would make comparing two outfits meaningless."""
+    from tests.test_garment_media import InMemoryMediaStore
+
+    store = InMemoryMediaStore()
+    user_id = await _user(db)
+    renderer = StubRenderer()
+
+    await domain.generate_avatar(
+        db, user_id=user_id, renderer=renderer, store=store
+    )
+    await domain.try_on(
+        db,
+        user_id=user_id,
+        outfit="a charcoal wool suit",
+        renderer=renderer,
+        store=store,
+    )
+
+    assert len(renderer.tried) == 1
+    source, outfit = renderer.tried[0]
+    # The edit was handed the avatar that was drawn, not a blank.
+    assert source == b"RIFFavatar"
+    assert outfit == "a charcoal wool suit"
+
+
+async def test_trying_on_without_an_avatar_uses_a_mannequin(
+    db: AsyncSession,
+) -> None:
+    """**This used to refuse, and the refusal was the bug.**
+
+    Eight of the last eight try-ons failed with "create your avatar
+    before trying clothes on it" - a wall in front of the feature
+    somebody came for, while fifteen mannequin figures sat in the
+    repository unreachable from the server.
+
+    It now dresses a shared figure instead. The person's own avatar
+    still wins when they have one; this is only what happens when
+    they do not.
+    """
+    from tests.test_garment_media import InMemoryMediaStore
+
+    user_id = await _user(db)
+    renderer = StubRenderer()
+    await domain.try_on(
+        db,
+        user_id=user_id,
+        outfit="a linen shirt",
+        renderer=renderer,
+        store=InMemoryMediaStore(),
+    )
+
+    assert len(renderer.tried) == 1
+    source, outfit = renderer.tried[0]
+    assert outfit == "a linen shirt"
+    # A real picture, not a blank: the shipped mannequin's bytes.
+    assert len(source) > 1000
+
+
+async def test_trying_on_says_so_when_there_is_no_figure_at_all(
+    db: AsyncSession,
+) -> None:
+    """The refusal is still there for the case that warrants it.
+
+    If the shipped figures are missing from the image - a broken
+    build rather than a new account - there is genuinely nothing to
+    draw on, and saying so beats rendering nothing.
+    """
+    from tests.test_garment_media import InMemoryMediaStore
+
+    user_id = await _user(db)
+    with mock.patch(
+        "app.domain.mannequin.bytes_for", return_value=None
+    ), pytest.raises(domain.NoAvatarYet):
+        await domain.try_on(
+            db,
+            user_id=user_id,
+            outfit="a linen shirt",
+            renderer=StubRenderer(),
+            store=InMemoryMediaStore(),
+        )
+
+
+async def test_one_persons_avatar_is_never_another_persons(
+    db: AsyncSession,
+) -> None:
+    """Scoping, asserted rather than assumed: this is a picture of somebody."""
+    from tests.test_garment_media import InMemoryMediaStore
+
+    store = InMemoryMediaStore()
+    mine = await _user(db)
+    stranger = await _user(db)
+    await domain.generate_avatar(
+        db, user_id=mine, renderer=StubRenderer(), store=store
+    )
+
+    assert await domain.current_avatar(db, user_id=mine) is not None
+    assert await domain.current_avatar(db, user_id=stranger) is None
+
+
+# --------------------------------------------------------------------------- #
+# the try-on prompt
+# --------------------------------------------------------------------------- #
+def test_the_try_on_prompt_pins_everything_except_the_clothes() -> None:
+    """An image edit will redraw the person given the chance.
+
+    An avatar whose face changes between outfits is not an avatar, and
+    region-limited editing is unavailable here (`mask` is a verified 400), so
+    the prompt has to carry the constraint.
+    """
+    prompt = try_on_prompt("a green corduroy suit")
+
+    assert "a green corduroy suit" in prompt
+    for held in ("same person", "same face", "same pose", "same background"):
+        assert held in prompt
+
+
+# --------------------------------------------------------------------------- #
+# over HTTP
+# --------------------------------------------------------------------------- #
+async def test_appearance_round_trips(client: httpx.AsyncClient, auth: Any) -> None:
+    await client.post("/v1/auth/session", headers=auth(sub="kc-avatar-1"))
+
+    sent = await client.put(
+        "/v1/avatar/appearance",
+        headers=auth(sub="kc-avatar-1"),
+        json={"presentation": "masculine", "age_band": "30s"},
+    )
+    assert sent.status_code == 200, sent.text
+    assert sent.json()["presentation"] == "masculine"
+
+    read = await client.get("/v1/avatar", headers=auth(sub="kc-avatar-1"))
+    assert read.status_code == 200
+    body = read.json()
+    # Nothing drawn yet, and the client is told so rather than shown a blank.
+    assert body["asset_id"] is None
+    assert body["appearance"]["presentation"] == "masculine"
+    assert body["appearance"]["skin_tone"] == "unspecified"
+
+
+async def test_an_unknown_appearance_value_is_refused_over_http(
+    client: httpx.AsyncClient, auth: Any
+) -> None:
+    await client.post("/v1/auth/session", headers=auth(sub="kc-avatar-2"))
+    r = await client.put(
+        "/v1/avatar/appearance",
+        headers=auth(sub="kc-avatar-2"),
+        json={"presentation": "something-else"},
+    )
+    assert r.status_code == 422
+
+
+async def test_the_avatar_needs_a_session(client: httpx.AsyncClient) -> None:
+    assert (await client.get("/v1/avatar")).status_code == 401
+    assert (
+        await client.put("/v1/avatar/appearance", json={"presentation": "feminine"})
+    ).status_code == 401

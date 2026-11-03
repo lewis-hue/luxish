@@ -56,3 +56,29 @@ export function useCorrectGarment(id: string) {
     },
   });
 }
+
+/**
+ * Remove many garments at once.
+ *
+ * Goes through the server's bulk path rather than looping single deletes:
+ * each one writes a media tombstone, and a loop of them from the device
+ * would be N round trips that can half-fail with no record of where it
+ * stopped. The server answers per item, so a stale id in the selection is
+ * reported rather than failing the batch.
+ */
+export function useBulkDeleteGarments() {
+  const queries = useQueryClient();
+  return useMutation({
+    mutationFn: async (garmentIds: string[]) => {
+      const { data, error } = await api.POST('/v1/wardrobe/garments/bulk/delete', {
+        body: { garment_ids: garmentIds } as never,
+      });
+      if (error || !data) throw new Error('Could not remove those.');
+      return data;
+    },
+    onSuccess: () => {
+      void queries.invalidateQueries({ queryKey: ['wardrobe'] });
+      void queries.invalidateQueries({ queryKey: ['wardrobe', 'collections'] });
+    },
+  });
+}

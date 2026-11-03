@@ -1,30 +1,65 @@
-import * as WebBrowser from 'expo-web-browser';
+import { useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, TextInput, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { Screen } from '@/components/ui/screen';
-import { Colors, Display, Radius, Spacing } from '@/constants/theme';
+import {
+  Colors,
+  Radius,
+  Spacing,
+  labelType,
+} from '@/constants/theme';
 import {
   availableActions,
   detectPlatform,
   supportFor,
 } from '@/features/social-import/platforms';
+import { openSite } from '@/features/profile/website';
 import { useScheme } from '@/hooks/use-theme';
 
 /**
  * Add inspiration from a link (§11).
  *
  * Reached by pasting a URL or by sharing a post into the app from Instagram, TikTok
- * or Pinterest — `+native-intent.ts` routes incoming shares here.
+ * or another supported platform — `+native-intent.ts` routes
+ * incoming shares here.
  *
  * The screen's job is to be truthful: it says what we can do with this particular
  * link, and when garment analysis is not permitted it offers the alternative that
  * works rather than failing or pretending.
  */
+/**
+ * Pull the shared link out of whatever the platform handed us.
+ *
+ * The share payload's shape is not fixed — it arrives as a query parameter
+ * on an `expo-sharing` deep link, under a key that differs by platform and
+ * by the app doing the sharing. Rather than guess at the key, take the first
+ * http(s) link in the decoded payload: a share whose point is a post URL has
+ * exactly one, and a payload with none yields an empty field, which is where
+ * this screen started anyway.
+ */
+function sharedLink(payload: string | string[] | undefined): string {
+  const raw = Array.isArray(payload) ? payload[0] : payload;
+  if (!raw) return '';
+  let decoded = raw;
+  try {
+    decoded = decodeURIComponent(raw);
+  } catch {
+    // A payload that is not valid percent-encoding is still worth scanning.
+  }
+  return /https?:\/\/[^\s"'<>]+/.exec(decoded)?.[0] ?? '';
+}
+
 export default function ImportScreen() {
   const colors = Colors[useScheme()];
-  const [url, setUrl] = useState('');
+  const { shared } = useLocalSearchParams<{ shared?: string }>();
+  // Seeded once, in a lazy initialiser rather than an effect: setting state
+  // from a prop inside an effect is both a lint error here and a second
+  // render. The sheet is presented per share, so it mounts with the payload
+  // it is for — a share arriving while it is already open keeps whatever is
+  // typed, which is the right answer for anybody mid-edit.
+  const [url, setUrl] = useState(() => sharedLink(shared));
 
   const trimmed = url.trim();
   const support = useMemo(
@@ -36,7 +71,7 @@ export default function ImportScreen() {
   return (
     <Screen scroll>
       <View style={{ gap: Spacing.two, marginBottom: Spacing.four }}>
-        <ThemedText style={{ fontFamily: Display.regular, fontSize: 28, lineHeight: 34 }}>
+        <ThemedText style={{ ...labelType(28, 800), lineHeight: 34 }}>
           Add inspiration
         </ThemedText>
         <ThemedText type="small" themeColor="textSecondary">
@@ -110,7 +145,7 @@ export default function ImportScreen() {
                 label={action}
                 onPress={
                   action === 'Open original post'
-                    ? () => WebBrowser.openBrowserAsync(trimmed)
+                    ? () => openSite(trimmed)
                     : undefined
                 }
               />

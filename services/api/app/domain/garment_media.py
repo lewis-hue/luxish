@@ -46,7 +46,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import sqlalchemy as sa
@@ -582,6 +582,7 @@ async def record_categorisation(
     *,
     inference_version: str | None = None,
     autofill_confidence: float = CATEGORY_AUTOFILL_CONFIDENCE,
+    only_if_unset: bool = False,
 ) -> bool:
     """Write one categorisation. Never commits; the caller owns the transaction.
 
@@ -594,11 +595,20 @@ async def record_categorisation(
     against. So "a later high-confidence inference overwrote my correction" is
     not a bug that can be introduced here without deleting a line that exists to
     stop it.
+
+    ``only_if_unset`` makes the write a claim on an empty slot rather than an
+    update. Outfit detection uses it: it has already classified the garment it
+    found, and writing that is worth doing *because* it saves a second model
+    call — but never at the price of overwriting a better answer that arrived
+    first. Reported as ``False`` when it declines, so the caller can tell the
+    difference between "the garment is gone" and "it was already sorted".
     """
     garment = await session.scalar(
         sa.select(Garment).where(Garment.id == garment_id, Garment.deleted_at.is_(None))
     )
     if garment is None:
+        return False
+    if only_if_unset and garment.inference_version is not None:
         return False
 
     values: dict[str, Any] = {
@@ -833,6 +843,29 @@ async def bulk_create_garments(
     return outcomes
 
 
+#: How long categorisation waits so detection can answer first.
+#:
+#: Raised from 12 on 2026-10-29. The 12 came from "detection completes in
+#: roughly 7-9 seconds", which was two photographs. Fourteen real ones
+#: (`scripts/measure_detection.py`) put the model call at **3.1 to 12.8
+#: seconds** — the worst case already past the old handicap, and three of the
+#: fourteen within 2.5s of it. Those are model latencies alone; the job also
+#: downloads the image, segments and commits, so end-to-end overruns more
+#: often than one in fourteen.
+#:
+#: Every overrun costs a paid call for an answer detection was about to
+#: produce, which is the exact saving the handicap exists to make. Twenty
+#: clears the measured worst case with room for the work around it.
+#:
+#: **The cost falls on the failure path, deliberately.** Categorisation is
+#: still enqueued, so a garment whose detection dead-letters is sorted by it —
+#: twenty seconds later instead of twelve. That path is rare and already
+#: degraded; the common path is every upload. Setting this to 0 restores the
+#: race and makes both calls on every upload, for a latency difference
+#: measured under a second.
+CATEGORISE_HANDICAP_SECONDS = 20
+
+
 async def enqueue_media_pipeline(
     session: AsyncSession, *, garment: Garment, user_id: uuid.UUID
 ) -> tuple[str, ...]:
@@ -869,7 +902,29 @@ async def enqueue_media_pipeline(
         BACKGROUND_REMOVAL_JOB_KIND,
     ):
         await enqueue(
-            session, kind, payload, idempotency_key=f"{kind}:{garment.id}"
+            session,
+            kind,
+            payload,
+            idempotency_key=f"{kind}:{garment.id}",
+            # Categorisation starts late, and the delay is the whole point.
+            #
+            # Detection already classifies a photograph that turns out to hold
+            # one garment, and writes it. These two sit on different queues and
+            # are dispatched together, so they race: categorisation made its
+            # own paid call for an answer detection was about to produce, and
+            # its write was then discarded as the later one.
+            #
+            # Holding it back lets detection land first, so categorisation
+            # finds the garment already sorted and returns without calling
+            # anything. It is still *enqueued*, which is what makes this safe:
+            # if detection fails or dead-letters, this runs and does the work,
+            # so the cost of the delay falls only on the path where something
+            # already went wrong.
+            available_at=(
+                _now() + timedelta(seconds=CATEGORISE_HANDICAP_SECONDS)
+                if kind == CATEGORISE_JOB_KIND
+                else None
+            ),
         )
         queued.append(kind)
     return tuple(queued)

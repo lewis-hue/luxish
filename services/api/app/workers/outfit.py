@@ -37,11 +37,18 @@ from app.domain.garment_media import (
     PATTERN_LABELS,
     SLOT_LABELS,
     CategorisationResult,
+    record_categorisation,
 )
+from app.config import get_settings
 from app.errors import ApiError
 from app.providers.base import AIMessage, AIRequest, Capabilities, JsonSchemaFormat
 from app.providers.segmentation import data_uri
 from app.workers.categorise import prepare_image
+from app.workers.shell_fit import fit_to_shell
+from app.workers.render import (
+    RENDER_MEDIA_KIND,
+    GarmentRenderer,
+)
 
 #: Model and prompt version, recorded on every run so a change in behaviour
 #: can be attributed to a change in the prompt.
@@ -49,16 +56,43 @@ OUTFIT_MODEL = "muse-spark-1.3"
 OUTFIT_PROMPT_VERSION = "outfit-detect/v1"
 OUTFIT_PURPOSE = "wardrobe.detect_outfit"
 
-#: Reasoning tokens count against this, and the model spends them before it
-#: emits anything. A list of six garments is longer than one garment, so this
-#: is above the single-garment budget for the same measured reason.
-OUTFIT_MAX_TOKENS = 4096
+#: Raised from 4096 on 2026-10-29, against the expectation that it would come
+#: down. `scripts/measure_detection.py` ran fourteen real photographs through
+#: the live detector: completions ran 763 to **3460** tokens, mean 1549, which
+#: left the old ceiling with 1.18x headroom on the worst case rather than the
+#: generous margin it looked like.
+#:
+#: The worst case was a two-person photograph, and nothing stops somebody
+#: uploading one. One token over and the model returns empty with
+#: ``finish_reason: length`` — not an error naming the cause, which is the
+#: failure this codebase has already shipped three times at 512, 1200 and
+#: 2048.
+#:
+#: Reasoning is most of that completion (1453 of 1526 on a single dress) and
+#: the vendor reports it as a breakdown of `completion_tokens` rather than in
+#: addition to it, so this one number bounds both. Two times the measured
+#: worst case, rounded up to the next power of two.
+OUTFIT_MAX_TOKENS = 8192
 OUTFIT_TEMPERATURE = 0.0
 
 #: More than this in one photograph and the tail is almost always a
 #: misreading: a belt loop counted as a belt, a shadow as a second shoe.
 #: Capping also bounds the segmentation spend for one upload.
 MAX_GARMENTS = 8
+
+#: How much of a garment the photograph shows, worst case last.
+#:
+#: This decides whether the wardrobe gets a cut-out of the real garment or a
+#: render of one like it, so it is a judgement about the *photograph*, not
+#: about how confident the model is that the garment is there. A shirt almost
+#: entirely behind a tote is `mostly_hidden` however certain the model is that
+#: it is a shirt.
+VISIBILITY_LABELS: tuple[str, ...] = ("clear", "partly_hidden", "mostly_hidden")
+
+#: What a garment gets when the model declines to judge. The forgiving default:
+#: it keeps the real cut-out, which is only wrong in the cases this feature
+#: exists to catch, and never spends on a render that was not asked for.
+DEFAULT_VISIBILITY = "clear"
 
 OUTFIT_SYSTEM = (
     "You identify garments in a photograph so they can be catalogued in "
@@ -75,7 +109,16 @@ OUTFIT_SYSTEM = (
     "`noun_phrase` is how the garment will be cut out of the photograph, so "
     "it must be two or three plain words naming the garment and its most "
     "distinguishing visible feature, such as 'white button-up shirt' or "
-    "'brown leather tote'. It must name one garment, never a list."
+    "'brown leather tote'. It must name one garment, never a list.\n"
+    "\n"
+    "`visibility` decides what the wardrobe ends up showing, so judge the "
+    "photograph rather than your own certainty. Ask only this: if this "
+    "garment were cut out along its visible edges and shown on its own, would "
+    "it still look like the garment? Say 'clear' when its outline is "
+    "essentially complete, 'partly_hidden' when something overlaps it but its "
+    "shape still reads, and 'mostly_hidden' when the cut-out would be a "
+    "fragment — a shirt behind a bag, trousers crossed by a desk. A garment "
+    "you are certain about can still be mostly hidden."
 )
 
 OUTFIT_USER_TEXT = (
@@ -118,6 +161,7 @@ OUTFIT_SCHEMA: dict[str, Any] = {
                     "pattern",
                     "apparent_material",
                     "confidence",
+                    "visibility",
                 ],
                 "properties": {
                     "noun_phrase": {
@@ -138,6 +182,18 @@ OUTFIT_SCHEMA: dict[str, Any] = {
                         "never a fibre-composition claim.",
                     ),
                     "confidence": _confidence("Confidence this garment is present."),
+                    "visibility": {
+                        "type": "string",
+                        "enum": list(VISIBILITY_LABELS),
+                        "description": (
+                            "How much of this garment the photograph actually "
+                            "shows. 'clear' when its outline is essentially "
+                            "complete. 'partly_hidden' when something overlaps "
+                            "it but its shape still reads. 'mostly_hidden' "
+                            "when cutting it out would leave a fragment that "
+                            "does not read as the garment."
+                        ),
+                    },
                 },
             },
         },
@@ -156,6 +212,15 @@ class DetectedGarment:
     noun_phrase: str
     classification: CategorisationResult
     confidence: float
+    #: One of :data:`VISIBILITY_LABELS`.
+    visibility: str = DEFAULT_VISIBILITY
+
+    @property
+    def needs_render(self) -> bool:
+        """True when cutting this garment out would not produce the garment."""
+        from app.workers.render import RENDER_WHEN_VISIBILITY
+
+        return self.visibility in RENDER_WHEN_VISIBILITY
 
 
 @dataclass(frozen=True, slots=True)
@@ -215,6 +280,7 @@ class MetaOutfitDetector:
             ),
             response_format=OUTFIT_RESPONSE_FORMAT,
             max_completion_tokens=OUTFIT_MAX_TOKENS,
+            reasoning_effort=get_settings().model_reasoning_effort,
             temperature=OUTFIT_TEMPERATURE,
             prompt_version=self._prompt_version,
             purpose=OUTFIT_PURPOSE,
@@ -289,6 +355,14 @@ class MetaOutfitDetector:
                     noun_phrase=phrase,
                     classification=classification,
                     confidence=confidence,
+                    # An unrecognised value falls back rather than raising: a
+                    # garment is still worth recording when the only thing
+                    # the model got wrong is how hidden it said it was.
+                    visibility=(
+                        raw.get("visibility")
+                        if raw.get("visibility") in VISIBILITY_LABELS
+                        else DEFAULT_VISIBILITY
+                    ),
                 )
             )
 
@@ -298,6 +372,7 @@ class MetaOutfitDetector:
 
 
 __all__ = [
+    "DEFAULT_VISIBILITY",
     "MAX_GARMENTS",
     "OUTFIT_MAX_TOKENS",
     "OUTFIT_MODEL",
@@ -306,10 +381,11 @@ __all__ = [
     "OUTFIT_RESPONSE_FORMAT",
     "OUTFIT_SCHEMA",
     "OUTFIT_SYSTEM",
+    "VISIBILITY_LABELS",
     "DetectedGarment",
-    "crop_to_subject",
     "MetaOutfitDetector",
     "OutfitDetection",
+    "crop_to_subject",
 ]
 
 
@@ -365,6 +441,49 @@ def crop_to_subject(
         return buffer.getvalue()
 
 
+async def _queue_packshots(
+    session: Any, *, user_id: Any, made: list[dict[str, Any]]
+) -> int:
+    """Ask the studio for a packshot of each piece. Returns how many.
+
+    **Never fails the detection.** The wardrobe already has its
+    garments by the time this runs; a packshot is a better picture of
+    one, not the thing itself. So a studio that is down, out of quota
+    or misconfigured costs the nicer image and nothing else, and the
+    failure is logged rather than raised.
+    """
+    import logging
+
+    from app.domain import garment_studio
+    from app.workers.garment_studio import treatment_by_id
+
+    packshot = treatment_by_id("packshot")
+    if packshot is None:  # pragma: no cover - the id is a constant
+        return 0
+
+    queued = 0
+    for item in made:
+        # A piece nothing could be isolated from has no picture worth
+        # restyling - the source would be the whole photograph, and
+        # the packshot would be of the person in it.
+        if not item.get("cut_out"):
+            continue
+        try:
+            await garment_studio.request(
+                session,
+                user_id=user_id,
+                treatment=packshot,
+                garment_id=uuid.UUID(item["garment_id"]),
+            )
+            queued += 1
+        except Exception:  # noqa: BLE001 - one piece must not cost the rest
+            logging.getLogger(__name__).exception(
+                "could not queue a packshot",
+                extra={"garment": item["garment_id"]},
+            )
+    return queued
+
+
 # --------------------------------------------------------------------------- #
 # the fan-out
 # --------------------------------------------------------------------------- #
@@ -378,6 +497,7 @@ async def detect_outfit(
     detector: MetaOutfitDetector,
     segmenter: Any,
     store: Any = None,
+    renderer: GarmentRenderer | None = None,
 ) -> dict[str, Any]:
     """Turn one photograph of a worn outfit into one garment per piece.
 
@@ -425,14 +545,38 @@ async def detect_outfit(
     )
 
     if detection.is_single_garment:
-        # Not a worn outfit after all. Falling through to the ordinary
-        # single-garment path is cheaper and more accurate than fanning out
-        # over one item, and leaves the existing categorise job to do its job.
+        # Not a worn outfit after all, so there is nothing to fan out over.
+        #
+        # The classification is still written here rather than discarded. The
+        # detector has already looked at this photograph and already named the
+        # garment in the same closed vocabulary the classifier uses, so
+        # leaving it to `categorise` meant paying a second model call for an
+        # answer we were holding, and making the user wait out a second round
+        # trip to be told it. `categorise` sees the garment is classified and
+        # returns without calling anything.
+        #
+        # Only when the garment has no category yet. A user correction and an
+        # earlier run both outrank this.
+        sorted_now = False
+        if detection.garments:
+            piece = detection.garments[0]
+            written = await record_categorisation(
+                session,
+                payload.garment_id,
+                piece.classification,
+                inference_version=OUTFIT_PROMPT_VERSION,
+                only_if_unset=True,
+            )
+            if written:
+                await session.commit()
+                sorted_now = True
+
         return {
             "detected": True,
             "worn": detection.worn,
             "garments": len(detection.garments),
             "reason": "single_garment",
+            "sorted_from_detection": sorted_now,
         }
 
     created: list[dict[str, Any]] = []
@@ -440,36 +584,86 @@ async def detect_outfit(
 
     for piece in detection.garments:
         classification = piece.classification
-        try:
-            result = await segmenter.cutout(
-                image=image,
-                prompt=piece.noun_phrase,
-                content_type=asset.content_type or CUTOUT_CONTENT_TYPE,
-                background=CUTOUT_BACKGROUND,
-                user_id=payload.user_id,
-                job_id=job.id,
-            )
-        except (SegmentationUnavailable, CapabilityUnavailable) as exc:
-            # The garment is still real and still worth recording; it just
-            # has no cut-out. It keeps the source photograph.
-            result = None
-            reason = exc.code
-        else:
-            reason = result.reason or ""
+
+        # Segmentation can only remove what it can see, so a garment the
+        # photograph mostly hides has no cut-out worth having: the mask comes
+        # back as a fragment and the wardrobe shows a shirt with a bag-shaped
+        # hole in it. Those are drawn instead, from what was read off them,
+        # and the cut-out is not attempted — it would be paid for and thrown
+        # away.
+        piece_image: bytes | None = None
+        piece_content_type = CUTOUT_CONTENT_TYPE
+        piece_kind = asset.kind
+        rendered = False
+        reason = ""
+
+        if piece.needs_render and renderer is not None:
+            try:
+                drawing = await renderer.render(
+                    noun_phrase=piece.noun_phrase,
+                    classification=classification,
+                    user_id=payload.user_id,
+                )
+            except Exception as exc:  # noqa: BLE001 - see below
+                # Deliberately broad. Rendering is the fallback for a garment
+                # that cannot be cut out; a fallback that can itself fail the
+                # whole job is not one. Whatever went wrong — a refused
+                # prompt, a quota, a decode — this piece falls through to the
+                # cut-out, and a fragment of the real garment beats nothing.
+                reason = getattr(exc, "code", type(exc).__name__)
+            else:
+                piece_image = drawing.data
+                piece_content_type = drawing.content_type
+                piece_kind = RENDER_MEDIA_KIND
+                rendered = True
+                reason = "rendered"
+
+        if piece_image is None:
+            try:
+                result = await segmenter.cutout(
+                    image=image,
+                    prompt=piece.noun_phrase,
+                    content_type=asset.content_type or CUTOUT_CONTENT_TYPE,
+                    background=CUTOUT_BACKGROUND,
+                    user_id=payload.user_id,
+                    job_id=job.id,
+                )
+            except (SegmentationUnavailable, CapabilityUnavailable) as exc:
+                # The garment is still real and still worth recording; it just
+                # has no cut-out. It keeps the source photograph.
+                result = None
+                reason = exc.code
+            else:
+                reason = result.reason or reason or ""
+            if result is not None and result.image is not None:
+                # Cropped to the garment, then stood upright. A
+                # pair of trousers cuts out tall and a pair of shoes
+                # cuts out wide, so a wardrobe laid out from one
+                # photograph had tiles in two different shapes.
+                piece_image = fit_to_shell(
+                    crop_to_subject(result.image, result.records),
+                    content_type=piece_content_type,
+                    portrait=True,
+                )
 
         cutout_asset_id = None
-        if result is not None and result.image is not None:
-            piece_image = crop_to_subject(result.image, result.records)
-            key = f"{asset.storage_key or asset.id}/piece/{uuid.uuid4().hex[:12]}.png"
+        if piece_image is not None:
+            suffix = "webp" if "webp" in piece_content_type else "png"
+            key = (
+                f"{asset.storage_key or asset.id}/piece/"
+                f"{uuid.uuid4().hex[:12]}.{suffix}"
+            )
             try:
                 await store.write(
-                    key, piece_image, content_type=CUTOUT_CONTENT_TYPE
+                    key, piece_image, content_type=piece_content_type
                 )
                 derived = MediaAsset(
                     user_id=asset.user_id,
-                    kind=asset.kind,
+                    # A render is labelled as one. Nothing downstream should
+                    # be able to mistake a drawing for the user's photograph.
+                    kind=piece_kind,
                     status="ready",
-                    content_type=CUTOUT_CONTENT_TYPE,
+                    content_type=piece_content_type,
                     max_bytes=len(piece_image),
                     byte_size=len(piece_image),
                     storage_key=key,
@@ -506,6 +700,9 @@ async def detect_outfit(
             categorisation_confidence=classification.category_confidence,
             inference_confidence=classification.confidence,
             inference_version=OUTFIT_PROMPT_VERSION,
+            # Only true when the stored picture really is a drawing: a render
+            # that failed and fell back to a cut-out must not be badged as one.
+            image_is_rendered=rendered and cutout_asset_id is not None,
         )
         session.add(garment)
         await session.flush()
@@ -516,6 +713,8 @@ async def detect_outfit(
             "slot": classification.slot,
             "category": classification.category,
             "cut_out": cutout_asset_id is not None,
+            "visibility": piece.visibility,
+            "rendered": rendered,
         }
         if cutout_asset_id is None:
             entry["reason"] = reason or "no_subject_found"
@@ -536,10 +735,194 @@ async def detect_outfit(
 
     await session.commit()
 
+    # One catalogue packshot per piece.
+    #
+    # **Only on this path, which is the worn one.** A photograph of a
+    # garment already lying flat is a packshot; paying a model to
+    # redraw it as one buys nothing. A photograph of somebody wearing
+    # four things is the opposite case: the cut-outs are shaped round
+    # a body, lit by whatever room they were standing in, and often
+    # part-occluded by an arm.
+    #
+    # Per piece rather than one picture of the set, because these are
+    # four wardrobe items and a grid showing the same image four
+    # times is not a wardrobe. The studio's own packshot still groups
+    # everything in its source, which is the right default there: it
+    # is making one picture, not filling a cupboard.
+    #
+    # After the commit, deliberately. The garments are the result and
+    # a packshot is an improvement on them, so a studio that is down
+    # costs the nicer picture and nothing else.
+    packshots = await _queue_packshots(session, user_id=payload.user_id, made=created)
+
     return {
         "detected": True,
         "worn": True,
+        "packshots": packshots,
         "garments": len(created),
         "without_cutout": len(skipped),
+        # Counted separately because it is a different claim about the
+        # wardrobe: these tiles show a drawing of a garment like the user's,
+        # not a picture of the user's.
+        "rendered": sum(1 for item in created if item.get("rendered")),
         "items": created,
     }
+
+
+# --------------------------------------------------------------------------- #
+# the studio's split: one photograph, a picture per garment in it
+# --------------------------------------------------------------------------- #
+async def split_shots(
+    session: Any,
+    job: Any,
+    *,
+    detector: MetaOutfitDetector,
+    segmenter: Any,
+    store: Any = None,
+) -> dict[str, Any]:
+    """Shoot each garment in one photograph separately.
+
+    **The studio groups by default and this is the exception.** Handed
+    a photograph of a shirt and trousers, the packshot treatment
+    returns one picture with both in it, laid out together, because
+    the studio is making an image. This is for the other case: the
+    same photograph wanted as two catalogue images, one per garment.
+
+    **It never touches the wardrobe.** The intake path also splits a
+    worn photograph, and that one creates a garment per piece because
+    somebody is filling a cupboard. This one is somebody making
+    pictures, often from a camera roll photo that is not theirs to
+    own, so it writes cut-outs and shots and no `Garment` rows at all.
+
+    Partial success is the normal outcome and is reported as such: a
+    bag half behind a hip may not segment cleanly while the shirt and
+    the trousers do, and two packshots beats a failed job and none.
+    """
+    import uuid as _uuid
+
+    from app.domain import garment_studio
+    from app.domain.jobs import guard_write
+    from app.errors import CapabilityUnavailable
+    from app.models.media_asset import MediaAsset
+    from app.providers.segmentation import (
+        CUTOUT_BACKGROUND,
+        CUTOUT_CONTENT_TYPE,
+        SegmentationUnavailable,
+    )
+    from app.workers.categorise import UnavailableMediaStore
+    from app.workers.garment_studio import treatment_by_id
+
+    store = store or UnavailableMediaStore()
+    payload = job.payload or {}
+    user_id = _uuid.UUID(str(payload["user_id"]))
+    treatment = treatment_by_id(str(payload.get("treatment") or "packshot"))
+    if treatment is None:
+        return {"split": False, "reason": "bad_treatment"}
+    brief = payload.get("brief") or None
+
+    asset = await guard_write(
+        session,
+        _uuid.UUID(str(payload["asset_id"])),
+        version=payload.get("asset_version"),
+        user_id=user_id,
+    )
+    try:
+        image = await store.read(asset)
+    except CapabilityUnavailable as exc:
+        return {"split": False, "reason": exc.code}
+
+    detection = await detector.detect(
+        image=image,
+        content_type=asset.content_type or CUTOUT_CONTENT_TYPE,
+        user_id=user_id,
+    )
+    if not detection.garments:
+        return {"split": False, "reason": "no_garments", "shots": 0}
+
+    if detection.is_single_garment:
+        # One garment, so splitting is the same request as not
+        # splitting - and doing it the long way would pay for a
+        # segmentation first. Straight to the ordinary shot.
+        shot = await garment_studio.request(
+            session,
+            user_id=user_id,
+            treatment=treatment,
+            asset_id=asset.id,
+            brief=brief,
+        )
+        return {"split": False, "reason": "single_garment", "shots": 1,
+                "shot_ids": [str(shot.id)]}
+
+    made: list[str] = []
+    skipped = 0
+    for piece in detection.garments:
+        try:
+            result = await segmenter.cutout(
+                image=image,
+                prompt=piece.noun_phrase,
+                content_type=asset.content_type or CUTOUT_CONTENT_TYPE,
+                background=CUTOUT_BACKGROUND,
+                user_id=user_id,
+                job_id=job.id,
+            )
+        except (SegmentationUnavailable, CapabilityUnavailable):
+            skipped += 1
+            continue
+        if result is None or result.image is None:
+            skipped += 1
+            continue
+
+        piece_image = fit_to_shell(
+            crop_to_subject(result.image, result.records),
+            content_type=CUTOUT_CONTENT_TYPE,
+            portrait=True,
+        )
+        suffix = "webp" if "webp" in CUTOUT_CONTENT_TYPE else "png"
+        key = (
+            f"{asset.storage_key or asset.id}/split/"
+            f"{_uuid.uuid4().hex[:12]}.{suffix}"
+        )
+        try:
+            await store.write(key, piece_image, content_type=CUTOUT_CONTENT_TYPE)
+        except CapabilityUnavailable:
+            skipped += 1
+            continue
+
+        derived = MediaAsset(
+            user_id=asset.user_id,
+            # The same kind the intake split writes. A cut-out of a
+            # garment is evidence of a garment, and the kind is a
+            # boundary: nothing that scans for clothes should pick up
+            # an avatar source or a banner, and nothing here should
+            # be mistaken for either.
+            kind=asset.kind,
+            status="ready",
+            content_type=CUTOUT_CONTENT_TYPE,
+            max_bytes=len(piece_image),
+            byte_size=len(piece_image),
+            storage_key=key,
+            version=1,
+            publication_consent=False,
+        )
+        session.add(derived)
+        await session.flush()
+
+        shot = await garment_studio.request(
+            session,
+            user_id=user_id,
+            treatment=treatment,
+            asset_id=derived.id,
+            brief=brief,
+        )
+        made.append(str(shot.id))
+
+    await session.commit()
+    return {
+        "split": True,
+        "shots": len(made),
+        "without_cutout": skipped,
+        "shot_ids": made,
+    }
+
+
+SPLIT_SHOTS_JOB_KIND = "garment.studio_split"

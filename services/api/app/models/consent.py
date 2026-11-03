@@ -22,6 +22,25 @@ CONSENT_KINDS = (
     "location_precise",
     "location_coarse",
     "analytics",
+    #: Letting other people see what you have saved.
+    #:
+    #: Saving a look is a private act — the Saved screen is a personal shelf
+    #: and nothing ever said otherwise. Two things read it across accounts
+    #: and both wait on this grant: the community feed, and the count of
+    #: shared saves on a suggestion card. The second is the subtler one,
+    #: because it is an aggregate rather than a list and still enumerates a
+    #: collection exactly when the caller controls one side of the
+    #: comparison. Absent means no.
+    "community_sharing",
+    #: Sending a photograph of yourself to a model, to build an avatar
+    #: that looks like you.
+    #:
+    #: Separate from `ai_processing`, which covers reading a wardrobe and
+    #: writing an outfit. A face is not a jumper: somebody can reasonably
+    #: want the stylist and not want their likeness generated, and one
+    #: grant standing in for the other would make that impossible to say.
+    #: Absent means no, and withdrawing it stops further generation.
+    "likeness",
 )
 
 consent_kind_enum = named_enum("consent_kind", *CONSENT_KINDS)

@@ -11,6 +11,10 @@ const brand = require('./branding.config.js');
 const config: ExpoConfig = {
   name: brand.name,
   slug: brand.slug,
+  // The EAS account that owns the project below. Written here rather
+  // than left to the CLI because this is a dynamic config, which
+  // `eas init` cannot edit for us.
+  owner: 'lew2434',
   scheme: brand.scheme,
   version: '1.0.0',
   orientation: 'portrait',
@@ -51,6 +55,55 @@ const config: ExpoConfig = {
 
   plugins: [
     'expo-router',
+    // Without this the camera is a button that does nothing on
+    // Android: the plugin is what writes `CAMERA` into the manifest,
+    // and `launchCameraAsync` fails at the permission check before it
+    // ever opens. iOS happened to work because the usage strings
+    // above are set by hand, which is why only half the platforms
+    // were broken.
+    [
+      'expo-image-picker',
+      {
+        photosPermission:
+          'Choose existing photos of your clothes to add them to your wardrobe.',
+        cameraPermission:
+          'Take photos of your clothes to add them to your wardrobe.',
+      },
+    ],
+    // Required for push to work at all in a build: it is what wires
+    // the native notification entitlements and the Android channel.
+    // Local scheduled reminders worked without it, which is why its
+    // absence went unnoticed until the server gained a push pipeline.
+    'expo-notifications',
+    [
+      'expo-audio',
+      {
+        // `$(PRODUCT_NAME)` is substituted at build time from the app's
+        // own name, so this does not hardcode a product name — the
+        // branding rule holds.
+        microphonePermission:
+          'Allow $(PRODUCT_NAME) to record what you say, so you can talk to the stylist instead of typing.',
+      },
+    ],
+    // Playing a video somebody sent in a thread. Bundled in Expo Go,
+    // so it needs no development build to work.
+    'expo-video',
+    [
+      'expo-media-library',
+      {
+        // Write only. Saving a picture of yourself is the whole use, and
+        // a feature that saves one has no business reading the rest of
+        // somebody's camera roll.
+        //
+        // `$(PRODUCT_NAME)` is substituted at build time from the app's
+        // own name, so this does not hardcode a product name.
+        savePhotosPermission:
+          'Allow $(PRODUCT_NAME) to save pictures of your avatar to your photos.',
+        photosPermission:
+          'Allow $(PRODUCT_NAME) to save pictures of your avatar to your photos.',
+        isAccessMediaLocationEnabled: false,
+      },
+    ],
     [
       'expo-splash-screen',
       {
@@ -68,6 +121,11 @@ const config: ExpoConfig = {
   },
 
   extra: {
+    // What `getExpoPushTokenAsync` needs to mint a push token for
+    // this installation. Without it the app cannot be reached by the
+    // server's notification pipeline at all - see
+    // `features/notifications/permission.pushToken`.
+    eas: { projectId: '007fab39-2880-4a8e-9e64-642908202e5a' },
     brand: {
       tagline: brand.tagline,
       isWorkingName: brand.isWorkingName,

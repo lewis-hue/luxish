@@ -18,7 +18,44 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin, UTCDateTime, named_enum, uuid_fk, uuid_pk
 
-MEDIA_KINDS = ("garment_photo", "outfit_photo", "inspiration", "avatar")
+#: ``garment_render`` is a picture of a garment that is not a photograph of it.
+#: It exists because a garment can be plainly visible and still impossible to
+#: cut out — something overlaps it and the mask comes back as a fragment — so
+#: the alternative is showing the user a shirt with a bag-shaped hole in it.
+#: Kept as its own kind rather than passed off as a photo: a render is not
+#: evidence of what somebody owns, and nothing downstream should treat it as
+#: though it were.
+#: ``avatar_source`` is a photograph somebody uploaded **of themselves**,
+#: so an avatar can be built that actually looks like them. Its own kind
+#: for three reasons, each of which would otherwise be a quiet mistake:
+#: it is a picture of a person and must never be mistaken for evidence of
+#: a garment; nothing that scans for clothes should pick it up; and
+#: deleting it has to be findable, because "remove the photo of my face"
+#: is a request somebody will make and it must not require knowing an id.
+#: ``profile_banner`` is the picture across the top of somebody's page.
+#: Decoration, shown to everybody who opens the profile, and therefore
+#: screened like a caption. Its own kind so nothing that reads clothes
+#: or faces picks it up: a skyline is neither.
+#: ``garment_studio`` is an edit of the owner's own garment photograph —
+#: the same garment, placed on a model, cut out, or set in a scene. Distinct
+#: from ``garment_render``, which is drawn from a description when a cut-out
+#: fails, and distinct from ``garment_photo``, which is the evidence of what
+#: somebody owns. A studio shot is neither: it is a derivative, and nothing
+#: downstream should feed it back in as a source.
+MEDIA_KINDS = (
+    "garment_photo",
+    "outfit_photo",
+    "inspiration",
+    "avatar",
+    "avatar_source",
+    "profile_banner",
+    "garment_render",
+    "garment_studio",
+    #: A picture somebody attached to a message. Private to the two
+    #: people in that thread, and never read for clothes: a photograph
+    #: sent to one person is not evidence of anything they own.
+    "message_media",
+)
 MEDIA_STATUSES = ("pending_upload", "uploaded", "processing", "ready", "failed")
 DERIVATIVE_KINDS = ("thumbnail", "display", "mask", "preview")
 

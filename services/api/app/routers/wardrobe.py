@@ -43,12 +43,28 @@ async def list_garments(
 
 @router.post("/garments", response_model=GarmentOut, status_code=status.HTTP_201_CREATED)
 async def create_garment(payload: GarmentCreate, db: SessionDep, ctx: AuthDep) -> GarmentOut:
+    """Create one garment and start the work its photograph needs.
+
+    The pipeline is queued here and not only in the bulk endpoint. Uploading a
+    single photograph is the ordinary path through the app, and without this a
+    garment created that way keeps a null category for ever: nothing
+    categorises it, nothing cuts it out, and nothing looks at what is being
+    worn in it. The client reads that as still-processing and shows a spinner
+    with no end, which is what it did.
+
+    ``enqueue_media_pipeline`` is a no-op for a garment with no photograph, and
+    its idempotency keys are derived from the garment, so a retried request
+    cannot queue the work, or the spend, twice.
+    """
     garment = await _repo(db, ctx).create(
         name=payload.name,
         category=payload.category,
         media_asset_id=payload.media_asset_id,
         confirmed_attributes=payload.confirmed_attributes,
         availability=payload.availability,
+    )
+    await garment_media.enqueue_media_pipeline(
+        db, garment=garment, user_id=ctx.user_id
     )
     return GarmentOut.model_validate(garment)
 

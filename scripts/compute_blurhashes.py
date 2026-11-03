@@ -30,6 +30,11 @@ OUTPUT = REPO_ROOT / "apps" / "mobile" / "src" / "features" / "discover" / "blur
 SETS = (
     ("styles", (4, 3)),
     ("wardrobe", (4, 4)),
+    # The sign-in crops. They are the first thing on the screen after "Get
+    # started", so a blank rectangle there is the worst-placed one in the app.
+    ("signin", (4, 3)),
+    # The welcome screen's own photographs, which are not collections.
+    ("welcome", (4, 3)),
 )
 
 

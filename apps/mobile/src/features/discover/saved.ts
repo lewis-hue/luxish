@@ -2,21 +2,26 @@ import Store from 'expo-sqlite/kv-store';
 import { useCallback, useEffect, useState } from 'react';
 
 /**
- * Saved looks and favourite garments.
+ * Saved looks and favourite garments, on the device.
  *
  * `expo-sqlite/kv-store` rather than AsyncStorage: on SDK 58 it is the drop-in
- * replacement with the same API, backed by SQLite, and it offers synchronous reads.
- * That matters here because a save toggle that waits on async storage flickers from
- * unsaved to saved on every mount.
+ * replacement with the same API, backed by SQLite, and it offers synchronous
+ * reads. That matters here because a save toggle that waits on async storage
+ * flickers from unsaved to saved on every mount.
  *
- * Local-only for now, deliberately: there is no authenticated session yet, so
- * writing these to the API would mean inventing an anonymous identity. They migrate
- * to the server at sign-in. What must not happen is a saved item silently
- * disappearing at that point, so the keys are stable and the stored shape is the one
- * the API will accept.
+ * **This stayed the source of truth after the server gained a copy.** The
+ * collection now persists against the account (`api/queries/saved.ts`), but
+ * the local store is what the UI reads, so saving still works offline and the
+ * bookmark still resolves synchronously. The server is a durable mirror that
+ * survives a reinstall, not a round trip the tap waits on.
+ *
+ * **Looks carry the date they were kept; favourites do not.** A collection is
+ * ordered and the order is something somebody built, so it has to survive the
+ * migration — a whole local collection arriving at the server in one request
+ * would otherwise stack into a single second. Favourites are a set with no
+ * order to lose, so they stay a plain set.
  */
 
-const SAVED_LOOKS = 'fashion.saved_looks';
 const FAVOURITE_GARMENTS = 'fashion.favourite_garments';
 
 function readSet(key: string): Set<string> {
@@ -24,7 +29,6 @@ function readSet(key: string): Set<string> {
     const raw = Store.getItemSync(key);
     return new Set(raw ? (JSON.parse(raw) as string[]) : []);
   } catch {
-    // A corrupt value reads as empty rather than crashing the screen using it.
     return new Set();
   }
 }
@@ -40,18 +44,19 @@ function notify(key: string): void {
   listeners.get(key)?.forEach((listener) => listener());
 }
 
+function subscribe(key: string, listener: () => void): () => void {
+  const existing = listeners.get(key) ?? new Set<() => void>();
+  existing.add(listener);
+  listeners.set(key, existing);
+  return () => {
+    existing.delete(listener);
+  };
+}
+
 function useStoredSet(key: string) {
   const [values, setValues] = useState<Set<string>>(() => readSet(key));
 
-  useEffect(() => {
-    const listener = () => setValues(readSet(key));
-    const existing = listeners.get(key) ?? new Set<() => void>();
-    existing.add(listener);
-    listeners.set(key, existing);
-    return () => {
-      existing.delete(listener);
-    };
-  }, [key]);
+  useEffect(() => subscribe(key, () => setValues(readSet(key))), [key]);
 
   const toggle = useCallback(
     async (id: string) => {
@@ -69,18 +74,6 @@ function useStoredSet(key: string) {
   return { values, has, toggle, count: values.size };
 }
 
-/** Looks the user kept for inspiration. */
-export function useSavedLooks() {
-  return useStoredSet(SAVED_LOOKS);
-}
-
-/**
- * Garments the user marked as favourites.
- *
- * A *stated* preference, not an inference, which is why it is stored explicitly and
- * weighted by the stylist. "Clothes I actually love" is information no amount of
- * wear-history guessing reproduces reliably, and asking is cheaper than modelling.
- */
 export function useFavouriteGarments() {
   return useStoredSet(FAVOURITE_GARMENTS);
 }
@@ -91,6 +84,19 @@ export function favouriteGarmentIds(): readonly string[] {
 }
 
 export const STORAGE_KEYS = {
-  savedLooks: SAVED_LOOKS,
   favouriteGarments: FAVOURITE_GARMENTS,
 } as const;
+
+/**
+ * Forget which garments this device had marked as favourites.
+ *
+ * **Same reason the wardrobe is forgotten on sign-out.** This is a
+ * set of ids kept against the device rather than the account, so
+ * without clearing it the next person to sign in here inherits the
+ * last person's hearts - on garments that are no longer even theirs.
+ * Small beside a wardrobe full of photographs, and exactly the same
+ * mistake.
+ */
+export async function forgetFavourites(): Promise<void> {
+  await writeSet(FAVOURITE_GARMENTS, new Set());
+}

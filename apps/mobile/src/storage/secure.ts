@@ -6,9 +6,10 @@
  * it, and `expo-secure-store` is the only store here backed by hardware-protected
  * keys.
  *
- * SDK 58 notes: the module is unavailable on web, so every function degrades to a
- * no-op there rather than throwing — the web build is a preview target and must not
- * crash on a storage call. `requireAuthentication` is deliberately not used: it does
+ * SDK 58 notes: the module is unavailable on web, so the store falls back to
+ * memory there rather than throwing — the web build is a preview target and
+ * must not crash on a storage call. See `memory` below for why that is a
+ * fallback and not a no-op, and why it is not `localStorage`. `requireAuthentication` is deliberately not used: it does
  * not work in Expo Go, and a biometric prompt on every API call is the wrong
  * trade for a 5-minute access token.
  */
@@ -40,19 +41,42 @@ const OPTIONS: SecureStore.SecureStoreOptions = {
 
 const supported = Platform.OS !== 'web';
 
+/**
+ * The web fallback: tokens held in memory, for the life of the tab.
+ *
+ * **Not a no-op, and not `localStorage`.** Reads and writes both used to do
+ * nothing on web, which did not degrade gracefully so much as break
+ * sign-in outright: the session published `signedIn` from memory, the first
+ * API call asked for a token, found none stored, treated that as a revoked
+ * session and signed the user straight back out. Signing in and being
+ * ejected one request later is not a reduced experience, it is a broken one.
+ *
+ * `localStorage` would fix it and is the wrong fix: §18 keeps credentials out
+ * of any store a script on the page can read, and web here is a preview
+ * target rather than a shipping surface. A module-scoped map is readable by
+ * the same page either way, but it is not persisted, so it leaves nothing
+ * behind after the tab closes and nothing for a later XSS to find. The cost
+ * is that a reload signs you out, which is the correct trade for a preview.
+ */
+const memory = new Map<string, string>();
+
 async function read(key: string): Promise<string | null> {
-  if (!supported) return null;
+  if (!supported) return memory.get(key) ?? null;
   try {
     return await SecureStore.getItemAsync(key, OPTIONS);
   } catch {
     // A corrupt or inaccessible keychain item must read as "signed out" rather
-        // than crash the app on launch.
+    // than crash the app on launch.
     return null;
   }
 }
 
 async function write(key: string, value: string | null): Promise<void> {
-  if (!supported) return;
+  if (!supported) {
+    if (value === null) memory.delete(key);
+    else memory.set(key, value);
+    return;
+  }
   if (value === null) {
     await SecureStore.deleteItemAsync(key, OPTIONS);
     return;

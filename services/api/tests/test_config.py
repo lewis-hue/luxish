@@ -107,3 +107,34 @@ def test_the_jwks_url_has_no_auth_prefix(monkeypatch: pytest.MonkeyPatch) -> Non
     url = Settings(_env_file=None).keycloak_jwks_url
     assert "/auth/" not in url
     assert url.endswith("/realms/luxish/protocol/openid-connect/certs")
+
+
+def test_the_jwks_source_follows_the_issuer_by_default() -> None:
+    cfg = Settings(
+        keycloak_issuer="https://id.example/realms/luxish",
+        keycloak_client_id="luxish-mobile",
+    )
+    assert cfg.keycloak_jwks_url == (
+        "https://id.example/realms/luxish/protocol/openid-connect/certs"
+    )
+
+
+def test_the_jwks_source_can_be_set_apart_from_the_issuer() -> None:
+    """Local development needs these to differ, and only these.
+
+    The issuer must be a public https URL so a phone and Google can both reach
+    it; the API sits next to Keycloak. Fetching keys through the public tunnel
+    made every request depend on a third party staying up, and when it blinked
+    the API rejected good tokens with `jwks_unavailable`. The issuer claim is
+    still validated against `keycloak_issuer` either way.
+    """
+    cfg = Settings(
+        keycloak_issuer="https://luxish-kc.loca.lt/realms/luxish",
+        keycloak_client_id="luxish-mobile",
+        keycloak_jwks_url_override=(
+            "http://localhost:55080/realms/luxish/protocol/openid-connect/certs"
+        ),
+    )
+    assert cfg.keycloak_jwks_url.startswith("http://localhost:55080/")
+    # The thing that must not change.
+    assert cfg.keycloak_issuer == "https://luxish-kc.loca.lt/realms/luxish"

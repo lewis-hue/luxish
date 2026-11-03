@@ -13,12 +13,14 @@ from fastapi import APIRouter, Request, Response, status
 
 from app.deps import AuthDep, SessionDep, SettingsDep, VerifierDep
 from app.domain import auth as auth_domain
+from app.domain import profile_identity
 from app.errors import ApiError, Unauthenticated
 from app.schemas.auth import (
     IdentityLinkConfirmRequest,
     IdentityLinkConfirmResponse,
     MeResponse,
     SessionResponse,
+    UpdateMeRequest,
 )
 from app.security.keycloak import LogoutTokenIncomplete, TokenRejected
 
@@ -51,6 +53,45 @@ async def me(ctx: AuthDep) -> MeResponse:
         email=ctx.user.email,
         email_verified=ctx.user.email_verified,
         display_name=ctx.user.display_name,
+        profile_photo_asset_id=ctx.user.profile_photo_media_asset_id,
+    )
+
+
+@router.patch("/me", response_model=MeResponse)
+async def update_me(
+    payload: UpdateMeRequest, ctx: AuthDep, db: SessionDep
+) -> MeResponse:
+    """Change the name and photograph somebody shows in the app.
+
+    Only the fields actually present in the body are touched, so a client
+    editing the name cannot blank the photograph by omitting it. The
+    photograph is given as a media asset id and re-validated against this
+    user's own media before it is stored — an id from a client is a claim.
+    """
+    try:
+        user = await profile_identity.set_profile(
+            db,
+            user_id=ctx.user_id,
+            display_name=payload.display_name,
+            photo_asset_id=payload.profile_photo_asset_id,
+            fields=payload.fields_sent(),
+        )
+    except profile_identity.ProfilePhotoNotFound:
+        # `ApiError`, not `HTTPException`: this app renders its own envelope
+        # and a raw HTTPException's detail is flattened to the generic
+        # `not_found`, losing the only part a client could act on.
+        raise ApiError(
+            "That picture is not one of yours.",
+            status_code=status.HTTP_404_NOT_FOUND,
+            code="media_not_found",
+        ) from None
+
+    return MeResponse(
+        user_id=user.id,
+        email=user.email,
+        email_verified=user.email_verified,
+        display_name=user.display_name,
+        profile_photo_asset_id=user.profile_photo_media_asset_id,
     )
 
 

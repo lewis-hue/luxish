@@ -129,6 +129,172 @@ export function SkeletonImage({
 }
 
 /**
+ * The shapes a column of shells takes.
+ *
+ * Real covers are portrait and not all the same portrait: measured
+ * across the published set they run from about 0.46 to 0.75 wide over
+ * tall. A shell grid of one ratio is a different shape from the content
+ * that replaces it, so the moment the real tiles arrive everything
+ * moves - which is the jump this component exists to prevent. Cycling a
+ * handful of real ratios makes the placeholder occupy roughly the space
+ * its content will.
+ *
+ * Fixed rather than random: a shell that is a different height on every
+ * render is its own flicker, and a seeded sequence is reproducible in a
+ * test.
+ */
+const SHELL_RATIOS = [0.75, 0.5625, 0.6667, 0.5, 0.7, 0.6] as const;
+
+/**
+ * Placeholders laid out the way the masonry lays out its tiles.
+ *
+ * **Not a grid.** `SkeletonGrid` puts equal cells in rows, which is
+ * right for a wardrobe of square thumbnails and wrong for a board of
+ * photographs: when the real tiles land at their own heights the whole
+ * column re-flows, and that re-flow is exactly what reads as the app
+ * lurching when a tab opens.
+ *
+ * Columns are filled shortest-first, which is what the masonry itself
+ * does, so the stagger looks like the content rather than like a
+ * pattern.
+ */
+export function SkeletonMasonry({
+  count = 6,
+  columns = 2,
+  gutter = Spacing.two,
+  radius = Radius.lg,
+  label = 'Loading',
+}: {
+  count?: number;
+  columns?: number;
+  gutter?: number;
+  radius?: number;
+  label?: string;
+}) {
+  // Shortest column first, the same rule the real masonry follows.
+  const heights = Array.from({ length: columns }, () => 0);
+  const lanes: number[][] = Array.from({ length: columns }, () => []);
+  for (let at = 0; at < count; at += 1) {
+    const ratio = SHELL_RATIOS[at % SHELL_RATIOS.length];
+    const shortest = heights.indexOf(Math.min(...heights));
+    lanes[shortest].push(ratio);
+    // Height per unit width is the inverse of width over height.
+    heights[shortest] += 1 / ratio;
+  }
+
+  return (
+    <View
+      accessible
+      accessibilityRole="progressbar"
+      accessibilityLabel={label}
+      accessibilityState={{ busy: true }}
+      style={{ flexDirection: 'row', gap: gutter }}>
+      {lanes.map((lane, column) => (
+        <View key={column} style={{ flex: 1, gap: gutter }}>
+          {lane.map((ratio, cell) => (
+            <SkeletonImage key={cell} aspectRatio={ratio} radius={radius} />
+          ))}
+        </View>
+      ))}
+    </View>
+  );
+}
+
+/**
+ * Placeholders for a list of people or threads.
+ *
+ * The same rule the masonry follows, for the other shape this app
+ * shows: a row of them is a face and two lines of text, so the shell
+ * is a circle and two bars. Plain text lines were the wrong shape -
+ * the avatars appeared from nowhere when the list landed and pushed
+ * every name sideways.
+ */
+export function SkeletonRows({
+  count = 5,
+  avatar = true,
+  /** A face is a circle; a fit's thumbnail is a square. */
+  round = true,
+  size = 48,
+  gap = Spacing.three,
+  label = 'Loading',
+}: {
+  count?: number;
+  avatar?: boolean;
+  round?: boolean;
+  size?: number;
+  gap?: number;
+  label?: string;
+}) {
+  return (
+    <View
+      accessible
+      accessibilityRole="progressbar"
+      accessibilityLabel={label}
+      accessibilityState={{ busy: true }}
+      style={{ gap }}>
+      {Array.from({ length: count }, (_, row) => (
+        <View
+          key={row}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.two }}>
+          {avatar ? (
+            <Skeleton
+              width={size}
+              height={size}
+              radius={round ? Radius.full : Radius.sm}
+            />
+          ) : null}
+          <View style={{ flex: 1, gap: Spacing.one }}>
+            <Skeleton width="55%" height={14} />
+            <Skeleton width="32%" height={10} />
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+/**
+ * Placeholders for a conversation.
+ *
+ * A thread is bubbles of different widths down alternate sides, so a
+ * stack of equal left-aligned lines is the wrong shape: the messages
+ * jump across the screen as they land. Widths are a fixed cycle, for
+ * the same reason the masonry's heights are - a shell that changes on
+ * every render is its own flicker.
+ */
+export function SkeletonBubbles({
+  count = 5,
+  gap = Spacing.two,
+  label = 'Loading this conversation',
+}: {
+  count?: number;
+  gap?: number;
+  label?: string;
+}) {
+  const widths = ['62%', '45%', '74%', '38%', '56%'] as const;
+  return (
+    <View
+      accessible
+      accessibilityRole="progressbar"
+      accessibilityLabel={label}
+      accessibilityState={{ busy: true }}
+      style={{ gap }}>
+      {Array.from({ length: count }, (_, at) => (
+        <View
+          key={at}
+          style={{ alignItems: at % 2 ? 'flex-end' : 'flex-start' }}>
+          <Skeleton
+            width={widths[at % widths.length]}
+            height={36}
+            radius={Radius.md}
+          />
+        </View>
+      ))}
+    </View>
+  );
+}
+
+/**
  * Placeholder text lines.
  *
  * The last line is shortened because real text rarely fills its final line,
