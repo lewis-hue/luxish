@@ -14,8 +14,10 @@
  * for the server and takes its count from the answer.
  */
 
+import { useCallback } from 'react';
 import {
   useMutation,
+  useInfiniteQuery,
   useQuery,
   useQueryClient,
   type QueryClient,
@@ -114,15 +116,40 @@ export function toFeedFit(item: Record<string, unknown>): FeedFit {
   return fit;
 }
 
+/** One page of the board, plus whether there is another. */
+interface BoardPage {
+  fits: FeedFit[];
+  more: boolean;
+}
+
 export function useBoard(group: string, enabled: boolean) {
-  return useQuery<FeedFit[]>({
+  const query = useInfiniteQuery<BoardPage>({
     queryKey: feedKeys.board(group),
     enabled,
+    // **The page number is for the cache, not for the server.**
+    //
+    // There is no cursor and there does not need to be one: the
+    // server records what it sent and excludes it next time, so
+    // asking again walks forward on its own. A ranked offset would
+    // be worse than useless, because the ranking is rebuilt per
+    // request from a random walk - page two of a list that
+    // reshuffled between requests is not page two of anything.
+    // React Query still needs distinct page params to key them, so
+    // this counts and is never sent.
+    initialPageParam: 0,
+    getNextPageParam: (last: BoardPage, pages: BoardPage[]) =>
+      last.more ? pages.length : undefined,
     queryFn: async () => {
       const { data } = await api.GET('/v1/feed', {
         params: { query: group === 'all' ? {} : { group } },
       });
-      return (data?.items ?? []).map((item) => toFeedFit(item as never));
+      return {
+        fits: (data?.items ?? []).map((item) => toFeedFit(item as never)),
+        // Absent on an older server, and false is the safe reading:
+        // a board that stops paging is a short board, one that never
+        // stops is an infinite loop.
+        more: Boolean((data as { more?: boolean } | undefined)?.more),
+      };
     },
     // **The grid is a session artifact, not a cached answer.**
     //
@@ -147,6 +174,44 @@ export function useBoard(group: string, enabled: boolean) {
     refetchOnMount: false,
     refetchOnWindowFocus: false,
   });
+
+  const client = useQueryClient();
+
+  /**
+   * Pull-to-refresh: one new page, not every page again.
+   *
+   * **An infinite query's own `refetch` re-fetches all of them**, in
+   * order, so pulling down after scrolling twelve pages would fire
+   * twelve recommender passes and take as long as the whole session
+   * had. It also would not do what the gesture means: "show me
+   * something new" is a request for a fresh board, not for the same
+   * 360 pins re-picked.
+   *
+   * Dropping back to one page and fetching it is both faster and the
+   * honest reading of the gesture. The server does the rest - it
+   * remembers what it has sent, so the fresh page is genuinely new
+   * rather than the same grid reshuffled.
+   */
+  const freshStart = useCallback(async () => {
+    client.setQueryData(feedKeys.board(group), (held: unknown) => {
+      const pages = held as { pages: BoardPage[]; pageParams: unknown[] } | undefined;
+      if (!pages) return held;
+      // Keep one page so the list has something to draw while the
+      // new one arrives; replacing it with nothing blanks the board
+      // mid-gesture.
+      return { pages: pages.pages.slice(0, 1), pageParams: pages.pageParams.slice(0, 1) };
+    });
+    await query.refetch();
+  }, [client, group, query]);
+
+  // Flattened here so every caller keeps reading `data` as the list
+  // of fits it always was, and only the screen that pages has to
+  // know there are pages.
+  return {
+    ...query,
+    data: query.data?.pages.flatMap((page: BoardPage) => page.fits),
+    freshStart,
+  };
 }
 
 export function useFeedGroups(enabled: boolean) {

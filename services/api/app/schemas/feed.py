@@ -54,6 +54,15 @@ class FeedItemOut(BaseModel):
 class FeedOut(BaseModel):
     group: str
     items: list[FeedItemOut] = Field(default_factory=list)
+    #: Whether asking again would return anything new.
+    #:
+    #: **Not derivable from the page itself.** The sources are capped
+    #: per request, so a short page is ordinary and "fewer than you
+    #: asked for" cannot mean the end. This says the corpus has
+    #: wrapped - the seen-filter had to be relaxed, so everything
+    #: from here is a repeat - and it is how an infinite list knows
+    #: to stop rather than paging for ever through the same pins.
+    more: bool = False
 
 
 class GroupOut(BaseModel):

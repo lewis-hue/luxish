@@ -498,3 +498,79 @@ async def test_the_gate_gives_way_rather_than_leaving_a_blank_shelf(
 
     shelf = await more_like(db, user_id=me, post_id=lonely.id, limit=6)
     assert shelf, "the shelf went blank rather than falling back"
+
+
+# --------------------------------------------------------------------------- #
+# Paging
+#
+# There is no cursor and there does not need to be one: `record`
+# excludes what the last call showed, so asking twice walks forward -
+# which the refresh test above already proves. What paging adds is a
+# stop condition, and that is what these pin.
+# --------------------------------------------------------------------------- #
+async def test_the_caller_is_told_when_the_corpus_has_wrapped(
+    db: AsyncSession,
+) -> None:
+    """**The stop condition, and it cannot be read off the page.**
+
+    The sources are capped per request, so a short page is ordinary
+    and "fewer than you asked for" cannot mean the end. Only the
+    seen-filter being relaxed says everything from here is a repeat,
+    and an infinite list needs that or it pages for ever.
+    """
+    me = await make_user(db)
+    curator = await make_user(db)
+    everything = [await post_by(db, curator, caption=f"fit {i}") for i in range(6)]
+    await board_with(db, curator, everything)
+    await saves(db, me, everything[0])
+    await db.commit()
+
+    memory = InMemorySeen()
+    notes: dict[str, object] = {}
+    for _ in range(8):
+        notes = {}
+        await discover(
+            db,
+            user_id=me,
+            size=5,
+            seen_store=memory,
+            rng=random.Random(3),
+            now=NOW,
+            notes=notes,
+        )
+        if notes.get("exhausted"):
+            break
+
+    assert notes["exhausted"] is True, "walked past the end and was never told"
+
+
+async def test_a_reader_with_a_board_left_to_see_is_not_told_it_ended(
+    db: AsyncSession,
+) -> None:
+    me = await make_user(db)
+    curator = await make_user(db)
+    everything = [await post_by(db, curator, caption=f"fit {i}") for i in range(40)]
+    await board_with(db, curator, everything)
+    await saves(db, me, everything[0])
+    await db.commit()
+
+    notes: dict[str, object] = {}
+    grid = await discover(
+        db,
+        user_id=me,
+        size=8,
+        seen_store=InMemorySeen(),
+        rng=random.Random(3),
+        now=NOW,
+        notes=notes,
+    )
+
+    assert grid, "an empty grid proves nothing"
+    assert notes["exhausted"] is False
+
+
+async def test_notes_are_optional() -> None:
+    """Every existing caller passes none, and must keep working."""
+    import inspect
+
+    assert inspect.signature(discover).parameters["notes"].default is None

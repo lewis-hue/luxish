@@ -354,13 +354,32 @@ async def discover(
     rng: random.Random | None = None,
     now: datetime | None = None,
     record: bool = True,
+    notes: dict[str, object] | None = None,
 ) -> list[Explained]:
     """One grid for one person. The whole pipeline.
 
     `record` writes the result to the seen-filter so the next refresh
     returns something else. Off for a dry run, because an inspection
     that marks everything as shown changes what it was inspecting.
+
+    **`record` is also what makes paging work.** There is no cursor
+    and there does not need to be one: each call excludes what the
+    last call showed, so asking twice walks forward through the
+    corpus. A ranked offset would be worse than useless here, because
+    the ranking is rebuilt per request from a random walk - page two
+    of a list that reshuffled between requests is not page two of
+    anything.
+
+    `notes`, when given, is filled with what the caller cannot see
+    from the returned list. Today that is one key, `exhausted`: True
+    when the seen-filter had to be relaxed, which is the only signal
+    that the corpus has wrapped and the next page would repeat. A
+    page that is merely short does not mean the end - the sources are
+    capped per request - so "fewer than you asked for" cannot be used
+    as the stop condition and something has to say so out of band.
     """
+    if notes is not None:
+        notes["exhausted"] = False
     chance = rng or random.Random()
     moment = now or datetime.now(UTC)
 
@@ -434,6 +453,11 @@ async def discover(
             extra={"user": str(user_id), "permitted": allowed_count},
         )
         already = set()
+        # The corpus has wrapped. Everything from here is a repeat, so
+        # a reader scrolling forward should be told the board ends
+        # rather than shown the same pins again under more of it.
+        if notes is not None:
+            notes["exhausted"] = True
 
     def survivors(ids: list[uuid.UUID]) -> list[uuid.UUID]:
         return [p for p in unseen(ids, already) if permitted(p)]

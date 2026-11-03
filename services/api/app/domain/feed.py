@@ -393,6 +393,7 @@ async def discovered(
     seen_store=None,
     now: datetime | None = None,
     record: bool = True,
+    notes: dict[str, object] | None = None,
 ) -> list[FeedPost]:
     """The Discover board, built by the staged recommender.
 
@@ -416,6 +417,10 @@ async def discovered(
         seen_store=seen_store,
         now=now,
         record=record,
+        # Carried straight through: the router needs to know whether
+        # the corpus has wrapped so it can tell the client to stop
+        # asking for more.
+        notes=notes,
     )
     if not picks:
         return []

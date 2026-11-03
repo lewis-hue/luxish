@@ -204,6 +204,7 @@ async def board(
     filter that silently omits things is worse than one that does
     not personalise.
     """
+    notes: dict[str, object] = {}
     if group and group != "all":
         entries = await domain.board(
             db,
@@ -211,13 +212,24 @@ async def board(
             group=group,
             liked_groups=await _liked_groups(db, ctx.user_id),
         )
+        # A group chip answers "show me everything in denim" in one
+        # pass, so there is no second page to offer.
+        more = False
     else:
         from app.domain.discovery.wiring import seen_store
 
         entries = await domain.discovered(
-            db, user_id=ctx.user_id, seen_store=seen_store()
+            db, user_id=ctx.user_id, seen_store=seen_store(), notes=notes
         )
-    return FeedOut(group=group or "all", items=await _render(db, entries, viewer_id=ctx.user_id))
+        # More unless the corpus wrapped. An empty page is also the
+        # end: there is nothing to put under it.
+        more = bool(entries) and not notes.get("exhausted", False)
+
+    return FeedOut(
+        group=group or "all",
+        items=await _render(db, entries, viewer_id=ctx.user_id),
+        more=more,
+    )
 
 
 @router.get("/groups", response_model=GroupsOut)

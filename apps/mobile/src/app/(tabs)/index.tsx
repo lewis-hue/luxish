@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Pressable,
   ScrollView,
@@ -104,7 +105,7 @@ export default function DiscoverScreen() {
   // counters under it still reload, they just do not hold it
   // open after the pins have visibly repainted.
   const refresh = usePullToRefresh(undefined, {
-    primary: () => board.refetch(),
+    primary: () => board.freshStart(),
   });
   // The tab bar follows which way this board is being scrolled.
   const barFollows = useScrollDirection();
@@ -319,6 +320,30 @@ export default function DiscoverScreen() {
         // `features/navigation/attention.scrolled`.
         onScroll={barFollows.onScroll}
         scrollEventThrottle={32}
+        // **Why the board used to end.**
+        //
+        // It asked for one page of thirty and never asked again, so
+        // scrolling hit the bottom of a fixed grid while hundreds of
+        // pins sat unseen behind it. Nothing was missing from the
+        // corpus; nothing was asking for more of it.
+        //
+        // Half a screen of warning rather than at the very bottom:
+        // the next page is a round trip plus a recommender pass, and
+        // reaching the end before it lands is the thing that reads
+        // as running out.
+        onEndReachedThreshold={0.5}
+        onEndReached={() => {
+          if (board.hasNextPage && !board.isFetchingNextPage) {
+            void board.fetchNextPage();
+          }
+        }}
+        ListFooterComponent={
+          board.isFetchingNextPage ? (
+            <View style={{ paddingVertical: Spacing.four }}>
+              <ActivityIndicator color={colors.accent} />
+            </View>
+          ) : null
+        }
         // The shared control, not a second one written here.
         //
         // This board had its own, with `tintColor` only - which is
