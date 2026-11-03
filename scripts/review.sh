@@ -183,6 +183,15 @@ start_metro() {
 open_app() {
   head2 "Opening the app"
   local bin avd
+  # A device already attached is reused. Without this check a second
+  # `up` boots a duplicate emulator against the same AVD, which fails
+  # to lock the disk image and leaves two half-working devices.
+  if adb_ready; then
+    ok "a device is already attached"
+    ( cd "$MOBILE" && npx expo start --android --non-interactive >>"$LOGS/metro.log" 2>&1 & )
+    ok "app launching on it"
+    return 0
+  fi
   if bin="$(emulator_binary)" && avd="$(list_avds | head -1)" && [ -n "$avd" ]; then
     say "  booting the Android emulator ($avd) ..."
     ( nohup "$bin" -avd "$avd" -no-snapshot-save >"$LOGS/emulator.log" 2>&1 & )

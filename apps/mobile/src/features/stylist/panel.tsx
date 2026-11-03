@@ -662,6 +662,17 @@ export function StylistPanel({
             three more rows down the page. */}
         <View
           style={{
+            // One row, not two stacked ones.
+            //
+            // This was a 64pt-tall input with a separate row of
+            // controls underneath, which made the composer about a
+            // fifth of the screen before a single word was typed -
+            // "so rigid and unnecessarily big", and on a phone with
+            // the keyboard up it left almost nothing for the
+            // conversation. Everything now sits on one line and the
+            // box grows only when the sentence does.
+            flexDirection: 'row',
+            alignItems: 'flex-end',
             borderRadius: Radius.lg,
             borderCurve: 'continuous',
             borderWidth: 1,
@@ -670,8 +681,7 @@ export function StylistPanel({
             borderColor: colors.borderStrong,
             backgroundColor: colors.backgroundElement,
             paddingHorizontal: Spacing.two,
-            paddingTop: Spacing.two,
-            paddingBottom: Spacing.one,
+            paddingVertical: Spacing.one,
             gap: Spacing.one,
           }}>
           <TextInput
@@ -682,11 +692,17 @@ export function StylistPanel({
             multiline
             accessibilityLabel="Ask the stylist"
             style={{
-              minHeight: 64,
+              // One line to start. `maxHeight` is what keeps a long
+              // request from eating the thread: past about five lines
+              // the field scrolls inside itself instead of growing.
+              flex: 1,
+              minHeight: TapTarget,
+              maxHeight: 132,
               paddingHorizontal: Spacing.one,
+              paddingTop: Spacing.two,
               color: colors.text,
               fontSize: FontSize.body,
-              textAlignVertical: 'top',
+              textAlignVertical: 'center',
             }}
           />
 
@@ -710,7 +726,6 @@ export function StylistPanel({
               }
             />
 
-            <View style={{ flex: 1 }} />
 
             <MotionPressable
               accessibilityRole="button"

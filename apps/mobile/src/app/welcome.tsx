@@ -1,13 +1,12 @@
 import { Stack, router } from 'expo-router';
 import { MotiView } from 'moti';
 import { useState } from 'react';
-import { Text, useWindowDimensions, View, type LayoutChangeEvent } from 'react-native';
+import { Text, useWindowDimensions, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BRAND } from '@/branding';
 import { ThemedText } from '@/components/themed-text';
-import { Collage } from '@/components/ui/collage';
 import { Grain } from '@/components/ui/grain';
 import {
   MotionPressable,
@@ -23,45 +22,39 @@ import {
   Spacing,
   TapTarget,
 } from '@/constants/theme';
-import { WELCOME_SHEET, WELCOME_STAGE } from '@/features/onboarding/welcome';
 import { useScheme } from '@/hooks/use-theme';
 
 
 /**
  * The page's one orchestrated moment, in milliseconds.
  *
- * The wordmark drops, then twelve prints deal themselves out beneath it,
- * back row first.
- *
  *   masthead  120 ..  ~700   (spring, settles once)
- *   prints      0 .. ~1370   (last card at delay 690 + 680 easing)
- *   button     520 ..   800
+ *   rule      420 ..   700
+ *   button    520 ..   800
  *
  * Written out here rather than scattered through the JSX because the only
  * thing keeping this legal is the total: **WCAG 2.2.2 wants a pause, stop or
  * hide control for motion that runs past five seconds beside other
  * content**, and a pause button on a welcome screen is clutter nobody wants.
+ * It now finishes comfortably inside one second.
  *
- * Two concepts stood here before this one and are worth recording, because
- * both were asked for and both were removed for the same reason. A drawn
- * crowd stood on a globe under the pile; then a single sketched man held the
- * pile over his head and buckled under it as it landed. The figure was
- * always the hard part — line art is transparent, so it needed a silhouette
- * mask behind it to stop the photographs showing through, it could not
- * cross-fade between poses without reading as a double exposure, and at the
- * sizes that left room for it the prints were too small to see who was in
- * them. The pictures are the product. They have the screen now.
- */
-
-/**
- * How much of the stage box the pile is allowed to fill.
+ * **What used to be here.** Twelve photographic prints dealt themselves out
+ * under the wordmark, back row first, taking about 1.4 seconds. Two concepts
+ * preceded even that: a drawn crowd on a globe beneath the pile, then a
+ * single sketched figure buckling under it.
  *
- * One. The pile *is* the screen now rather than a prop in somebody's hands,
- * and the box it is fitted into is already only what the masthead and the
- * button left over. This is here as a name for that decision rather than as
- * a dial — but it is the dial, if the composition ever needs air around it.
+ * All three are gone, on the product owner's instruction (2026-11-03). The
+ * pile was the slowest thing on the first screen a person ever sees, and the
+ * screen says what it needs to say without it: a wordmark set at the full
+ * measure of the page, on grained paper, and one door. A splash screen that
+ * has to show you twelve photographs before it will let you in is arguing
+ * for the product rather than opening it.
+ *
+ * The frames themselves lived in `features/onboarding/welcome.ts` with a
+ * test pinning their stagger and overlap. Both were deleted with this change
+ * rather than left unrendered — see git history if the pile is ever wanted
+ * back. The `Collage` component stays; `components/ui/empty-state` uses it.
  */
-const STAGE_FILL = 1;
 
 /**
  * The size the wordmark is measured at, before it is scaled to the measure.
@@ -83,24 +76,27 @@ const MASTHEAD_TRACKING = -1;
  * new arrival met a grid of collections with no idea whose it was or what it
  * would do for them.
  *
- * **The name, the strapline, and the way in.** Three claims used to sit
- * under the strapline, each naming something the app does. They went because
- * they were saying in words what the pictures above them already say, and a
- * first screen that has to explain itself in a list is not introducing a
- * product so much as apologising for one.
+ * **The name and the way in, and nothing else.** Three claims used to sit
+ * under a strapline, each naming something the app does. They went because
+ * they were saying in words what the pictures above them said already; then
+ * the pictures went too. What is left is the oldest thing a fashion title
+ * does: put the name on the page at full width and get out of the way.
+ *
+ * There is deliberately no strapline. "Dress well, daily" stood here once
+ * and was then repeated on the sign-in screen one tap later — the same words
+ * twice in five seconds. Sign-in carries the sentence now.
  *
  * **One way out, because there is only one.** Every feature is behind
  * sign-in, so the screen offers the door that exists rather than a "look
  * around first" that would dead-end on a redirect back to here.
  *
- * **This is the one screen that gets an orchestrated entrance**, and the
- * reasons are specific rather than a preference for motion. ADR-019 holds
- * that animation competes with the photographs, which are the content — on
- * every other screen. Here the photographs *are* the entrance, there is no
- * grid underneath for the motion to pull attention from, and a first screen
- * is the one place where a product may take two seconds to say what it is.
- * It runs once, on arrival, and nothing on this screen loops: a repeating
- * animation beside text is what WCAG 2.2.2 asks for a pause control for.
+ * **This is the one screen that gets an orchestrated entrance.** ADR-019
+ * holds that animation competes with the photographs, which are the content
+ * — on every other screen. Here there is no grid underneath for motion to
+ * pull attention from, and a first screen is the one place where a product
+ * may take a moment to say what it is. It runs once, on arrival, and nothing
+ * loops: a repeating animation beside text is what WCAG 2.2.2 asks for a
+ * pause control for.
  */
 export default function WelcomeScreen() {
   const colors = Colors[useScheme()];
@@ -115,26 +111,6 @@ export default function WelcomeScreen() {
   const { width: screenWidth } = useWindowDimensions();
   const contentWidth = screenWidth - Spacing.three * 2;
   const [fitted, setFitted] = useState<number | null>(null);
-
-  // What is left for the pile once the masthead, the button and the safe
-  // areas have taken theirs — measured rather than derived from the screen
-  // height, because the masthead's own height depends on how wide the
-  // wordmark turned out to be.
-  const [stageBox, setStageBox] = useState<{ width: number; height: number } | null>(null);
-  const onStageLayout = (event: LayoutChangeEvent) => {
-    const { width, height } = event.nativeEvent.layout;
-    setStageBox((current) =>
-      current?.width === width && current?.height === height ? current : { width, height },
-    );
-  };
-
-  // Fitted inside *both* dimensions. A stage with a fixed aspect ratio and a
-  // full-width card overflows its box on any phone shorter than the one it
-  // was tuned on — and an overflowing collage does not clip, it slides under
-  // the button.
-  const stageWidth = stageBox
-    ? Math.min(stageBox.width, stageBox.height * WELCOME_STAGE) * STAGE_FILL
-    : 0;
 
   // One way in. Browsing without an account used to be the second button
   // here; every feature is behind sign-in now, so a "look around" door would
@@ -152,39 +128,20 @@ export default function WelcomeScreen() {
         style={{
           flex: 1,
           backgroundColor: colors.background,
-          // Near the top, but off it. Hard against the safe area the
-          // masthead read as cropped rather than placed.
           paddingTop: insets.top + Spacing.four,
           paddingBottom: insets.bottom + Spacing.four,
           paddingHorizontal: Spacing.three,
-          // One rhythm down the screen. `space-between` used to distribute
-          // the slack, which put uneven gaps between the four blocks; the
-          // sketch absorbs it now, so every gap here is the same.
           gap: Spacing.three,
         }}
       >
-        {/* The name first and loud.
-
-            It sat under the pictures, at 68, with the strapline beneath it.
-            Moved to the top and set at 92 in the heavy weight: this is the
-            only screen the brand appears on, the thing it has to do is be
-            unmissable, and a fat didone at the top of the page is the oldest
-            move a fashion title has. The strapline went with it — "Dress
-            well, daily" was then repeated on the sign-in screen one tap
-            later, which is the same words twice in five seconds.
-
-            The wordmark settles out of wide tracking rather than fading in,
-            so the entrance animates the typography itself instead of using
-            type as a surface to fade. */}
         {/* A hidden copy, set once, purely to find the size that fills the
             measure.
 
-            The visible wordmark animates its tracking in from 560, so
-            measuring *it* returns the width of a word stretched across three
-            screens. This one carries the settled tracking and the base size,
-            is never painted, and reports the one number needed: how wide
-            `BRAND.name` is at `MASTHEAD_BASE`. The real size follows by
-            proportion. */}
+            The visible wordmark drops in from above, so it cannot be
+            measured while it is moving. This one carries the settled
+            tracking and the base size, is never painted, and reports the one
+            number needed: how wide `BRAND.name` is at `MASTHEAD_BASE`. The
+            real size follows by proportion. */}
         {fitted === null ? (
           <Text
             // Never read aloud and never seen: the visible masthead below
@@ -217,85 +174,91 @@ export default function WelcomeScreen() {
           </Text>
         ) : null}
 
-        {/* The wordmark drops in.
+        {/* The masthead, centred in everything the button and the safe areas
+            left over.
 
-            Two earlier versions were wrong in different ways. It settled out
-            of 14pt of tracking first, which works while the word is narrower
-            than the measure and breaks the moment it fills it — 14pt across
-            six letters is seventy points of extra width the line has nowhere
-            to put, so a wordmark set to span the column spent the animation
-            truncated to "LUXis…". Then a sheet in the page colour slid off
-            it, which preserved the width and was slow and inert to watch.
+            It sat hard against the top when the prints had the middle of the
+            screen. With the middle now empty, a word pinned to the top edge
+            reads as a header with its page missing; centred, it reads as the
+            title page it is. */}
+        <View style={{ flex: 1, justifyContent: 'center', gap: Spacing.two }}>
+          {/* The wordmark drops in.
 
-            It falls instead: a spring, about half a second, with enough
-            weight to settle rather than glide. `translateY` changes nothing
-            about the line's width, so the fitted size is safe. */}
-        <MotiView
-          from={{ translateY: -(fitted ?? MASTHEAD_BASE), opacity: 0 }}
-          animate={{ translateY: 0, opacity: 1 }}
-          // Stiff and lightly damped: it arrives fast and settles once.
-          transition={spring({ damping: 13, stiffness: 240, mass: 0.85, delay: 120 })}>
-          <Animated.Text
-            accessibilityRole="header"
-            numberOfLines={1}
+              Two earlier versions were wrong in different ways. It settled
+              out of 14pt of tracking first, which works while the word is
+              narrower than the measure and breaks the moment it fills it —
+              14pt across six letters is seventy points of extra width the
+              line has nowhere to put, so a wordmark set to span the column
+              spent the animation truncated to "LUXis…". Then a sheet in the
+              page colour slid off it, which preserved the width and was slow
+              and inert to watch.
+
+              It falls instead: a spring, about half a second, with enough
+              weight to settle rather than glide. `translateY` changes nothing
+              about the line's width, so the fitted size is safe. */}
+          <MotiView
+            from={{ translateY: -(fitted ?? MASTHEAD_BASE), opacity: 0 }}
+            animate={{ translateY: 0, opacity: 1 }}
+            // Stiff and lightly damped: it arrives fast and settles once.
+            transition={spring({ damping: 13, stiffness: 240, mass: 0.85, delay: 120 })}>
+            <Animated.Text
+              accessibilityRole="header"
+              numberOfLines={1}
+              style={{
+                fontFamily: Display.variable,
+                // Sized to the measure: the wordmark spans exactly the width
+                // the Get started button does, which is what makes it read as
+                // a masthead rather than as a large word. Falls back to the
+                // base size for the frame before the measurement lands.
+                fontSize: fitted ?? MASTHEAD_BASE,
+                // 1.2, not 1.04. A didone at weight 900 has ascenders well
+                // clear of its cap height, and a line box barely taller than
+                // the point size crops the top of the letters off — which is
+                // not something `displayType`'s leading curve covers, because
+                // this masthead sets its own size outside it.
+                lineHeight: Math.round((fitted ?? MASTHEAD_BASE) * 1.2),
+                color: colors.text,
+                textAlign: 'center',
+                // The heavy end of the weight axis, and the *low* end of the
+                // optical one, which is the part that matters here.
+                //
+                // A didone's optical-size axis controls stroke contrast: the
+                // large-size cuts are drawn with finer hairlines because at
+                // display size that is what looks refined. Left to its own
+                // devices at this size, Bodoni thinned the crossbar of the X
+                // and the thin sides of the U to the point of vanishing. opsz
+                // 6 is the bottom of this file's range (6-96, default 11),
+                // so it is the sturdiest cut the family has: set at 92px it
+                // keeps the drama of the heavy stems while leaving the thin
+                // strokes actually there. Note the default is 11, not the
+                // font size — this is a real reduction, not a no-op.
+                fontVariationSettings: { wght: 900, opsz: 6 },
+              }}>
+              {BRAND.name}
+            </Animated.Text>
+          </MotiView>
+
+          {/* One hairline, drawn across the measure.
+
+              The single piece of structure on the page, and it is doing a
+              job rather than decorating: it states where the measure ends,
+              which is what turns a large word floating in the middle of a
+              screen into a masthead sitting on a page. It is also the oldest
+              device in the trade for exactly that.
+
+              It wipes out from the centre once the wordmark has landed —
+              never before, or the rule is drawing a line under a word that
+              has not arrived. */}
+          <MotiView
+            from={{ scaleX: 0, opacity: 0 }}
+            animate={{ scaleX: 1, opacity: 1 }}
+            transition={timing({ duration: Motion.slow, delay: 420 })}
             style={{
-              fontFamily: Display.variable,
-              // Sized to the measure: the wordmark spans exactly the width
-              // the Get started button does, which is what makes it read as
-              // a masthead rather than as a large word. Falls back to the
-              // base size for the frame before the measurement lands.
-              fontSize: fitted ?? MASTHEAD_BASE,
-              // 1.2, not 1.04. A didone at weight 900 has ascenders well
-              // clear of its cap height, and a line box barely taller than
-              // the point size crops the top of the letters off — which is
-              // not something `displayType`'s leading curve covers, because
-              // this masthead sets its own size outside it.
-              lineHeight: Math.round((fitted ?? MASTHEAD_BASE) * 1.2),
-              color: colors.text,
-              textAlign: 'center',
-              // The heavy end of the weight axis, and the *low* end of the
-              // optical one, which is the part that matters here.
-              //
-              // A didone's optical-size axis controls stroke contrast: the
-              // large-size cuts are drawn with finer hairlines because at
-              // display size that is what looks refined. Left to its own
-              // devices at this size, Bodoni thinned the crossbar of the X
-              // and the thin sides of the U to the point of vanishing. opsz
-              // 6 is the bottom of this file's range (6-96, default 11),
-              // so it is the sturdiest cut the family has: set at 92px it
-              // keeps the drama of the heavy stems while leaving the thin
-              // strokes actually there. Note the default is 11, not the
-              // font size — this is a real reduction, not a no-op.
-              fontVariationSettings: { wght: 900, opsz: 6 },
-            }}>
-            {BRAND.name}
-          </Animated.Text>
-
-        </MotiView>
-
-        {/* The stage: twelve prints, dealt out.
-
-            This is the whole middle of the screen and it is meant to be.
-            Twelve people in twelve aesthetics, none of them repeating who
-            the last one was, is the product's claim made as a picture — and
-            it is a claim that gets weaker the smaller you draw it.
-
-            The cards carry their angles past the edges of this box, which is
-            deliberate: a pile trimmed exactly to a rectangle reads as a
-            grid. */}
-        <View style={{ flex: 1, justifyContent: 'center' }} onLayout={onStageLayout}>
-          {/* Nothing mounts until the masthead has its fitted size. The
-              hidden measure lands one frame in and changes the masthead's
-              height, which resizes this box; a collage already mid-deal at
-              that moment is re-laid out in flight, and the jump reads as
-              the whole screen glitching, button included. Waiting costs
-              one frame and removes the only layout shift the entrance
-              could collide with. */}
-          {fitted !== null && stageWidth > 0 ? (
-            <View style={{ width: stageWidth, alignSelf: 'center' }}>
-              <Collage frames={WELCOME_SHEET} aspectRatio={WELCOME_STAGE} entrance="deal" />
-            </View>
-          ) : null}
+              height: 1,
+              backgroundColor: colors.borderStrong,
+              alignSelf: 'stretch',
+            }}
+          />
         </View>
 
         <MotiView
@@ -303,7 +266,7 @@ export default function WelcomeScreen() {
           animate={{ opacity: 1, translateY: 0 }}
           // 2050 put the primary action behind two seconds of invisibility
           // while it stayed fully hit-testable — a tap on apparently empty
-          // paper navigated. It arrives with the pictures now instead.
+          // paper navigated. It arrives with the masthead now instead.
           transition={timing({ duration: Motion.slow, delay: 520 })}
           style={{ gap: Spacing.two }}
         >

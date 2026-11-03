@@ -128,6 +128,52 @@ body.login-pf {
 /* --- type -------------------------------------------------------------- */
 
 /*
+ * The wordmark, made visible.
+ *
+ * It was in the markup the whole time - keycloak.v2 renders the realm's
+ * display name as `<div id="kc-header-wrapper" class="pf-v5-c-brand">` above
+ * the card - and it could not be seen, because the parent sheet sets
+ *
+ *     color: var(--pf-v5-global--Color--light-100) !important;
+ *
+ * which is near-white. That is correct for PatternFly, whose header sits on
+ * a dark blue band; this theme replaced the band with warm paper over a
+ * photograph, so the name was being painted white on cream at 29px. Present,
+ * sized, centred, and invisible.
+ *
+ * Hence `!important` on the colour: the parent declares it that way, so
+ * nothing weaker wins. It is the only place in this file that needs it for
+ * specificity rather than to beat an inline PatternFly variable.
+ *
+ * The rest makes it the app's masthead rather than a generic site title.
+ * PatternFly sets the name uppercase with 3px of tracking - the wordmark is
+ * mixed-case `LUXish` in a didone on the welcome screen, and spacing letters
+ * apart is the one thing that stops a wordmark reading as a wordmark. Weight
+ * and optical size match the welcome masthead (wght 900, opsz 6); the low
+ * opsz is what keeps the thin strokes of the U and the X actually present.
+ */
+#kc-header-wrapper {
+  font-family: 'Bodoni Moda', Georgia, serif;
+  font-variation-settings: 'opsz' 6, 'wght' 900;
+  font-weight: 900;
+  font-size: clamp(2.5rem, 12vw, 4rem);
+  line-height: 1.2;
+  /* Mixed case, and tracked tight rather than loose. */
+  text-transform: none;
+  letter-spacing: -0.012em;
+  color: var(--luxish-ink) !important;
+  /* The parent centres it; said again so the rule stands on its own if the
+     parent's ever stops. */
+  text-align: center;
+}
+
+#kc-header {
+  /* Air between the wordmark and the card. The parent gives it none, which
+     left the name sitting on the card's top edge. */
+  padding-bottom: 0.5rem;
+}
+
+/*
  * Bodoni for the heading, Archivo for everything read or tapped, which is the
  * same split the app uses. The optical-size axis is pinned low for the same
  * reason it is on the welcome screen: Bodoni's display cuts thin their

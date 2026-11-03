@@ -8,7 +8,6 @@ import { MotionPressable, successFeedback, tapFeedback } from '@/components/ui/m
 import {
   BottomTabInset,
   Colors,
-  Radius,
   Spacing,
   TapTarget,
   labelType,
@@ -85,61 +84,66 @@ export default function WardrobeScreen() {
         paddingBottom: BottomTabInset + insets.bottom + Spacing.five,
         gap: Spacing.three,
       }}>
-      <ThemedText
-        accessibilityRole="header"
-        style={{ ...labelType(28, 800), lineHeight: 34 }}>
-        Wardrobe
-      </ThemedText>
+      {/* The title and the way to the clothes, on one line.
 
-      {/* The clothes, one tap away rather than underneath.
+          The count used to be a full-width filled card of its own
+          under the heading - an icon, two lines of text and a
+          chevron, about a tenth of the screen, repeating a number
+          nobody came here to read. It is a link now, set beside the
+          title at footnote size, and the conversation starts where
+          the card used to.
 
-          A count rather than a grid: it is the one thing worth saying
-          about a wardrobe on a page that is not showing it, and it is
-          also what tells somebody whether there is anything in there
-          to style from. */}
-      <MotionPressable
-        accessibilityRole="button"
-        accessibilityLabel={`Your wardrobe, ${owned.length} pieces`}
-        accessibilityHint="Opens all your pieces, where you can rename or remove them"
-        animateEntrance={false}
-        onPress={() => {
-          void tapFeedback();
-          router.push('/closet');
-        }}
+          It is still the thing that tells somebody whether there is
+          anything to style from, so it keeps the count and keeps its
+          tap target; it just stops being furniture. */}
+      <View
         style={{
           flexDirection: 'row',
-          alignItems: 'center',
+          alignItems: 'baseline',
+          justifyContent: 'space-between',
           gap: Spacing.three,
-          minHeight: TapTarget,
-          paddingVertical: Spacing.two,
-          paddingHorizontal: Spacing.three,
-          borderRadius: Radius.lg,
-          borderCurve: 'continuous',
-          backgroundColor: colors.backgroundElement,
         }}>
-        <SymbolView
-          name={{ ios: 'hanger', android: 'apparel', web: 'apparel' }}
-          size={22}
-          tintColor={colors.text}
-        />
-        <View style={{ flex: 1, gap: Spacing.half }}>
-          <ThemedText type="smallBold">Your wardrobe</ThemedText>
+        <ThemedText
+          accessibilityRole="header"
+          style={{ ...labelType(28, 800), lineHeight: 34 }}>
+          Wardrobe
+        </ThemedText>
+
+        <MotionPressable
+          accessibilityRole="button"
+          accessibilityLabel={`Your clothes, ${owned.length} pieces`}
+          accessibilityHint="Opens all your pieces, where you can rename or remove them"
+          animateEntrance={false}
+          onPress={() => {
+            void tapFeedback();
+            router.push('/closet');
+          }}
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: Spacing.one,
+            // The row is short, so the tap target is widened rather
+            // than made taller - a 44pt-tall link beside a title
+            // would reintroduce the band this change removed.
+            minHeight: TapTarget,
+            paddingLeft: Spacing.two,
+          }}>
           <ThemedText type="small" themeColor="textSecondary">
             {owned.length === 0
-              ? 'Nothing in it yet'
+              ? 'Add clothes'
               : `${owned.length} ${owned.length === 1 ? 'piece' : 'pieces'}`}
           </ThemedText>
-        </View>
-        <SymbolView
-          name={{
-            ios: 'chevron.right',
-            android: 'chevron_right',
-            web: 'chevron_right',
-          }}
-          size={18}
-          tintColor={colors.textSecondary}
-        />
-      </MotionPressable>
+          <SymbolView
+            name={{
+              ios: 'chevron.right',
+              android: 'chevron_right',
+              web: 'chevron_right',
+            }}
+            size={14}
+            tintColor={colors.textSecondary}
+          />
+        </MotionPressable>
+      </View>
 
       {/* The assistant. Idle it is one line and a `+`; the outfit and
           the picture of it worn appear beneath as they arrive. */}

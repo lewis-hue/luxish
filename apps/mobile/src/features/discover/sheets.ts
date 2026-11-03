@@ -18,7 +18,7 @@ import type { CollageFrame } from '@/components/ui/collage';
  * sampled per launch, for the same reason the welcome sheet is — a screen
  * that looks different every time reads as unfinished.
  *
- * **Picked by cast and by aesthetic**, on the rule `WELCOME_SHEET` sets out
+ * **Picked by cast and by aesthetic**, on the rule the welcome sheet used to set out
  * at length: no sheet repeats a region across its three cards, and the
  * aesthetics belong to the audience this is for rather than being whichever
  * pictures sat together nicely. Check both tables before swapping an id.
