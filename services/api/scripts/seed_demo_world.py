@@ -283,7 +283,7 @@ NEAR: dict[str, list[str]] = {
 #: Photographs to post, grouped the way this app groups them.
 #:
 #: **Supplied by the operator, on disk, not fetched from anywhere.** The
-#: rule in `CLAUDE.md` is that no code downloads from Instagram, TikTok
+#: rule in `AGENTS.md` is that no code downloads from Instagram, TikTok
 #: or another platform, and that analysis runs on user-supplied media; this
 #: reads a folder the operator pointed at. Several of the filenames look
 #: like saved pins, so these are fine for a demonstration and are **not**

@@ -1,4 +1,4 @@
-@apps/mobile/AGENTS.md
+The mobile app carries its own guide as well: [apps/mobile/AGENTS.md](apps/mobile/AGENTS.md).
 
 # Repository guide
 

@@ -280,7 +280,7 @@ def test_a_provider_can_be_fetched_by_name() -> None:
     assert registry.get("meta").name == "meta"
     assert registry.names() == ("meta", "chatgpt_plan")
     with pytest.raises(KeyError):
-        registry.get("anthropic")
+        registry.get("not-registered")
 
 
 def test_registering_the_same_name_twice_is_refused() -> None:
