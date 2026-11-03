@@ -190,10 +190,23 @@ async def test_an_avatar_is_stored_as_an_avatar_not_a_photograph(
     assert asset.publication_consent is False
 
 
-async def test_trying_on_edits_the_existing_avatar_rather_than_drawing_a_new_one(
+async def test_having_an_avatar_does_not_move_try_on_onto_it(
     db: AsyncSession,
 ) -> None:
-    """A fresh figure each time would make comparing two outfits meaningless."""
+    """**Making an avatar is not the same as choosing to wear everything
+    on it.**
+
+    This asserted the opposite until 2026-11-03, on the reasoning that
+    an avatar somebody built is a better figure than a shared one.
+    True, and it made the avatar unavoidable: building one once, to see
+    what it looked like, silently redirected every later try-on onto a
+    photorealistic likeness with no way back short of deleting it. The
+    mannequin is the default now; the avatar is a preference.
+
+    The invariant the old test protected - a stable figure, so two
+    outfits can be compared - is untouched. It is simply the same
+    mannequin every time instead of the same avatar.
+    """
     from tests.test_garment_media import InMemoryMediaStore
 
     store = InMemoryMediaStore()
@@ -213,9 +226,63 @@ async def test_trying_on_edits_the_existing_avatar_rather_than_drawing_a_new_one
 
     assert len(renderer.tried) == 1
     source, outfit = renderer.tried[0]
-    # The edit was handed the avatar that was drawn, not a blank.
+    assert source != b"RIFFavatar", "the avatar was used without being asked for"
+    assert source.startswith(b"RIFF"), "a mannequin webp"
+    assert outfit == "a charcoal wool suit"
+
+
+async def test_asking_for_the_avatar_moves_try_on_onto_it(
+    db: AsyncSession,
+) -> None:
+    """And the preference is the only thing that moves it."""
+    from app.domain.mannequin import ON_MY_AVATAR, VEHICLE_KEY
+    from app.models.preference import Preference
+    from tests.test_garment_media import InMemoryMediaStore
+
+    store = InMemoryMediaStore()
+    user_id = await _user(db)
+    renderer = StubRenderer()
+
+    await domain.generate_avatar(
+        db, user_id=user_id, renderer=renderer, store=store
+    )
+    db.add(Preference(user_id=user_id, key=VEHICLE_KEY, value=ON_MY_AVATAR))
+    await db.commit()
+
+    await domain.try_on(
+        db,
+        user_id=user_id,
+        outfit="a charcoal wool suit",
+        renderer=renderer,
+        store=store,
+    )
+
+    source, outfit = renderer.tried[0]
     assert source == b"RIFFavatar"
     assert outfit == "a charcoal wool suit"
+
+
+async def test_the_figure_is_the_same_one_every_time(
+    db: AsyncSession,
+) -> None:
+    """The property the old test existed for, stated directly.
+
+    A fresh figure per try-on would make comparing two outfits
+    meaningless, whichever figure it is.
+    """
+    from tests.test_garment_media import InMemoryMediaStore
+
+    store = InMemoryMediaStore()
+    user_id = await _user(db)
+    renderer = StubRenderer()
+
+    for outfit in ("a charcoal wool suit", "a cream linen shirt"):
+        await domain.try_on(
+            db, user_id=user_id, outfit=outfit, renderer=renderer, store=store
+        )
+
+    first, second = renderer.tried[0][0], renderer.tried[1][0]
+    assert first == second, "the figure changed between two try-ons"
 
 
 async def test_trying_on_without_an_avatar_uses_a_mannequin(
