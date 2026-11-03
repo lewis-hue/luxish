@@ -210,11 +210,13 @@ export default function WardrobeScreen() {
             // reaching for a measured height.
             paddingVertical: Spacing.six,
           }}>
-          <SymbolView
-            name={{ ios: 'sparkles', android: 'auto_awesome', web: 'auto_awesome' }}
-            size={30}
-            tintColor={colors.accent}
-          />
+          {/* No mark above the line.
+
+              A maroon sparkle sat here and three more sat down the
+              thread. They were decoration - they named nothing a
+              person could read - and the greeting is stronger as one
+              sentence on an empty page than as an icon with a
+              caption. */}
           <ThemedText
             style={{
               ...labelType(22, 400),

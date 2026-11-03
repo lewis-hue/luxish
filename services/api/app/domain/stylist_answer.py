@@ -97,7 +97,22 @@ ANSWER_SYSTEM = (
     "from what they own. Be strict: a rough approximation is not a "
     "match. If they cannot, say so plainly - telling somebody they "
     "own something they do not is the one thing that makes this "
-    "useless to them."
+    "useless to them.\n\n"
+    # **The middle answer, which the schema always allowed and the
+    # prompt never asked for.** `has_match` false with `using`
+    # filled in is "not this look, but these of yours would carry
+    # it" - the most useful thing a stylist says, and the only
+    # branch that ends in a picture they can act on. Without this
+    # paragraph the model treated the decision as yes-or-no and the
+    # branch was dead code.
+    "There is a third answer and it is often the right one: they "
+    "cannot make this exact look, but they own pieces that would "
+    "carry its idea. When that is true, set has_match false, name "
+    "those pieces in `using`, and say in your answer what to wear "
+    "and how it differs. Leave `missing` empty in that case - do "
+    "not send somebody shopping for what you have just told them "
+    "they can already wear.\n\n"
+    "Fill `missing` only when they own nothing that works at all."
 )
 
 ANSWER_SCHEMA: dict[str, Any] = {
@@ -341,17 +356,46 @@ class Plan:
 
     @property
     def renders(self) -> bool:
-        return bool(self.wear) or bool(self.look_for)
+        """Whether a picture is worth paying for.
+
+        **Only when they own the clothes.** This used to render for a
+        "no" as well, on the argument that "what would this look like
+        on me" is the question underneath the question. It is - and
+        the answer to it, when the person owns none of the garments,
+        is a picture of somebody else's outfit on their figure. They
+        cannot wear it, cannot buy it from the picture and learn
+        nothing they did not learn from the sentence above it. It
+        costs a paid render and half a minute to say the same "no"
+        again, slower.
+
+        A "no" ends in words and somewhere to buy. A "yes", or a
+        "not quite, but these would do it", ends in a picture -
+        because then there is something to actually put on.
+        """
+        return bool(self.wear)
 
 
 def plan_from(verdict: Verdict) -> Plan:
     """Turn a verdict into the two things that follow it.
 
-    Yes: wear what they own. No: go shopping, and draw that instead.
-    Both end in a picture of them in it, because "what would this
-    look like on me" is the question underneath the question.
+    **Three outcomes, not two.**
+
+    *Yes* - they own what the look needs. Wear it, and draw it.
+
+    *Close* - they own nothing exact, but the model named pieces of
+    theirs that would carry the look. Wear those, draw those, and do
+    not send them shopping: they already have something to try.
+
+    *No* - nothing of theirs works. Words and somewhere to buy, and
+    **no picture**. Drawing somebody else's outfit on their figure
+    when they own none of it teaches them nothing the sentence did
+    not, and costs a paid render to say it.
     """
     if verdict.has_match:
+        return Plan(verdict=verdict, wear=verdict.using)
+    # The middle case. `using` can be non-empty under a "no": the
+    # model names pieces that are close without claiming they match.
+    if verdict.using:
         return Plan(verdict=verdict, wear=verdict.using)
     return Plan(verdict=verdict, look_for=verdict.missing)
 

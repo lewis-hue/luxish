@@ -90,3 +90,92 @@ export function focusesFirst(pathname: string): boolean {
   const [, head] = pathname.split('/');
   return Boolean(head) && FOCUS_FIRST.has(head);
 }
+
+/* -------------------------------------------------------------------------- *
+ * Direction, not just depth
+ *
+ * `immersed` above answers "is this a looking page or a browsing
+ * page", which is about *where* somebody is. This answers a different
+ * question: which way are they going.
+ *
+ * **Why direction predicts intent.** Scrolling down is reading
+ * forward - more of what you came for, and the chrome is in the way.
+ * Scrolling back up is almost never re-reading on a feed; it is
+ * heading for the top, which is where the way out lives. So the
+ * conventional behaviour across iOS Safari, Material's scroll-aware
+ * app bar and essentially every feed is: hide while going down,
+ * reveal the instant somebody comes back up. The bar is there exactly
+ * when it is about to be wanted, and absent the rest of the time.
+ *
+ * Three rules keep it from being annoying, and all three come from
+ * the ways this pattern is usually got wrong:
+ *
+ *   - **Near the top it is always shown.** Hiding the bar at rest on
+ *     a short page leaves navigation that has to be discovered.
+ *   - **Hiding takes sustained travel; revealing does not.** The
+ *     costs are asymmetric. Hiding too eagerly flickers the chrome;
+ *     revealing too eagerly shows a bar nobody minds. Reveal on the
+ *     first real upward movement, hide only after a deliberate push
+ *     down.
+ *   - **Travel accumulates in one direction and resets when it
+ *     turns.** Without that, jitter around a single threshold toggles
+ *     it continuously - the same failure `STEADY_BAND` exists for.
+ * -------------------------------------------------------------------------- */
+
+/** Movement smaller than this is a finger resting, not a scroll. */
+export const JITTER = 4;
+
+/** Sustained downward travel before the bar stands down. */
+export const HIDE_AFTER = 72;
+
+/** Upward travel that brings it straight back. */
+export const REVEAL_AFTER = 16;
+
+/** Above this the bar is always shown, whatever the direction. */
+export const ALWAYS_SHOWN_ABOVE = 64;
+
+export interface Scrolling {
+  /** Accumulated travel in the current direction. Negative is upward. */
+  travel: number;
+  /** Where the last sample was. */
+  lastY: number;
+  /** Whether the bar is currently standing down. */
+  hidden: boolean;
+}
+
+export const AT_REST: Scrolling = { travel: 0, lastY: 0, hidden: false };
+
+/**
+ * Fold one scroll sample into the decision.
+ *
+ * Pure, and returns the whole state, so the caller keeps no logic and
+ * this can be tested without a scroll view.
+ */
+export function scrolled(was: Scrolling, offsetY: number): Scrolling {
+  const moved = offsetY - was.lastY;
+
+  // Resting, or the rubber-band above the top of the list.
+  if (Math.abs(moved) < JITTER || offsetY <= 0) {
+    return {
+      travel: was.travel,
+      lastY: offsetY,
+      hidden: offsetY <= ALWAYS_SHOWN_ABOVE ? false : was.hidden,
+    };
+  }
+
+  // Turning round starts the count again, which is what stops a
+  // wobble from accumulating its way across a threshold.
+  const sameWay = (moved > 0) === (was.travel > 0);
+  const travel = sameWay ? was.travel + moved : moved;
+
+  if (offsetY <= ALWAYS_SHOWN_ABOVE) {
+    return { travel, lastY: offsetY, hidden: false };
+  }
+  if (travel <= -REVEAL_AFTER) {
+    return { travel, lastY: offsetY, hidden: false };
+  }
+  if (travel >= HIDE_AFTER) {
+    return { travel, lastY: offsetY, hidden: true };
+  }
+  return { travel, lastY: offsetY, hidden: was.hidden };
+}

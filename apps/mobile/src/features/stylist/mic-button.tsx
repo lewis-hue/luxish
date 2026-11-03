@@ -55,6 +55,8 @@ export function MicButton({
   const [working, setWorking] = useState(false);
   /** The file being written, so a release knows there is one to finish. */
   const writing = useRef(false);
+  /** Open in progress, so a second press-in does not race the first. */
+  const starting = useRef(false);
 
   // `int16` rather than the default `float32`: a 16-bit WAV is what the
   // vendor's ASR expects, and asking the platform for it avoids a
@@ -66,8 +68,13 @@ export function MicButton({
   });
 
   const start = async () => {
+    // A second press-in before the first has finished opening the
+    // stream is the other way two recordings end up asked for.
+    if (starting.current || recording) return;
+    starting.current = true;
     const { granted } = await requestRecordingPermissionsAsync();
     if (!granted) {
+      starting.current = false;
       Alert.alert(
         'Microphone access needed',
         'Grant access in Settings to talk to the stylist. Typing keeps working.',
@@ -82,12 +89,41 @@ export function MicButton({
       // file comes back empty. See `features/audio/session`.
       await openForRecording();
       await stream.start();
+
+      // **Clear any recording the native stream still thinks it has.**
+      //
+      // This is the bug that made talking fail across the whole app:
+      //
+      //   Calling the 'startFileRecordingAsync' function has failed
+      //   -> A file recording is already in progress. Each stream
+      //      supports one file recording at a time.
+      //
+      // `writing` is a React ref standing in for native state, and
+      // the two drift apart the moment anything goes wrong between
+      // them - a `stop()` whose `stopFileRecordingAsync` threw, a
+      // release that never arrived because the component unmounted
+      // mid-gesture, a double press-in. Once they had drifted the
+      // ref said "nothing is recording" for ever and every
+      // subsequent press hit the same refusal, which is why it
+      // presented as permanently broken rather than as flaky.
+      //
+      // Asking the stream to stop first makes the ref's accuracy
+      // irrelevant: either there was a recording and it is now
+      // finished, or there was not and this throws and is ignored.
+      try {
+        await stream.stopFileRecordingAsync();
+      } catch {
+        // Nothing was recording. The ordinary case.
+      }
+
       // Written straight to a WAV by the platform: see `voice.ts` for
       // why that matters more than it sounds.
       await stream.startFileRecordingAsync({ format: 'wav' });
       writing.current = true;
+      starting.current = false;
     } catch (caught) {
       setRecording(false);
+      starting.current = false;
       // **Say what actually went wrong.**
       //
       // This was a bare `catch {}` behind the words "Try again, or

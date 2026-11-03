@@ -197,17 +197,43 @@ def test_yes_wears_what_they_own() -> None:
     assert plan.renders
 
 
-def test_no_goes_shopping_and_still_draws_it() -> None:
-    """**"What would this look like on me" is the question underneath.**
+def test_a_no_goes_shopping_and_pays_for_no_picture() -> None:
+    """**Owning none of it means there is nothing to draw.**
 
-    A "no" that only lists things to buy has answered half of it.
+    This asserted the opposite until 2026-11-03, on the argument that
+    "what would this look like on me" is the question underneath. It
+    is - and when the person owns none of the garments, the answer is
+    somebody else's outfit on their figure. They cannot wear it and
+    cannot buy it from the picture, so a paid render and half a
+    minute buys a slower restatement of the "no" above it.
     """
     plan = plan_from(
         Verdict(answer="No.", has_match=False, missing=("cream trousers",))
     )
     assert plan.wear == ()
     assert plan.look_for == ("cream trousers",)
-    assert plan.renders, "a no still ends in a picture of them in it"
+    assert not plan.renders, "a no must not pay for a render"
+
+
+def test_pieces_that_would_carry_the_look_are_worn_not_shopped() -> None:
+    """**The middle answer.**
+
+    Not an exact match, but the model named things of theirs that
+    would do it. That is worth drawing - there is something to
+    actually put on - and it is not worth sending them shopping for
+    what they have been told they can already wear.
+    """
+    plan = plan_from(
+        Verdict(
+            answer="Not exactly, but your charcoal trousers would carry it.",
+            has_match=False,
+            using=(MINE[0],),
+            missing=("cream trousers",),
+        )
+    )
+    assert plan.wear == (MINE[0],)
+    assert plan.renders
+    assert plan.look_for == (), "do not shop for what they can already wear"
 
 
 def test_a_no_with_nothing_to_suggest_renders_nothing() -> None:
