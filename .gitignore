@@ -71,3 +71,18 @@ example
 
 # EAS Simulator session file — carries a daemon token.
 .env.eas-simulator
+
+# Local process logs from scripts/dev-stack.sh
+.devlogs/
+
+# Training and evaluation imagery. Large binaries, kept out of the app bundle
+# and out of git history; copy them in from wherever they are kept.
+datasets/
+
+# Local object storage. Every photograph anybody uploaded to the dev
+# stack lands here, and since data export shipped, so does a zip
+# holding one person's entire account - wardrobe, conversations and
+# all. 695 untracked files sat here with nothing stopping a
+# `git add -A` from committing them.
+services/api/.media/
+.media/

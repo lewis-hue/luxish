@@ -33,12 +33,16 @@ EXPECTED_PREFIXES: tuple[str, ...] = (
     "/v1/social",
     "/v1/regional",
     "/v1/stylist",
+    "/v1/consents",
+    "/v1/avatar",
 )
 
 
 def _router_modules() -> tuple:
     from app.routers import (
         auth,
+        avatar,
+        consents,
         regional,
         social_import,
         stylist,
@@ -47,7 +51,17 @@ def _router_modules() -> tuple:
         wardrobe_media,
     )
 
-    return (auth, uploads, wardrobe, wardrobe_media, social_import, regional, stylist)
+    return (
+        auth,
+        avatar,
+        consents,
+        uploads,
+        wardrobe,
+        wardrobe_media,
+        social_import,
+        regional,
+        stylist,
+    )
 
 
 def _declared() -> list[tuple[str, str, str]]:
@@ -170,3 +184,43 @@ def test_selecting_a_subset_gives_exactly_that_subset() -> None:
     from app.workers.runner import all_handlers
 
     assert set(all_handlers(["media.derive"])) == {"media.derive"}
+
+
+async def test_api_startup_points_enqueue_at_the_broker() -> None:
+    """Writing a job row is not enqueuing it.
+
+    ``enqueue`` commits to PostgreSQL and then calls ``_notify`` to wake a
+    worker. With no dispatcher registered, ``_notify`` returns silently: the
+    row is durable, no worker is ever told it exists, and the only thing that
+    finds it is the sweeper on its next pass. That is the difference between a
+    photograph being sorted in seconds and a spinner that outlives the user's
+    patience, and nothing else in the suite notices, because every other test
+    deliberately runs without a broker.
+    """
+    from app.domain import jobs
+
+    app = create_app()
+    before = jobs._dispatcher
+    try:
+        async with app.router.lifespan_context(app):
+            assert jobs._dispatcher is not None, (
+                "the API started without a job dispatcher, so every job it "
+                "enqueues waits for the sweeper instead of a worker"
+            )
+    finally:
+        jobs.set_dispatcher(before)
+
+
+def test_the_sweeper_is_scheduled_rather_than_left_to_the_operator() -> None:
+    """The durability guarantee only holds if something runs the sweeper."""
+    from app.queue.celery_app import QUEUE_MAINTENANCE, celery_app
+
+    schedule = celery_app.conf.beat_schedule
+    entry = next(
+        (e for e in schedule.values() if e.get("task") == "luxish.sweep"), None
+    )
+    assert entry is not None, "luxish.sweep is never scheduled"
+    assert entry["options"]["queue"] == QUEUE_MAINTENANCE
+    # A sweep interval is an upper bound on how long a user waits when a
+    # dispatch is lost, so it belongs in seconds a person would accept.
+    assert 0 < entry["schedule"] <= 60

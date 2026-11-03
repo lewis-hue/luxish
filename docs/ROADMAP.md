@@ -104,7 +104,7 @@ progress. A `planned` row becomes `implemented` when its task's tests pass.
 | Inspiration import from **Instagram** | B | planned | Reference + embed + user-supplied media only (ADR-009). |
 | Inspiration import from **TikTok** | B | planned | Same model as Instagram. |
 | Inspiration import from **Pinterest** | B | planned | Same model as Instagram. |
-| Community: **photo posts** | C | planned | |
+| Community: **photo posts** | C | implemented | Fits: a look reference, a capped caption and tagged pieces, behind a screen that fails closed. |
 | Community: **short-video posts** | C | planned | `expo-video`; `expo-av` is removed on SDK 58 (**Verified**, ADR-015). |
 | Community: **comments** | C | planned | |
 | Community: **likes** | C | planned | |
@@ -112,7 +112,7 @@ progress. A `planned` row becomes `implemented` when its task's tests pass.
 | Community: **follows** | C | planned | |
 | Community: **search** | C | planned | Text and attribute search; the visual query is a separate blocked row in §12. |
 | Community: **creator profiles** | C | planned | |
-| **Item discovery from community posts** | C | planned | Tagged garments and products resolve into the shopping path. |
+| **Item discovery from community posts** | C | implemented | Tagged garments render as taxonomy chips (never the owner's own names) and catalogue products as cards with their retailer and provenance. |
 | **Creator gifting** | D | planned | IAP-purchased gift credits never expire (ADR-011, Task 12). |
 | **Creator earnings** | D | blocked | Unblocked by selecting a payout provider with verified Kenya support. |
 | **Free tier with controlled costs** | D | planned | Per-user allowance reserved in Redis before each model call (Task 7). |
@@ -340,19 +340,21 @@ progress. A `planned` row becomes `implemented` when its task's tests pass.
 
 | Capability | Phase | Status | Note |
 | --- | --- | --- | --- |
-| `Retailer`, `Product`, `Variant`, `Offer`, `MatchEvidence` models | B | planned | Task 11. |
-| `Offer(retailer_id, product_id, price_minor, currency, sizes, availability, ships_to[], retrieved_at, expires_at, source_url)` | B | planned | Task 11; money is integer minor units (ADR-011). |
-| `MatchLabel` = `confirmed_item` / `likely_match` / `similar_style` | B | planned | Task 11. |
-| `classify` is a **pure function of evidence** | B | planned | Task 11. |
+| `Retailer`, `Product`, `Variant`, `Offer`, `MatchEvidence` models | B | implemented | Task 11, lean subset: `Retailer`/`ShopProduct`/`Offer`; variants fold into sizes, match evidence travels on the offer and the response rather than its own table. |
+| `Offer(retailer_id, product_id, price_minor, currency, sizes, availability, ships_to[], retrieved_at, expires_at, source_url)` | B | implemented | Task 11; money is integer minor units (ADR-011). |
+| `MatchLabel` = `confirmed_item` / `likely_match` / `similar_style` | B | implemented | Task 11; the curated provider's evidence caps every result at `similar_style`. |
+| `classify` is a **pure function of evidence** | B | implemented | Task 11; enforced in `app/domain/shopping.py`, where the label is made. |
 | Identifier agreement (GTIN / MPN / retailer product ID) yields `confirmed_item` | B | planned | Task 11. |
 | Corroborating but non-identifying evidence yields `likely_match` | B | planned | Task 11. |
-| **Visual resemblance alone can never yield `confirmed_item`** | B | planned | Task 11 (acceptance criterion 7). |
-| An offer past expiry is labelled `stale` with its timestamp shown, **not dropped** | B | planned | Task 11. |
-| A **verified retailer badge requires a completed verification record** | B | planned | Task 11; absent verification renders `verified_badge: false`. |
+| **Visual resemblance alone can never yield `confirmed_item`** | B | implemented | Task 11 (acceptance criterion 7); pinned by `tests/test_shopping.py`. |
+| An offer past expiry is labelled `stale` with its timestamp shown, **not dropped** | B | implemented | Task 11; the card renders the checked date. |
+| A **verified retailer badge requires a completed verification record** | B | implemented | Task 11; nothing in this build can write a verification, so every retailer renders unverified. |
 | Destination / `ships_to` filtering excludes non-shipping offers | B | planned | Task 11. |
 | Affiliate and sponsored placements **disclosed on the card** and unable to silently reorder results | B | planned | Task 11. |
-| `GET /v1/shopping/search` returning offers with `match_label` and `evidence` | B | planned | Task 11. |
-| Phase B retailer provider | B | simulated | A clearly labelled fixture adapter over a seeded catalogue with real source URLs, behind the interface a live merchant or affiliate feed implements. |
+| **Shops near the user** | C | implemented | `providers/retail.py` + `GET /v1/shops/nearby`: OpenStreetMap via the public Overpass API - free, no credential, real data. Gated on `location_coarse`; coordinates are sent per request, rounded to ~1km before they leave the service, and stored nowhere. Cached a day per coarse point because upstream measured 2.2s / 25.1s / 44.6s on three identical queries and is a shared free service. Mirrors on failure, and a failure is never cached as "no shops here". ODbL attribution travels with every result. |
+| **Named retailers** (Zara, H&M, Shopify) | — | blocked | `GET /v1/shops/retailers` answers `configured: false` with a reason rather than an empty list, because "nothing matched" and "nobody looked" are different answers. None of them has a usable public search: Zara publishes no API, a Shopify storefront needs a token from that store's owner, and the aggregators that cover them are paid and keyed. Unblocked by naming a provider and supplying credentials; `NamedRetailers` is the seam. |
+| `GET /v1/shopping/search` returning offers with `match_label` and `evidence` | B | implemented | Task 11; plus `GET /v1/shopping/recommendations` from stylist gaps and taste. |
+| Phase B retailer provider | B | simulated | Shipped: `scripts/seed_catalog.py`, 7 real retailers, 28 curated references with real outbound search URLs, every offer `availability=unverified` and `provider=curated` on the payload. |
 | **Live retailer / affiliate feed integration** | C | blocked | Unblocked by a merchant or affiliate-network agreement plus feed credentials. |
 | Retailer onboarding and verification operations | C | planned | An `apps/admin` surface. |
 | Outbound click-out with attribution and disclosure | C | planned | ⚠ |
@@ -388,7 +390,7 @@ progress. A `planned` row becomes `implemented` when its task's tests pass.
 
 | Capability | Phase | Status | Note |
 | --- | --- | --- | --- |
-| Create a **photo post** | C | planned | |
+| Create a **photo post** | C | implemented | `POST /v1/posts` into `pending_review`; the composer is `app/compose.tsx`. |
 | Create a **short-video post** | C | planned | `expo-video` only; `expo-av` is removed (**Verified**, ADR-015). |
 | Publication is always a **separate explicit action** from wardrobe capture | C | planned | Private by default is a global constraint. |
 | **Comments** | C | planned | |
@@ -396,6 +398,10 @@ progress. A `planned` row becomes `implemented` when its task's tests pass.
 | **Saves** | C | planned | |
 | **Follows** | C | planned | |
 | Feed with fan-out | C | planned | Fan-out volume is a §17 capacity line. |
+| **Staged discovery recommender** | C | implemented | `app/domain/discovery/`: retrieval (the graph walk-style random walk over the pin/board graph with the multi-hit booster, tag affinity, velocity-based trending, unproven-pin exploration) → one visibility gate → seen-filter → per-source normalisation → blending to a 45/20/20/15 mix with author and tag diversity. Every pin carries why it was chosen. Serves `GET /v1/feed` when no group is named; a group chip still uses `feed.board`, because a chip asks for the whole group rather than a personalised sample of it. `README.md` beside the code states what is matched against the published designs this follows and what is not. |
+| Trending by velocity rather than volume | C | implemented | `discovery/trending.py`: 24h against a 7-day baseline with a floor, a 3-distinct-people threshold, and an optional per-vertical scope so a smaller vertical is not drowned by the largest one. |
+| Impression "seen" filter so a refresh returns new pins | C | implemented | `discovery/seen.py`: Redis sorted set, 3-day rolling window, capped per person, and degrading to "nothing seen" rather than failing the feed. Verified live: two consecutive `GET /v1/feed` calls repeated 0 of 40 pins. |
+| Visual-embedding retrieval (embedding-retrieval equivalent) | — | blocked | The one substantial gap against the described architecture. Unblocked by the same embeddings-provider selection as community visual query (ADR-004); until then retrieval is graph plus tags, which cannot place a pin that has neither. |
 | Community **text / attribute search** | C | planned | |
 | Community **supported visual query** | — | blocked | Unblocked by an embeddings provider selection plus a cost review; attribute retrieval does not deliver visual similarity (**Verified**, ADR-004). |
 | **Creator profiles** | C | planned | |
@@ -416,12 +422,12 @@ progress. A `planned` row becomes `implemented` when its task's tests pass.
 | Report flow from every piece of user content | C | planned | |
 | Moderation queue with its own worker class | C | planned | Task 6 declares the `moderation` queue. |
 | Moderation console in `apps/admin` | C | planned | |
-| Automated pre-screen before publication | C | planned | ⚠ Runs as a queued job; a failure holds the post rather than publishing optimistically. |
+| Automated pre-screen before publication | C | implemented | `app/workers/screen.py`: a queued job; the caption is fenced as untrusted and photographs are checked by vision; every failure path holds. Verified live, a phone number and a prompt-injection attempt both refused. |
 | Appeals workflow | C | planned | ⚠ |
 | Block and mute controls | C | planned | |
 | **Private by default** — wardrobes and conversations | A | planned | A global constraint, enforced by owner-scoped repository queries (Task 5). |
 | Consent records for publication and for AI processing | A | planned | `app/models/consent.py` (Task 4). |
-| Data export | C | planned | ⚠ |
+| Data export | C | implemented | `app/domain/account_export.py` plus the `account.export` job: an allow-list, never a table walk. Credentials and reports filed *about* somebody are refused by name in `NEVER_EXPORTED`; a zip carries the pictures themselves because a file of URLs dies with the account; the archive is capped and says so; the download is owner-only and expires after 48 hours. Two populated accounts are asserted not to appear in each other's export. |
 | Account deletion removes or tombstones user content | A | planned | Task 4 + Task 6. |
 | **Deletion tombstones that outlive in-flight jobs** | A | planned | Task 6; checking at job start is insufficient because deletion can land mid-job (ADR-012). |
 | Every worker re-checks ownership, deletion state, publication consent, and asset version **in the same transaction** as its write | A | planned | Task 6 `guard_write` (ADR-012). |
@@ -432,6 +438,13 @@ progress. A `planned` row becomes `implemented` when its task's tests pass.
 ---
 
 ## §14 — Subscriptions, gifts, and payouts
+
+> Gifting had a simulated implementation in the app and it was
+> withdrawn: it stood on a member's page as a credit form nobody had
+> asked for, below the photographs people came to see. The ledger
+> table (`credit_ledger_entries`) and its model are still there and
+> untouched - those rows are money - so bringing it back is a router
+> and a screen rather than a schema change.
 
 | Capability | Phase | Status | Note |
 | --- | --- | --- | --- |
@@ -613,7 +626,7 @@ sign-off text. No criterion has been dropped; the count is twenty.
 | 5 | A user who declines device location can still obtain styling from a manually entered place. | B | planned | Task 9 — `test_declined_location_still_permits_manual_styling` (202, no device location involved). |
 | 6 | ⚠ Weather used in a recommendation is either a real reading carrying `source` and `observed_at`, or explicitly flagged as described by the user — never fabricated. | B | planned | Task 9 — `WeatherReading` validation; `described_by_user=True` carries no fabricated `source`. |
 | 7 | A shopping result's match label is earned from evidence: visual similarity alone can never be `confirmed_item`, and identifier agreement is required for it. | B | planned | Task 11 — `test_visual_similarity_alone_cannot_be_confirmed`, `test_gtin_agreement_is_confirmed`. |
-| 8 | An Instagram / TikTok / Pinterest link reports truthfully that it cannot be analysed and offers the user-supplied-media alternative. | B | planned | Task 10 — `test_instagram_link_reports_no_analysis_and_offers_alternative`. |
+| 8 | A third-party platform link reports truthfully that it cannot be analysed and offers the user-supplied-media alternative. | B | planned | Task 10 — `test_instagram_link_reports_no_analysis_and_offers_alternative`. |
 | 9 | No API response or rendered outfit ever exposes another user's wardrobe: owned-garment identity is re-validated at a single chokepoint and cross-user reads return 404, not 403. | B | planned | Tasks 5 and 7 — `test_another_users_garment_is_not_readable`, `test_wardrobe_guard.py` (ADR-010 cites §6, §15, criteria 2 and 9). |
 | 10 | An interrupted upload, resumed twice, creates exactly one garment. | B | planned | Task 13 — `outbox.test.ts`, idempotency key generated before the first attempt. |
 | 11 | ⚠ Every AI-dependent and integration-dependent surface is labelled implemented / simulated / blocked / planned, and a fixture never reads as a live integration. | B | planned | Task 11 fixture labelling plus this document and `INTEGRATION-MATRIX.md`. |

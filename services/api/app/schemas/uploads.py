@@ -8,7 +8,32 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-MediaKind = Literal["garment_photo", "outfit_photo", "inspiration", "avatar"]
+#: What a client may declare on an upload.
+#:
+#: ``profile_banner`` is the picture across the top of somebody's page.
+#: Decoration, shown to everybody who opens the profile, and screened
+#: like a caption for that reason.
+#:
+#: ``avatar_source`` is a photograph of the person themselves, uploaded so
+#: an avatar can be built that looks like them. It is a separate kind from
+#: ``avatar`` - one is what they sent, the other is what was drawn - and
+#: separate from every garment kind, so a picture of a person is never
+#: read as evidence of what they own.
+#:
+#: ``garment_render`` and ``garment_studio`` are deliberately absent: both
+#: are written by this service from something a user already uploaded, and
+#: a client declaring one would be claiming a derivative is an original.
+MediaKind = Literal[
+    "garment_photo",
+    "outfit_photo",
+    "inspiration",
+    "avatar",
+    "avatar_source",
+    "profile_banner",
+    #: A picture attached to a message. Private to the two people in
+    #: that thread, and never read for clothes.
+    "message_media",
+]
 
 
 class UploadAuthorizeRequest(BaseModel):

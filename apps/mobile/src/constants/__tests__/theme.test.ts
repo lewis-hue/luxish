@@ -7,12 +7,17 @@
 import {
   AspectRatio,
   Colors,
+  Display,
   FontSize,
+  OpticalSize,
+  capsLabel,
+  labelType,
   MinFontSize,
   Motion,
   Radius,
   Spacing,
   TapTarget,
+  displayType,
 } from '@/constants/theme';
 
 /** WCAG 2.1 relative luminance. Implemented here rather than pulled in as a dep. */
@@ -172,3 +177,69 @@ function hueOf(hex: string): number {
     max === r ? ((g - b) / d + (g < b ? 6 : 0)) : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
   return h * 60;
 }
+
+describe('displayType', () => {
+  it('tightens tracking as the heading grows', () => {
+    // A serif set at 56px with the spacing it was drawn for at 17px looks
+    // like body copy somebody enlarged. Small type is left alone, because
+    // the correction only applies once the letterforms are large enough for
+    // the default spacing to read as loose.
+    expect(displayType(56).letterSpacing).toBeLessThan(0);
+    expect(displayType(56).letterSpacing).toBeLessThan(displayType(24).letterSpacing);
+    expect(displayType(17).letterSpacing).toBe(0);
+  });
+
+  it('carries weight as an axis rather than leaving it to fontWeight', () => {
+    // With a variable font, fontWeight invites the platform to synthesise a
+    // bold instead of interpolating one.
+    expect(displayType(20, 900).fontVariationSettings.wght).toBe(900);
+    expect(displayType(20).fontVariationSettings.wght).toBe(400);
+  });
+
+  it('names one family, because weight is no longer part of the name', () => {
+    expect(displayType(20).fontFamily).toBe(Display.variable);
+    expect(displayType(20, 900).fontFamily).toBe(Display.variable);
+  });
+});
+
+describe('the two faces', () => {
+  it('never reaches for a system font, and never for the templated pair', () => {
+    // The brief is explicit that no standard system face may appear. The
+    // *second* half of this is newer: Playfair Display on warm cream with
+    // Space Grotesk is the palette generated pages cluster on, and shipping
+    // it put this app inside that cluster. Monospace is the one documented
+    // exception.
+    expect(displayType(20).fontFamily).toBe('BodoniModa');
+    expect(labelType(17).fontFamily).toBe('Archivo');
+  });
+
+  it('cuts a heading for the size it is set at', () => {
+    // The whole reason for a variable didone. At 11pt the hairlines must be
+    // thick enough to survive; at 44px those same hairlines read as clumsy.
+    expect(displayType(44).fontVariationSettings.opsz).toBe(44);
+    expect(displayType(13).fontVariationSettings.opsz).toBe(13);
+  });
+
+  it('clamps the optical size to the range the axis accepts', () => {
+    expect(displayType(4).fontVariationSettings.opsz).toBe(OpticalSize.min);
+    expect(displayType(400).fontVariationSettings.opsz).toBe(OpticalSize.max);
+  });
+
+  it('spans the weights the brief actually asked for', () => {
+    // 100/200 against 800/900 had to be reported as impossible under the
+    // previous pairing: Playfair stops at 400 and Space Grotesk at 300.
+    // Archivo runs 100 to 900, so the light end is finally a real light.
+    expect(labelType(15, 200).fontVariationSettings.wght).toBe(200);
+    expect(labelType(15, 400).fontVariationSettings.wght).toBe(400);
+    expect(labelType(15, 800).fontVariationSettings.wght).toBe(800);
+  });
+
+  it('sets the heavy label without shouting', () => {
+    // Tracked-out caps above every heading is one of the most reliable tells
+    // of a templated page, and on a narrow tile it is also the congestion.
+    const label = capsLabel();
+    expect(label.fontVariationSettings.wght).toBe(800);
+    expect(label).not.toHaveProperty('textTransform');
+    expect(label.letterSpacing).toBeLessThan(1);
+  });
+});

@@ -58,6 +58,7 @@ from app.domain.garment_media import (
     record_categorisation,
 )
 from app.domain.jobs import AssetGone, guard_write
+from app.config import get_settings
 from app.errors import ApiError, CapabilityUnavailable
 from app.models.garment import Garment
 from app.models.job import Job
@@ -365,6 +366,7 @@ class MetaGarmentClassifier:
             ),
             response_format=CATEGORISATION_RESPONSE_FORMAT,
             max_completion_tokens=CATEGORISATION_MAX_TOKENS,
+            reasoning_effort=get_settings().model_reasoning_effort,
             temperature=CATEGORISATION_TEMPERATURE,
             prompt_version=self._prompt_version,
             purpose=CATEGORISATION_PURPOSE,
@@ -458,6 +460,21 @@ async def categorise(
         user_id=payload.user_id,
     )
     content_type = asset.content_type or "image/jpeg"
+
+    # Already sorted, so there is nothing to pay for.
+    #
+    # Outfit detection runs first and, when the photograph turns out to hold
+    # one garment, writes the classification it already made. Calling the
+    # classifier here would buy a second opinion on the same image from the
+    # same vocabulary, at the price of a model call and the seconds somebody
+    # spends watching a spinner for it.
+    garment = await session.get(Garment, payload.garment_id)
+    if garment is not None and garment.inference_version is not None:
+        return {
+            "categorised": False,
+            "reason": "already_categorised",
+            "category": garment.category,
+        }
 
     try:
         image = await store.read(asset)

@@ -78,7 +78,21 @@ function stripExtension(filename: string): string {
   return filename.replace(/\.[^.]+$/, '');
 }
 
-export type PermissionOutcome = 'granted' | 'denied' | 'cancelled';
+/**
+ * Everything that can come back other than photographs.
+ *
+ * `unavailable` is new and was the whole of a bug: the camera can
+ * fail for reasons that are not a refusal - no camera on a simulator,
+ * the hardware busy, the picker throwing - and nothing caught it. The
+ * promise rejected into a handler that did not await it, the sheet
+ * closed, and taking a picture looked like a button that did nothing.
+ * A named outcome means every caller has to say something.
+ */
+export type PermissionOutcome =
+  | 'granted'
+  | 'denied'
+  | 'cancelled'
+  | 'unavailable';
 
 export function useGarmentCapture() {
   const [cameraPermission, requestCamera] = ImagePicker.useCameraPermissions();
@@ -107,6 +121,11 @@ export function useGarmentCapture() {
       });
       if (picked.canceled) return 'cancelled';
       return [await prepare(picked.assets[0])];
+    } catch {
+      // A simulator with no camera, hardware already in use, or a
+      // picker that threw. Reported rather than swallowed: this
+      // rejected silently before, and the camera read as broken.
+      return 'unavailable';
     } finally {
       setBusy(false);
     }
@@ -142,6 +161,8 @@ export function useGarmentCapture() {
           prepared.push(await prepare(asset));
         }
         return prepared;
+      } catch {
+        return 'unavailable';
       } finally {
         setBusy(false);
       }

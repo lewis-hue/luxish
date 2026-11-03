@@ -99,6 +99,11 @@ services:
       # The file MUST be named <realm-name>-realm.json or the import is skipped.
       # Subdirectories are ignored.
       - ./keycloak/import:/opt/keycloak/data/import:ro
+      # The login theme. Mounted rather than baked into an image so editing
+      # the stylesheet is a container restart, not a rebuild. Keycloak ships
+      # its own themes inside a jar and leaves this directory empty, so there
+      # is nothing here to shadow.
+      - ./keycloak/themes:/opt/keycloak/themes:ro
     depends_on:
       postgres:
         condition: service_healthy

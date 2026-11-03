@@ -1,3 +1,5 @@
+import * as Haptics from 'expo-haptics';
+import type { MotiTransitionProp } from 'moti';
 import { useCallback, useEffect } from 'react';
 import { Platform, Pressable, type PressableProps, type ViewStyle } from 'react-native';
 import Animated, {
@@ -154,6 +156,51 @@ export function useEntranceMotion(index = 0): MotionStyle {
   }));
 }
 
+/**
+ * How wide the masthead starts before it settles.
+ *
+ * Large on purpose. A couple of points reads as a glitch; this reads as a
+ * masthead opening, which is the move a fashion title has used on its own
+ * cover for a century.
+ */
+const MASTHEAD_TRACKING = 14;
+
+/**
+ * The wordmark settling out of wide tracking.
+ *
+ * The one place in this app where the *typography* is animated rather than a
+ * surface carrying it, and it is confined to the welcome screen for the
+ * reason every other animation here is confined: on a screen with
+ * photographs, motion competes with the content. On the first screen the
+ * type is the content.
+ *
+ * Reanimated rather than Moti, because `MotiText` is typed off a style union
+ * that `letterSpacing` is not in — `Omit` across `ViewStyle | TextStyle`
+ * keeps only the common keys — so the one property this animates is the one
+ * property it cannot express.
+ *
+ * Note this re-lays-out the text every frame, which is why it is a single
+ * short string and a one-shot. Do not reach for it on a paragraph.
+ */
+export function useMastheadMotion(delayMs = 0, resting = 0): MotionStyle {
+  const progress = useSharedValue(0);
+  const reduced = useReducedMotion();
+
+  useEffect(() => {
+    if (reduced) {
+      write(progress, 1);
+      return;
+    }
+    write(progress, withDelay(delayMs, withTiming(1, { duration: 900 })));
+  }, [delayMs, reduced, progress]);
+
+  return useAnimatedStyle(() => ({
+    opacity: progress.value,
+    letterSpacing:
+      MASTHEAD_TRACKING + (resting - MASTHEAD_TRACKING) * progress.value,
+  }));
+}
+
 /* -------------------------------------------------------------------------- */
 /* State change                                                               */
 /* -------------------------------------------------------------------------- */
@@ -199,18 +246,106 @@ export function usePopMotion(): { style: MotionStyle; pop: () => void } {
  * The lightest tap the platform offers. Anything heavier on a browse grid
  * becomes noise within a few scrolls, which is why there is one helper rather
  * than a choice at each call site.
+ *
+ * **Imported at the top, not awaited per tap.** It used to be a dynamic
+ * `import()`, which bought nothing - the module is a hard dependency
+ * already in the bundle - and cost a promise on the hottest path in the
+ * app. It also made every press untestable: jest cannot run a dynamic
+ * import, so a tap rejected before the handler under test was reached.
  */
 export async function tapFeedback(): Promise<void> {
   if (Platform.OS === 'web') return;
-  const Haptics = await import('expo-haptics');
   await Haptics.selectionAsync();
 }
 
 /** Success feedback, for a completed multi-step action such as a bulk upload. */
 export async function successFeedback(): Promise<void> {
   if (Platform.OS === 'web') return;
-  const Haptics = await import('expo-haptics');
   await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Moti                                                                       */
+/* -------------------------------------------------------------------------- */
+
+/** The subset of Moti's timing config anything in this app actually sets. */
+export interface MotiTiming {
+  duration?: number;
+  delay?: number;
+  /** A continuous pulse. Dropped entirely under Reduce Motion. */
+  loop?: boolean;
+  repeat?: number;
+  repeatReverse?: boolean;
+}
+
+/**
+ * A timing transition for a Moti component.
+ *
+ * The cast is deliberate and lives here rather than at each call site. Moti
+ * 0.30 types `transition` as `MotiTransitionProp<any>`, and because
+ * `keyof any` is `string | number | symbol`, the per-style half of that
+ * intersection becomes an index signature requiring *every* key to be a
+ * transition config. That makes `type: 'timing'` — the value Moti's own docs
+ * use — fail to typecheck. Verified: a transition with no `type` compiles and
+ * the identical object with `type: 'timing'` does not.
+ */
+export function motiTiming(config: MotiTiming): MotiTransitionProp {
+  return { type: 'timing', ...config } as MotiTransitionProp;
+}
+
+/** The subset of Moti's spring config anything in this app actually sets. */
+export interface MotiSpring {
+  damping?: number;
+  stiffness?: number;
+  mass?: number;
+  delay?: number;
+}
+
+/**
+ * A spring transition for a Moti component.
+ *
+ * Same cast, same reason as `motiTiming` above.
+ *
+ * Springs are rare here on purpose — most motion in this app is a settle,
+ * and a settle wants an easing curve. A spring is for the few things that
+ * should arrive with weight: something that *drops*, where a linear landing
+ * reads as a slide rather than as a fall.
+ */
+export function motiSpring(config: MotiSpring): MotiTransitionProp {
+  return { type: 'spring', ...config } as MotiTransitionProp;
+}
+
+/**
+ * The same thing, honouring Reduce Motion, which is how every other primitive
+ * in this file behaves.
+ *
+ * Under the setting a transition collapses to zero and any loop is dropped, so
+ * the component lands on its `animate` values and holds them. A looping pulse
+ * therefore becomes a static tint rather than a faster pulse: Apple asks for
+ * repetitive animation to be *removed*, not sped up.
+ */
+export function useMotiTiming(): (config: MotiTiming) => MotiTransitionProp {
+  const reduced = useReducedMotion();
+  return useCallback(
+    (config: MotiTiming) =>
+      reduced ? motiTiming({ duration: 0, delay: 0 }) : motiTiming(config),
+    [reduced],
+  );
+}
+
+/**
+ * A spring, honouring Reduce Motion.
+ *
+ * Collapses to an instant timing rather than to a slow spring: a damped
+ * spring is still motion, and the setting asks for it to be removed.
+ */
+export function useMotiSpring(): (config: MotiSpring) => MotiTransitionProp {
+  const reduced = useReducedMotion();
+  return useCallback(
+    (config: MotiSpring) =>
+      reduced ? motiTiming({ duration: 0, delay: 0 }) : motiSpring(config),
+    [reduced],
+  );
 }
 
 /* -------------------------------------------------------------------------- */

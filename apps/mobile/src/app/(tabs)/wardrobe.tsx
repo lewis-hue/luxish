@@ -1,81 +1,57 @@
-import { Image } from 'expo-image';
-import { useMemo, useState } from 'react';
-import Animated from 'react-native-reanimated';
-import {
-  ActivityIndicator,
-  Alert,
-  FlatList,
-  Pressable,
-  View,
-  useWindowDimensions,
-} from 'react-native';
+import { router } from 'expo-router';
+import { SymbolView } from 'expo-symbols';
+import { Alert, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
+import { MotionPressable, successFeedback, tapFeedback } from '@/components/ui/motion';
 import {
-  AspectRatio,
   BottomTabInset,
   Colors,
-  Display,
-  FontSize,
-  Motion,
   Radius,
   Spacing,
-  Tracking,
-  toneColor,
+  TapTarget,
+  labelType,
 } from '@/constants/theme';
 import { useFavouriteGarments } from '@/features/discover/saved';
+import { StylistPanel } from '@/features/stylist/panel';
 import { useGarmentCapture } from '@/features/wardrobe/capture';
-import { AVAILABILITY_LABEL, AVAILABILITY_TONE } from '@/features/wardrobe/sample';
-import { useWardrobe, type WardrobeEntry } from '@/features/wardrobe/store';
-import { SLOTS, SLOT_LABELS, type Slot } from '@/features/taxonomy';
+import { useWardrobe } from '@/features/wardrobe/store';
+import { usePullToRefresh } from '@/components/ui/pull-to-refresh';
 import { useScheme } from '@/hooks/use-theme';
 
-import {
-  MotionPressable,
-  successFeedback,
-  tapFeedback,
-  usePopMotion,
-} from '@/components/ui/motion';
-import { GarmentSheet } from '@/features/wardrobe/garment-sheet';
-
-type FilterId = 'all' | Slot | 'favourites';
-
 /**
- * Wardrobe — the user's own items, filters, capture (§3, §5).
+ * The assistant, on the page it belongs to.
  *
- * Filters are the five taxonomy slots rather than ad-hoc groupings, so what the user
- * sees matches what the stylist reasons about. Favourites get their own filter
- * because "show me the clothes I love" is a real and frequent request.
+ * **The clothes moved off it, and that is the point.** This was a grid
+ * of every garment somebody owns, which is fine at twelve and a wall
+ * at a hundred and fifty - and once the stylist sat above it, the
+ * answer it gave had to compete with the entire wardrobe underneath.
+ * The grid is one tap away on `/closet`, where renaming, deleting and
+ * filtering live, and the page somebody opens to *ask* is now about
+ * asking.
  *
- * The sample wardrobe stays visible alongside real garments and stays labelled, so
- * a demonstration item can never be mistaken for something the user owns.
+ * **The outfit and the avatar render in place.** Both used to be on
+ * other screens. An outfit is four garment names, which is a
+ * description of a look rather than a look, so the stylist offers to
+ * draw it on this person's avatar right under the answer.
  */
 export default function WardrobeScreen() {
   const colors = Colors[useScheme()];
+  const refresh = usePullToRefresh();
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
   const favourites = useFavouriteGarments();
   const wardrobe = useWardrobe(favourites.values);
   const capture = useGarmentCapture();
-  const [filter, setFilter] = useState<FilterId>('all');
-  const [selected, setSelected] = useState<WardrobeEntry | null>(null);
 
-  const columns = width >= 700 ? 4 : 3;
-  const gutter = Spacing.two;
+  const owned = wardrobe.entries.filter((entry) => !entry.isSample);
 
-  const visible = useMemo(() => {
-    if (filter === 'all') return wardrobe.entries;
-    if (filter === 'favourites') return wardrobe.entries.filter((entry) => entry.isFavourite);
-    return wardrobe.entries.filter((entry) => entry.slot === filter);
-  }, [filter, wardrobe.entries]);
-
-  const ready = wardrobe.entries.filter((entry) => entry.availability === 'available').length;
-
+  /** Photograph a piece, or take some from the camera roll. */
   const add = async (source: 'camera' | 'library') => {
     const result =
-      source === 'camera' ? await capture.photograph() : await capture.pickFromLibrary();
-
+      source === 'camera'
+        ? await capture.photograph()
+        : await capture.pickFromLibrary();
     if (result === 'denied') {
       Alert.alert(
         source === 'camera' ? 'Camera access needed' : 'Photo access needed',
@@ -83,399 +59,91 @@ export default function WardrobeScreen() {
       );
       return;
     }
+    if (result === 'unavailable') {
+      // Said out loud. This used to reject into nothing, and the
+      // camera read as a button that did nothing at all.
+      Alert.alert(
+        'That could not be opened',
+        'The camera is not available right now. Choosing from your photos still works.',
+      );
+      return;
+    }
     if (result === 'cancelled' || typeof result === 'string') return;
-
     await wardrobe.addMany(result);
     void successFeedback();
   };
 
   return (
-    <>
-      <FlatList
-        style={{ backgroundColor: colors.background }}
-        data={visible}
-        keyExtractor={(item) => item.id}
-        numColumns={columns}
-        key={columns}
-        columnWrapperStyle={{ gap: gutter }}
-        contentContainerStyle={{
-          paddingTop: insets.top + Spacing.three,
-          paddingHorizontal: Spacing.three,
-          paddingBottom: BottomTabInset + insets.bottom + Spacing.five,
-          gap: gutter,
-        }}
-        showsVerticalScrollIndicator={false}
-        ListHeaderComponent={
-          <Header
-            filter={filter}
-            onFilter={setFilter}
-            total={wardrobe.entries.length}
-            ready={ready}
-            favouriteCount={favourites.count}
-            busy={capture.busy}
-            onAdd={add}
-            gutter={gutter}
-          />
-        }
-        renderItem={({ item, index }) => (
-          <GarmentCell
-            entry={item}
-            index={index}
-            onPress={() => setSelected(item)}
-            onToggleFavourite={() => void favourites.toggle(item.id)}
-          />
-        )}
-        ListEmptyComponent={
-          <View style={{ paddingVertical: Spacing.six, alignItems: 'center' }}>
-            <ThemedText type="small" themeColor="textSecondary">
-              {filter === 'favourites'
-                ? 'Tap the heart on anything you love and it will appear here.'
-                : 'Nothing in this group yet.'}
-            </ThemedText>
-          </View>
-        }
-      />
-
-      <GarmentSheet
-        entry={selected}
-        onClose={() => setSelected(null)}
-        onRename={wardrobe.rename}
-        onSetAvailability={wardrobe.setAvailability}
-        onDelete={wardrobe.remove}
-        onToggleFavourite={favourites.toggle}
-        isFavourite={selected ? favourites.has(selected.id) : false}
-      />
-    </>
-  );
-}
-
-function GarmentCell({
-  entry,
-  index,
-  onPress,
-  onToggleFavourite,
-}: {
-  entry: WardrobeEntry;
-  index: number;
-  onPress: () => void;
-  onToggleFavourite: () => void;
-}) {
-  const colors = Colors[useScheme()];
-  const favourite = usePopMotion();
-  const unavailable = entry.availability !== 'available';
-  const badge = AVAILABILITY_LABEL[entry.availability];
-
-  return (
-    <MotionPressable
-      accessibilityRole="button"
-      accessibilityLabel={`${entry.name}${badge ? `. ${badge}` : ''}`}
-      index={index}
-      onPress={onPress}
-      style={{ flex: 1, gap: Spacing.one }}>
-      <View
-        style={{
-          borderRadius: Radius.md,
-          borderCurve: 'continuous',
-          overflow: 'hidden',
-          backgroundColor: colors.backgroundElement,
-          borderWidth: 1,
-          borderColor: colors.border,
-        }}>
-        <Image
-          source={entry.image ?? (entry.uri ? { uri: entry.uri } : undefined)}
-          placeholder={entry.blurhash ? { blurhash: entry.blurhash } : undefined}
-          cachePolicy="memory-disk"
-          contentFit="cover"
-          transition={Motion.base}
-          accessible={false}
-          style={{
-            width: '100%',
-            aspectRatio: AspectRatio.garment,
-            // Dimmed, not hidden: an unavailable garment still exists, and hiding
-            // it makes the wardrobe look wrong.
-            opacity: unavailable ? 0.45 : 1,
-          }}
-        />
-
-        {entry.needsSync ? (
-          // Says what is actually true. A garment that has not reached the
-          // server is not "sorting" and must not borrow the spinner that
-          // means the server is working, or the wait looks like progress
-          // when nothing is happening at all.
-          <View
-            accessible
-            accessibilityLabel={`${entry.name}. ${entry.syncError ?? 'Not uploaded yet'}`}
-            style={{
-              position: 'absolute',
-              left: Spacing.one,
-              top: Spacing.one,
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: Spacing.one,
-              paddingHorizontal: Spacing.two,
-              paddingVertical: 3,
-              borderRadius: Radius.full,
-              backgroundColor: 'rgba(16,12,11,0.72)',
-            }}>
-            <View
-              style={{
-                width: 6,
-                height: 6,
-                borderRadius: Radius.full,
-                backgroundColor: toneColor(colors, entry.syncError ? 'warning' : 'muted'),
-              }}
-            />
-            <ThemedText
-              type="small"
-              style={{ fontSize: FontSize.meta, color: 'rgba(255,255,255,0.94)' }}>
-              {entry.syncError ? 'Sign in to upload' : 'Not uploaded'}
-            </ThemedText>
-          </View>
-        ) : null}
-
-        {entry.status === 'pending' ? (
-          <View
-            accessible
-            accessibilityLabel={`Sorting ${entry.name}`}
-            accessibilityState={{ busy: true }}
-            style={{
-              position: 'absolute',
-              inset: 0,
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: 'rgba(16,12,11,0.35)',
-            }}>
-            <ActivityIndicator color="#FFFFFF" />
-          </View>
-        ) : null}
-
-        {/* Favourite is a direct tap on the cell — burying "I love this" behind a
-            detail screen means it never gets used. */}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={
-            entry.isFavourite ? `Remove ${entry.name} from favourites` : `Favourite ${entry.name}`
-          }
-          accessibilityState={{ selected: entry.isFavourite }}
-          onPress={() => {
-            // Pop on the way *in* only. A heart that silently changes colour
-            // is easy to miss, and missing it means tapping twice.
-            if (!entry.isFavourite) favourite.pop();
-            void tapFeedback();
-            onToggleFavourite();
-          }}
-          hitSlop={12}
-          style={{
-            position: 'absolute',
-            top: Spacing.one,
-            right: Spacing.one,
-            width: 28,
-            height: 28,
-            alignItems: 'center',
-            justifyContent: 'center',
-            borderRadius: Radius.full,
-            backgroundColor: 'rgba(16,12,11,0.5)',
-          }}>
-          <Animated.View style={favourite.style}>
-            <ThemedText
-              style={{
-                fontSize: FontSize.footnote,
-                color: entry.isFavourite ? '#FF8FA8' : '#FFFFFF',
-              }}>
-              {entry.isFavourite ? '♥' : '♡'}
-            </ThemedText>
-          </Animated.View>
-        </Pressable>
-
-        {badge ? (
-          <View
-            style={{
-              position: 'absolute',
-              left: Spacing.one,
-              bottom: Spacing.one,
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: Spacing.one,
-              paddingHorizontal: Spacing.two,
-              paddingVertical: 3,
-              borderRadius: Radius.full,
-              backgroundColor: 'rgba(16,12,11,0.72)',
-            }}>
-            {/*
-              A coloured dot beside the word, never colour alone. WCAG 1.4.1
-              forbids colour as the sole carrier of meaning, and the pill sits
-              over an unknown photograph where a tint would be unreliable
-              anyway. The text stays white so it is legible regardless; the dot
-              is what carries the state at a glance.
-            */}
-            <View
-              style={{
-                width: 6,
-                height: 6,
-                borderRadius: Radius.full,
-                backgroundColor: toneColor(colors, AVAILABILITY_TONE[entry.availability]),
-              }}
-            />
-            <ThemedText
-              type="small"
-              style={{ fontSize: FontSize.meta, color: 'rgba(255,255,255,0.94)' }}>
-              {badge}
-            </ThemedText>
-          </View>
-        ) : null}
-      </View>
-
-      <View style={{ gap: 1 }}>
-        <ThemedText type="small" numberOfLines={1} style={{ fontSize: FontSize.caption }}>
-          {entry.name}
-        </ThemedText>
-        {entry.isSample ? (
-          <ThemedText
-            type="small"
-            themeColor="textSecondary"
-            style={{ fontSize: FontSize.meta }}>
-            Sample
-          </ThemedText>
-        ) : null}
-      </View>
-    </MotionPressable>
-  );
-}
-
-function Header({
-  filter,
-  onFilter,
-  total,
-  ready,
-  favouriteCount,
-  busy,
-  onAdd,
-  gutter,
-}: {
-  filter: FilterId;
-  onFilter: (id: FilterId) => void;
-  total: number;
-  ready: number;
-  favouriteCount: number;
-  busy: boolean;
-  onAdd: (source: 'camera' | 'library') => void;
-  gutter: number;
-}) {
-  const colors = Colors[useScheme()];
-
-  const filters: { id: FilterId; label: string }[] = [
-    { id: 'all', label: 'All' },
-    ...SLOTS.map((slot) => ({ id: slot as FilterId, label: SLOT_LABELS[slot] })),
-    { id: 'favourites', label: `Loved${favouriteCount ? ` (${favouriteCount})` : ''}` },
-  ];
-
-  return (
-    <View style={{ gap: Spacing.three, marginBottom: gutter }}>
-      <View style={{ gap: Spacing.half }}>
-        <ThemedText
-          type="small"
-          themeColor="textSecondary"
-          style={{
-            fontSize: FontSize.meta,
-            letterSpacing: Tracking.wide,
-            textTransform: 'uppercase',
-          }}>
-          {ready} of {total} ready to wear
-        </ThemedText>
-        <ThemedText
-          style={{
-            fontFamily: Display.regular,
-            fontSize: 44,
-            lineHeight: 46,
-            letterSpacing: -0.5,
-            color: colors.text,
-          }}>
-          Wardrobe
-        </ThemedText>
-      </View>
-
-      <View style={{ flexDirection: 'row', gap: Spacing.two }}>
-        <AddButton label="Take a photo" onPress={() => onAdd('camera')} busy={busy} primary />
-        <AddButton label="Choose photos" onPress={() => onAdd('library')} busy={busy} />
-      </View>
-
+    <ScrollView
+      style={{ backgroundColor: colors.background }}
+      showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
+      refreshControl={refresh.control}
+      contentContainerStyle={{
+        paddingTop: insets.top + Spacing.three,
+        paddingHorizontal: Spacing.three,
+        paddingBottom: BottomTabInset + insets.bottom + Spacing.five,
+        gap: Spacing.three,
+      }}>
       <ThemedText
-        type="small"
-        themeColor="textSecondary"
-        style={{ fontSize: FontSize.caption }}>
-        Up to 20 at once. Sorted and tidied automatically. Rename anything.
+        accessibilityRole="header"
+        style={{ ...labelType(28, 800), lineHeight: 34 }}>
+        Wardrobe
       </ThemedText>
 
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two }}>
-        {filters.map((option) => {
-          const active = option.id === filter;
-          return (
-            <Pressable
-              key={option.id}
-              accessibilityRole="button"
-              accessibilityState={{ selected: active }}
-              onPress={() => onFilter(option.id)}
-              hitSlop={6}
-              style={({ pressed }) => ({
-                minHeight: 34,
-                justifyContent: 'center',
-                paddingHorizontal: Spacing.three,
-                borderRadius: Radius.full,
-                backgroundColor: active ? colors.text : 'transparent',
-                borderWidth: 1,
-                borderColor: active ? colors.text : colors.border,
-                opacity: pressed ? 0.6 : 1,
-              })}>
-              <ThemedText
-                type="small"
-                style={{ fontSize: 13, color: active ? colors.background : colors.textSecondary }}>
-                {option.label}
-              </ThemedText>
-            </Pressable>
-          );
-        })}
-      </View>
-    </View>
-  );
-}
+      {/* The clothes, one tap away rather than underneath.
 
-function AddButton({
-  label,
-  onPress,
-  busy,
-  primary,
-}: {
-  label: string;
-  onPress: () => void;
-  busy: boolean;
-  primary?: boolean;
-}) {
-  const colors = Colors[useScheme()];
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ busy, disabled: busy }}
-      disabled={busy}
-      onPress={onPress}
-      style={({ pressed }) => ({
-        flex: 1,
-        minHeight: 46,
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderRadius: Radius.md,
-        borderCurve: 'continuous',
-        backgroundColor: primary ? colors.accent : 'transparent',
-        borderWidth: 1,
-        borderColor: primary ? colors.accent : colors.border,
-        opacity: busy ? 0.6 : pressed ? 0.75 : 1,
-      })}>
-      {busy ? (
-        <ActivityIndicator color={primary ? colors.accentText : colors.text} />
-      ) : (
-        <ThemedText type="smallBold" style={{ color: primary ? colors.accentText : colors.text }}>
-          {label}
-        </ThemedText>
-      )}
-    </Pressable>
+          A count rather than a grid: it is the one thing worth saying
+          about a wardrobe on a page that is not showing it, and it is
+          also what tells somebody whether there is anything in there
+          to style from. */}
+      <MotionPressable
+        accessibilityRole="button"
+        accessibilityLabel={`Your wardrobe, ${owned.length} pieces`}
+        accessibilityHint="Opens all your pieces, where you can rename or remove them"
+        animateEntrance={false}
+        onPress={() => {
+          void tapFeedback();
+          router.push('/closet');
+        }}
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: Spacing.three,
+          minHeight: TapTarget,
+          paddingVertical: Spacing.two,
+          paddingHorizontal: Spacing.three,
+          borderRadius: Radius.lg,
+          borderCurve: 'continuous',
+          backgroundColor: colors.backgroundElement,
+        }}>
+        <SymbolView
+          name={{ ios: 'hanger', android: 'apparel', web: 'apparel' }}
+          size={22}
+          tintColor={colors.text}
+        />
+        <View style={{ flex: 1, gap: Spacing.half }}>
+          <ThemedText type="smallBold">Your wardrobe</ThemedText>
+          <ThemedText type="small" themeColor="textSecondary">
+            {owned.length === 0
+              ? 'Nothing in it yet'
+              : `${owned.length} ${owned.length === 1 ? 'piece' : 'pieces'}`}
+          </ThemedText>
+        </View>
+        <SymbolView
+          name={{
+            ios: 'chevron.right',
+            android: 'chevron_right',
+            web: 'chevron_right',
+          }}
+          size={18}
+          tintColor={colors.textSecondary}
+        />
+      </MotionPressable>
+
+      {/* The assistant. Idle it is one line and a `+`; the outfit and
+          the picture of it worn appear beneath as they arrive. */}
+      <StylistPanel embedded onAddGarment={add} />
+    </ScrollView>
   );
 }

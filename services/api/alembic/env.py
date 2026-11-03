@@ -39,12 +39,36 @@ def resolve_url() -> str:
         or config.get_main_option("sqlalchemy.url")
         or os.environ.get("LUXISH_ALEMBIC_URL")
         or os.environ.get("LUXISH_DATABASE_URL")
+        # Last, the application's own settings, which read `.env`.
+        #
+        # Without this, `alembic upgrade head` needs a variable exported into
+        # the shell while `uvicorn app.main` in the same directory does not,
+        # so the two disagree about which database they are talking about.
+        # That is how a migration gets skipped: the app starts fine, the
+        # table is missing, and the only symptom is a 500 with the cause in a
+        # log nobody is tailing.
+        or _settings_url()
     )
     if not url:
         raise RuntimeError(
             "No database URL. Set LUXISH_DATABASE_URL or pass -x url=<dsn>."
         )
     return url
+
+
+def _settings_url() -> str | None:
+    """The URL the service itself would use, or None if it cannot be read.
+
+    Tolerant on purpose: a migration must still run against an explicitly
+    passed DSN on a machine where the application settings cannot load at
+    all, which is exactly the situation somebody is in while repairing one.
+    """
+    try:
+        from app.config import get_settings
+
+        return get_settings().database_url
+    except Exception:  # noqa: BLE001 - settings are a convenience here
+        return None
 
 
 def run_migrations_offline() -> None:

@@ -35,6 +35,17 @@ class User(Base, TimestampMixin):
         sa.Boolean, nullable=False, default=False, server_default=sa.false()
     )
     display_name: Mapped[str | None] = mapped_column(sa.String(120), nullable=True)
+    #: A photograph they chose, as opposed to the figure the avatar draws.
+    #:
+    #: Null is the normal state and not a missing value: most people never
+    #: set one, and the profile falls back to the drawn avatar and then to a
+    #: monogram. `SET NULL` on delete, so losing the media blanks the picture
+    #: rather than taking the account with it.
+    profile_photo_media_asset_id: Mapped[uuid.UUID | None] = mapped_column(
+        sa.Uuid(as_uuid=True),
+        sa.ForeignKey("media_assets.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     locale: Mapped[str | None] = mapped_column(sa.String(16), nullable=True)
     deleted_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True, index=True)
 

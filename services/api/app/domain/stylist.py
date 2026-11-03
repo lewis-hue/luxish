@@ -51,6 +51,7 @@ from typing import Any
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_settings
 from app.ai.prompts.stylist_v1 import VERSION, StylistContext, build_messages
 from app.ai.schemas import INFEASIBLE_REASONS, OUTFIT_ROLES, OUTFIT_SCHEMA
 
@@ -123,6 +124,17 @@ RUN_TIMEOUT_SECONDS = 90.0
 #: composition. Sending the whole wardrobe would blow the token budget in
 #: docs/performance/capacity.md.
 MAX_CANDIDATES = MAX_RESULTS
+#: Output budget for one styling turn.
+#:
+#: 4096 rather than a figure sized to the plan, because the cap covers
+#: *reasoning* tokens too and `muse-spark-1.3` spends them before it emits
+#: anything. Measured: at 1200 the tool-calling turns completed normally
+#: (181, 329 and 722 tokens) and the final answer stopped at exactly 1200 with
+#: `finish_reason: length` — truncated mid-structure, so the run reported
+#: `model_output_unusable` while the model had been working correctly all the
+#: way up to the last turn. The same mistake, at 512, is what made
+#: categorisation report that it "did not return JSON".
+STYLIST_MAX_TOKENS = 4096
 
 #: Why a run has no outfit. Closed, because the app branches on it: "you own
 #: nothing suitable" suggests shopping, "your constraints conflict" suggests
@@ -333,8 +345,17 @@ def _flatten(value: Any) -> list[str]:
 
 
 def describe(garment: Garment) -> str:
-    """Everything about a garment a constraint could reasonably refer to."""
+    """Everything about a garment a constraint could reasonably refer to.
+
+    Includes ``favourite`` for a garment the user has hearted, so "something
+    I love" or "use my favourite jacket" is a constraint the matcher can
+    actually satisfy rather than a phrase it silently ignores.
+    """
     pieces: list[str] = [garment.name or "", garment.category or ""]
+    if garment.is_favourite:
+        # Both words, because people ask for either and the matcher is
+        # whole-word rather than fuzzy.
+        pieces.extend(("favourite", "loved"))
     for key, value in (garment.effective_attributes or {}).items():
         if str(key).lower() in _DESCRIPTIVE_KEYS:
             pieces.extend(_flatten(value))
@@ -690,6 +711,9 @@ async def start_run(
     date: date_type | None = None,
     attachments: Sequence[Attachment] = (),
     conversation_id: uuid.UUID | None = None,
+    garment_id: uuid.UUID | None = None,
+    asset_id: uuid.UUID | None = None,
+    post_id: uuid.UUID | None = None,
     queue: bool = True,
 ) -> StylistRun:
     """Record the request and queue the work. Returns immediately.
@@ -716,6 +740,12 @@ async def start_run(
         required=[],
         locked_items={},
         forbidden_garment_ids=[],
+        # Stored, not acted on. Which of these the request is actually
+        # about is decided on the worker, and each is re-validated against
+        # this user before anything is read from it.
+        subject_garment_id=garment_id,
+        subject_asset_id=asset_id,
+        subject_post_id=post_id,
         prompt_version=VERSION,
     )
     session.add(run)
@@ -929,7 +959,23 @@ async def candidate_garments(
                     Garment.deleted_at.is_(None),
                     Garment.availability.in_(STYLEABLE_AVAILABILITY),
                 )
-                .order_by(Garment.created_at.asc(), Garment.id.asc())
+                # Favourites first, and the cap below is the whole reason.
+                #
+                # This list is truncated to MAX_CANDIDATES, so ordering is not
+                # a preference — it decides what the model is allowed to see
+                # at all. Ordered only by age, a wardrobe larger than the cap
+                # silently hides the garments the user said they love behind
+                # whatever they happened to add first, and the stylist builds
+                # outfits from clothes they were never keen on while never
+                # being shown the ones they were.
+                #
+                # Age still breaks the tie inside each group, so the order is
+                # total and a run is reproducible.
+                .order_by(
+                    Garment.is_favourite.desc(),
+                    Garment.created_at.asc(),
+                    Garment.id.asc(),
+                )
             )
         ).all()
     )
@@ -951,6 +997,85 @@ def _nudge(reason: str, detail: str) -> AIMessage:
             "the wardrobe can, return feasible: false with the reason."
         ),
     )
+
+
+async def _route_intent(
+    session: AsyncSession,
+    run: StylistRun,
+    *,
+    registry: ProviderRegistry,
+    subject: RoutingSubject | None = None,
+) -> StylistRunView | None:
+    """Decide what the request is for, and do it if it is not styling.
+
+    Returns a finished view when the request was something other than
+    building an outfit, and ``None`` when the styling loop should run.
+
+    A failure to *route* is never a failure of the run: anything that
+    cannot be decided becomes a styling request, which is the behaviour
+    this screen had before it could do anything else.
+    """
+    from app.domain import assistant
+
+    provider = None
+    try:
+        provider = registry.select(
+            Capabilities(text_in=True, text_out=True, structured_output=True),
+            subject or await load_routing_subject(session, run.user_id),
+        )
+    except Exception:  # noqa: BLE001 - no provider means the cheap prior alone
+        provider = None
+
+    intent = await assistant.classify(
+        text=run.request_text,
+        has_picture=run.subject_garment_id is not None
+        or run.subject_asset_id is not None,
+        has_fit=run.subject_post_id is not None,
+        provider=provider,
+        user_id=run.user_id,
+    )
+    run.intent = intent
+    await session.commit()
+
+    if intent == "style":
+        return None
+
+    outcome = await assistant.dispatch(
+        session,
+        user_id=run.user_id,
+        intent=intent,
+        text=run.request_text,
+        garment_id=run.subject_garment_id,
+        asset_id=run.subject_asset_id,
+        post_id=run.subject_post_id,
+    )
+    if not outcome.handled:
+        return None
+
+    # `completed`, which is the state this table defines. "done" is not
+    # one of them, and the enum raised on write rather than at import, so
+    # the run sat in `running` for ever with the work already queued.
+    run.state = "completed"
+    run.progress = 1.0
+    run.finished_at = utcnow()
+    run.reply = outcome.reply
+    # `explanation` is what a client already renders when there is no
+    # outfit, so the answer lands in the thread without a second field
+    # every screen would have to learn about.
+    run.explanation = outcome.reply
+    run.explanation_code = f"assistant_{intent}"
+    session.add(
+        Message(
+            conversation_id=run.conversation_id,
+            run_id=run.id,
+            role="assistant",
+            content=outcome.reply,
+            untrusted=False,
+            position=await _next_message_position(session, run.conversation_id),
+        )
+    )
+    await session.commit()
+    return await load_run_view(session, user_id=run.user_id, run_id=run.id)
 
 
 async def execute_run(
@@ -994,6 +1119,24 @@ async def execute_run(
 
     try:
         await _guard(session, run, bounds)
+
+        # What are they actually asking for?
+        #
+        # The assistant is one input box rather than a grid of capability
+        # tiles, so the verb in the sentence is what chooses between
+        # building an outfit, photographing a garment, making a set of
+        # brand visuals, and putting a fit on somebody. Deciding costs at
+        # most one short model call and happens here, on the worker, where
+        # model calls belong.
+        #
+        # Everything except `style` answers in words and finishes. `style`
+        # falls through into the loop below, which is unchanged.
+        done = await _route_intent(
+            session, run, registry=registry, subject=subject
+        )
+        if done is not None:
+            return done
+
         guidance, geo = await resolve_guidance(
             session,
             user_id=run.user_id,
@@ -1362,7 +1505,12 @@ async def _call_model(
         tools=tuple(tools.as_openai_tools()),
         response_format=JsonSchemaFormat(name="outfit_plan", json_schema=OUTFIT_SCHEMA),
         temperature=0.4,
-        max_completion_tokens=1200,
+        max_completion_tokens=STYLIST_MAX_TOKENS,
+        # Composing an outfit is the one call here where reasoning earns
+        # its latency, so this is the higher dial rather than the shared
+        # one. See `Settings.stylist_reasoning_effort` for the measured
+        # difference.
+        reasoning_effort=get_settings().stylist_reasoning_effort,
     )
     remaining = bounds.remaining
     if remaining <= 0:

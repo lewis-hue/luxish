@@ -20,7 +20,12 @@ from typing import Any
 from uuid import UUID
 
 from app.queue import bridge
-from app.queue.celery_app import QUEUE_MAINTENANCE, celery_app, queue_for
+from app.queue.celery_app import (
+    QUEUE_DEFAULT,
+    QUEUE_MAINTENANCE,
+    celery_app,
+    queue_for,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -145,10 +150,10 @@ def sweep(limit: int = 100) -> dict[str, int]:
 
 
 async def _sweep(*, limit: int) -> dict[str, int]:
+    from app.config import get_settings
     from app.db.session import session_scope
     from app.domain.jobs import ready_job_ids, reclaim_stalled_jobs
     from app.models.job import Job
-    from app.config import get_settings
 
     cfg = get_settings()
 
@@ -189,4 +194,89 @@ async def _sweep(*, limit: int) -> dict[str, int]:
     }
 
 
-__all__ = ["dispatch", "run_job", "sweep"]
+@celery_app.task(
+    name="luxish.recompute_cohorts", queue=QUEUE_MAINTENANCE, acks_late=True
+)
+def recompute_cohorts() -> dict[str, int]:
+    """Re-derive every user's taste cohort from their wardrobe.
+
+    Periodic rather than event-driven, and that is the design rather than a
+    simplification. A cohort recomputed on every garment upload would churn
+    the generated sets it exists to let several people share — the saving
+    comes from a key being *stable* long enough to be worth generating for,
+    and a key that moves whenever somebody photographs a jumper is not.
+
+    Reads nothing but garment category counts and stated answers. Nothing in
+    a cohort identifies a garment or a person, which is what makes the
+    resulting groups safe to generate shared content for.
+    """
+    return bridge.run(_recompute_cohorts())
+
+
+async def _recompute_cohorts() -> dict[str, int]:
+    from app.db.session import session_scope
+    from app.domain.cohort import recompute_all
+    from app.domain.inspiration import refresh_all
+
+    async with session_scope() as session:
+        computed = await recompute_all(session)
+        # In the same task, and in this order. Generating against stale
+        # cohorts would make sets for groups that no longer exist while the
+        # groups that do go without, and splitting them into two scheduled
+        # tasks is how that ordering gets lost.
+        made = await refresh_all(session)
+
+    logger.info(
+        "recomputed taste cohorts", extra={"users": computed, "sets": made}
+    )
+    return {"users": computed, "sets": made}
+
+
+@celery_app.task(name="luxish.deliver_push", queue=QUEUE_DEFAULT, acks_late=True)
+def deliver_push() -> dict[str, Any]:
+    """Hand whatever is due to the push gateway.
+
+    **This is the only thing that sends a notification**, and until it
+    was scheduled nothing did. Every event that notifies somebody -
+    a follow, a saved fit, a finished studio shot, a message - writes
+    a row to the outbox and returns. `push_handlers` existed, read the
+    outbox correctly, and was registered nowhere, so the rows
+    accumulated and no phone ever rang. A queue with no consumer looks
+    exactly like a working one from the side that writes to it, which
+    is why this is asserted in `tests/test_app_wiring.py` rather than
+    left to somebody noticing a quiet phone.
+
+    **On the default queue, not maintenance.** Recomputing taste
+    cohorts runs for minutes on `maintenance`, and a message banner
+    queued behind it would arrive after the conversation ended. The
+    default worker serves both, so this costs nothing and removes the
+    dependency.
+
+    Periodic rather than queued at the moment of the event, because a
+    row carries a `send_after` the event cannot know: quiet hours move
+    it, and batching means a row already waiting has its tally raised
+    instead of a second one being written. The schedule is what turns
+    those into one banner that says twenty.
+    """
+    return bridge.run(_deliver_push())
+
+
+async def _deliver_push() -> dict[str, Any]:
+    from app.db.session import session_scope
+    from app.workers.push import send_due
+
+    async with session_scope() as session:
+        outcome = await send_due(session)
+
+    if outcome["sent"] or outcome["dropped"]:
+        logger.info("drained the push outbox", extra=outcome)
+    return outcome
+
+
+__all__ = [
+    "deliver_push",
+    "dispatch",
+    "recompute_cohorts",
+    "run_job",
+    "sweep",
+]

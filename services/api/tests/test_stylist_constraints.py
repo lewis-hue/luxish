@@ -1059,3 +1059,70 @@ async def test_candidate_retrieval_excludes_unavailable_and_deleted(
         db, user_id=user.id, guidance=ResolvedGuidance()
     )
     assert [g.id for g in candidates] == [keep.id]
+
+
+async def test_favourites_survive_the_candidate_cap(db: AsyncSession) -> None:
+    """Ordering here is not a preference, it is what the model gets to see.
+
+    The candidate list is truncated, so in a wardrobe larger than the cap an
+    age-only order hides the clothes someone said they love behind whatever
+    they happened to add first. The stylist then builds outfits from garments
+    they were never keen on, having never been shown the ones they were.
+    """
+    user = await make_user(db)
+    # Added first, so an age-only order would keep exactly these.
+    for index in range(4):
+        await make_garment(
+            db, user_id=user.id, name=f"ordinary {index}", category="shirt"
+        )
+    loved = await make_garment(db, user_id=user.id, name="loved", category="shirt")
+    await db.execute(
+        sa.update(Garment).where(Garment.id == loved.id).values(is_favourite=True)
+    )
+    await db.commit()
+
+    candidates = await stylist.candidate_garments(
+        db, user_id=user.id, guidance=ResolvedGuidance(), limit=2
+    )
+
+    assert loved.id in [g.id for g in candidates], (
+        "the favourite was cut by the cap despite being the user's stated preference"
+    )
+    assert candidates[0].id == loved.id
+
+
+async def test_the_candidate_order_is_total_so_a_run_is_reproducible(
+    db: AsyncSession,
+) -> None:
+    """Favourites first, then age. Two runs must not disagree."""
+    user = await make_user(db)
+    first = await make_garment(db, user_id=user.id, name="a", category="shirt")
+    second = await make_garment(db, user_id=user.id, name="b", category="shirt")
+
+    once = await stylist.candidate_garments(
+        db, user_id=user.id, guidance=ResolvedGuidance()
+    )
+    twice = await stylist.candidate_garments(
+        db, user_id=user.id, guidance=ResolvedGuidance()
+    )
+    assert [g.id for g in once] == [g.id for g in twice] == [first.id, second.id]
+
+
+async def test_a_favourite_is_describable_so_it_can_be_asked_for(
+    db: AsyncSession,
+) -> None:
+    """"My favourite jacket" has to be a constraint, not a phrase to ignore."""
+    user = await make_user(db)
+    loved = await make_garment(db, user_id=user.id, name="navy blazer", category="jacket")
+    await db.execute(
+        sa.update(Garment).where(Garment.id == loved.id).values(is_favourite=True)
+    )
+    await db.commit()
+    await db.refresh(loved)
+
+    blob = stylist.describe(loved)
+    assert stylist.mentions(blob, "favourite")
+    assert stylist.mentions(blob, "loved")
+
+    plain = await make_garment(db, user_id=user.id, name="grey blazer", category="jacket")
+    assert not stylist.mentions(stylist.describe(plain), "favourite")

@@ -2,8 +2,11 @@
 # Register one Expo Go redirect URI against the *running* local realm.
 #
 # Expo Go has no custom scheme, so `makeRedirectUri` returns
-# `exp://<host>/--/callback`, and the host changes every time a tunnel
-# restarts. A wildcard would cover that and is deliberately NOT in the
+# `exp://<host>:<port>/--/callback`, and the host changes every time a tunnel
+# restarts or the machine's LAN address does. The port moved to 8081 in
+# SDK 54; the committed realm carries loopback entries for 8081 and 19000,
+# but a phone reaches Metro at the machine's LAN address, which is exactly
+# the value that cannot be committed. A wildcard would cover that and is deliberately NOT in the
 # committed realm: an imported `exp://*` would let any application that
 # registers the `exp` scheme receive an authorisation code, and it would be
 # inherited by every environment built from this file.

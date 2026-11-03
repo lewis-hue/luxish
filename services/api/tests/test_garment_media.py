@@ -35,7 +35,6 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import session_factory
-from app.workers.outfit import DETECT_OUTFIT_JOB_KIND
 from app.domain.garment_media import (
     CATEGORIES,
     CATEGORISATION_WRITABLE_COLUMNS,
@@ -75,6 +74,7 @@ from app.workers.categorise import (
     categorise_handlers,
     remove_background,
 )
+from app.workers.outfit import DETECT_OUTFIT_JOB_KIND
 
 
 @pytest.fixture(autouse=True)
@@ -1343,7 +1343,10 @@ async def test_a_claimed_job_carries_everything_the_handler_needs(
     outcomes = await bulk_create_garments(
         db, user_id=user_id, items=[BulkGarmentItem(media_asset_id=asset.id)]
     )
-    claimed = await claim_job(db, kinds=[CATEGORISE_JOB_KIND], worker="test")
+    # Background removal rather than categorisation: the latter is enqueued
+    # with a deliberate head start for detection and is not claimable yet.
+    # The payload is the same for every kind in the pipeline.
+    claimed = await claim_job(db, kinds=[BACKGROUND_REMOVAL_JOB_KIND], worker="test")
 
     assert claimed is not None
     payload = read_payload(claimed)
@@ -1351,6 +1354,40 @@ async def test_a_claimed_job_carries_everything_the_handler_needs(
     assert payload.asset_id == asset.id
     assert payload.asset_version == asset.version
     assert payload.user_id == user_id
+
+
+async def test_categorisation_yields_to_detection_rather_than_racing_it(
+    db: AsyncSession,
+) -> None:
+    """Both used to call a model for the same answer.
+
+    Detection classifies a photograph that holds one garment and writes it.
+    The two sit on different queues and were dispatched together, so they
+    raced: categorisation paid for its own call and had its write discarded as
+    the later one. Holding it back lets detection answer first, and leaving it
+    *enqueued* is what keeps that safe — if detection fails, this still runs.
+    """
+    from app.domain.garment_media import CATEGORISE_HANDICAP_SECONDS
+    from app.workers.outfit import DETECT_OUTFIT_JOB_KIND
+
+    user_id = await make_user(db)
+    asset = await make_asset(db, user_id=user_id)
+    await bulk_create_garments(
+        db, user_id=user_id, items=[BulkGarmentItem(media_asset_id=asset.id)]
+    )
+
+    # Detection is claimable at once.
+    assert await claim_job(db, kinds=[DETECT_OUTFIT_JOB_KIND], worker="test") is not None
+    # Categorisation is not, and that is the point.
+    assert await claim_job(db, kinds=[CATEGORISE_JOB_KIND], worker="test") is None
+
+    # It is queued, not dropped: the fallback has to survive a failed detection.
+    job = await db.scalar(
+        sa.select(Job).where(Job.kind == CATEGORISE_JOB_KIND)
+    )
+    assert job is not None
+    assert job.state == "queued"
+    assert CATEGORISE_HANDICAP_SECONDS > 0
 
 
 # --------------------------------------------------------------------------- #

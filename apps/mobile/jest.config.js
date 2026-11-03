@@ -14,6 +14,10 @@ module.exports = {
   // parse CSS, and the declarations are irrelevant to native token tests.
   moduleNameMapper: {
     '\.(css)$': '<rootDir>/__mocks__/style.js',
+    // Metro resolves a bundled image to an opaque handle; jest has no asset
+    // pipeline, so without this any module registering a cover fails to
+    // resolve and its whole test file vanishes rather than failing visibly.
+    '\.(png|jpg|jpeg|webp|gif|svg|ttf|otf)$': '<rootDir>/__mocks__/asset.js',
   },
   collectCoverageFrom: ['src/**/*.{ts,tsx}', '!src/**/__tests__/**'],
 };

@@ -25,7 +25,11 @@ Every constant in this module is a **verified vendor fact**, fetched on
 
 from __future__ import annotations
 
+import base64
+import json
 import uuid
+
+import httpx
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
@@ -38,6 +42,7 @@ from app.providers.base import (
     AIResponse,
     AIRunRecorder,
     Capabilities,
+    GeneratedImage,
     InMemoryUsageStore,
     InvalidProviderRequest,
     ProviderCapabilities,
@@ -60,6 +65,14 @@ API_KEY_PREFIX = "LLM_"
 #: Verified paths. ``/images/*`` happens to match the OpenAI shape;
 #: ``/asr/transcribe`` does not, which is why transcription is a direct HTTP
 #: call rather than ``client.audio.transcriptions``.
+#:
+#: The transcription request shape, verified against the live endpoint:
+#: two multipart parts named ``request`` (JSON) and ``audio`` (the file).
+#: An OpenAI-style ``file`` part answers "Both a 'request' and an 'audio'
+#: part are required". The JSON must carry ``audioEncoding``, which is
+#: **case-sensitive**: ``"WAV"`` is accepted, ``"wav"`` is a "Malformed
+#: request", and so are ``LINEAR16`` and ``pcm_s16le``. The response
+#: carries ``transcript``, ``turns`` and ``audioDurationMs``.
 IMAGE_GENERATIONS_PATH = "/images/generations"
 IMAGE_EDITS_PATH = "/images/edits"
 TRANSCRIBE_PATH = "/asr/transcribe"
@@ -552,6 +565,117 @@ class MetaProvider:
             cost_micro_minor=cost,
         )
 
+    async def stream(
+        self, request: AIRequest, *, user_id: uuid.UUID | None = None
+    ):
+        """Yield text deltas as they arrive, then record the call.
+
+        **Same reserve, reconcile and record as `complete`.** A
+        streamed call is still a billed call, and an unaccounted one
+        is a cost nobody can attribute - so this takes the identical
+        path and differs only in that the text arrives in pieces.
+
+        `stream_options.include_usage` is what makes reconciliation
+        honest: without it the usage block never arrives and the
+        reservation would be settled against the pre-call estimate,
+        which is an estimate. Verified accepted by the vendor on
+        2026-11-03 along with `stream` itself, both of which were
+        already in `CHAT_BODY_ALLOWLIST`.
+
+        **Mind the token budget.** Reasoning tokens come out of
+        `max_completion_tokens` before any content is emitted, so too
+        small a budget streams a single empty chunk and looks exactly
+        like streaming being unsupported. It is not: 200 tokens gave
+        two empty chunks and 2048 gave six content deltas on the same
+        prompt.
+        """
+        if self._recorder is None:
+            raise RuntimeError(
+                "MetaProvider.stream requires an AIRunRecorder: an "
+                "unaccounted model call is a cost nobody can attribute"
+            )
+
+        model = self.resolve_model(
+            request.required_capabilities(), model=request.model
+        )
+        if model.endpoint != "chat.completions":
+            raise UnsupportedCapability(
+                ("text_out",), f"{model.id} does not serve chat completions"
+            )
+        body = self._build_body(request, model=model)
+        body["stream"] = True
+        body["stream_options"] = {"include_usage": True}
+
+        estimated_tokens = (
+            request.estimated_prompt_tokens() + body["max_completion_tokens"]
+        )
+        reservation = await self._usage.reserve(
+            team_id=self.team_id,
+            model=model.id,
+            tokens=estimated_tokens,
+            micro_minor=token_cost_micro_minor(
+                model.capabilities,
+                input_tokens=request.estimated_prompt_tokens(),
+                output_tokens=body["max_completion_tokens"],
+            ),
+            limits=self.limits_for(model),
+        )
+        run = await self._recorder.start(
+            user_id=user_id,
+            provider=self.name,
+            model=model.id,
+            prompt_version=request.prompt_version,
+            purpose=request.purpose,
+            team_id=self.team_id,
+            reservation_id=reservation.id,
+            currency=model.capabilities.currency,
+        )
+
+        usage_seen: dict[str, int] = {}
+        finish_reason: str | None = None
+        response_id: str | None = None
+        try:
+            stream = await self.client().chat.completions.create(**body)
+            async for chunk in stream:
+                payload = _payload(chunk)
+                response_id = payload.get("id") or response_id
+                for choice in payload.get("choices") or []:
+                    delta = (choice.get("delta") or {}).get("content")
+                    if delta:
+                        yield delta
+                    if choice.get("finish_reason"):
+                        finish_reason = choice["finish_reason"]
+                # Arrives in its own final chunk, after the content.
+                reported = payload.get("usage")
+                if isinstance(reported, dict):
+                    usage_seen = reported
+        except Exception as exc:
+            await self._usage.release(reservation)
+            await self._recorder.fail(
+                run, code=type(exc).__name__, message=str(exc)
+            )
+            raise
+
+        usage = _usage_from(usage_seen)
+        cost = token_cost_micro_minor(
+            model.capabilities,
+            input_tokens=usage.input_tokens,
+            output_tokens=usage.output_tokens,
+        )
+        await self._usage.reconcile(
+            reservation, tokens=usage.total_tokens, micro_minor=cost
+        )
+        await self._recorder.finish(
+            run,
+            input_tokens=usage.input_tokens,
+            output_tokens=usage.output_tokens,
+            cached_input_tokens=usage.cached_input_tokens,
+            reasoning_tokens=usage.reasoning_tokens,
+            cost_micro_minor=cost,
+            finish_reason=finish_reason,
+            response_id=response_id,
+        )
+
     # -- image generation -------------------------------------------------- #
     async def generate_image(
         self, request: AIRequest, *, user_id: uuid.UUID | None = None, count: int = 1
@@ -589,7 +713,7 @@ class MetaProvider:
             currency=model.capabilities.currency,
         )
         try:
-            await self.client().images.generate(
+            generated = await self.client().images.generate(
                 model=model.id, prompt=request.prompt or "", n=count
             )
         except Exception as exc:
@@ -605,6 +729,87 @@ class MetaProvider:
             model=model.id,
             usage=TokenUsage(),
             images=count,
+            image_data=_decode_images(generated),
+            cost_micro_minor=cost,
+        )
+
+
+    async def edit_image(
+        self,
+        request: AIRequest,
+        *,
+        image: bytes,
+        content_type: str = "image/png",
+        user_id: uuid.UUID | None = None,
+    ) -> AIResponse:
+        """Edit at ``POST /v1/images/edits``.
+
+        Separate from :meth:`generate_image` because it takes a source image
+        and answers a different question: not "draw this" but "change this".
+        Verified against the live endpoint, an edit holds the person, the
+        pose, the backdrop and the lighting, and changes only what the prompt
+        names, which is what makes a wardrobe try-on possible at all.
+
+        Priced and rate-limited as an image, so it reserves and reconciles the
+        same way a generation does.
+
+        ``mask`` and ``input_fidelity`` are **not** sent: both are verified
+        400s on this endpoint. Region-limited editing is therefore not
+        available, and the prompt has to carry "keep everything else the same"
+        instead.
+        """
+        if self._recorder is None:
+            raise RuntimeError("MetaProvider.edit_image requires an AIRunRecorder")
+
+        model = self.resolve_model(
+            Capabilities(text_in=True, image_in=True, image_out=True),
+            model=request.model,
+        )
+        if not model.capabilities.image_out:
+            raise UnsupportedCapability(("image_out",), f"{model.id} does not emit images")
+
+        reservation = await self._usage.reserve(
+            team_id=self.team_id,
+            model=model.id,
+            tokens=0,
+            micro_minor=image_cost_micro_minor(model.capabilities, images=1),
+            limits=self.limits_for(model),
+        )
+        run = await self._recorder.start(
+            user_id=user_id,
+            provider=self.name,
+            model=model.id,
+            prompt_version=request.prompt_version,
+            purpose=request.purpose or "image.edit",
+            team_id=self.team_id,
+            reservation_id=reservation.id,
+            currency=model.capabilities.currency,
+        )
+        try:
+            # The declared type has to be the real one. Hardcoding PNG here
+            # was a 400 the moment it met a stored avatar, because this model
+            # returns WEBP and that is what gets saved.
+            declared = (content_type or "image/png").split(";")[0].strip()
+            suffix = declared.rsplit("/", 1)[-1] or "png"
+            edited = await self.client().images.edit(
+                model=model.id,
+                image=(f"avatar.{suffix}", image, declared),
+                prompt=request.prompt or "",
+            )
+        except Exception as exc:
+            await self._usage.release(reservation)
+            await self._recorder.fail(run, code=type(exc).__name__, message=str(exc))
+            raise
+
+        cost = image_cost_micro_minor(model.capabilities, images=1)
+        await self._usage.reconcile(reservation, tokens=0, micro_minor=cost)
+        await self._recorder.finish(run, images=1, cost_micro_minor=cost)
+        return AIResponse(
+            provider=self.name,
+            model=model.id,
+            usage=TokenUsage(),
+            images=1,
+            image_data=_decode_images(edited),
             cost_micro_minor=cost,
         )
 
@@ -636,6 +841,97 @@ class MetaProvider:
     def transcription_url(self) -> str:
         return f"{self._base_url.rstrip('/')}{TRANSCRIBE_PATH}"
 
+    async def transcribe(
+        self,
+        *,
+        audio: bytes,
+        content_type: str = "audio/wav",
+        duration_seconds: float = 0.0,
+        user_id: uuid.UUID | None = None,
+    ) -> str:
+        """Speech to text at ``POST /asr/transcribe``.
+
+        **A plain multipart POST rather than the vendor client.** The path
+        is not OpenAI-shaped — see :data:`TRANSCRIBE_PATH` — so
+        ``client.audio.transcriptions`` addresses the wrong URL. This is
+        the one call in this provider that talks HTTP directly.
+
+        Pre-flighted by :meth:`check_transcription` first, which refuses
+        locally what the vendor would refuse with a 400 or a 413. That
+        matters more here than elsewhere: the thing being rejected is an
+        upload we would have paid to send.
+
+        Billed and recorded like every other model call. An empty
+        transcript is returned as an empty string rather than as a
+        failure: somebody recording silence is not an error.
+        """
+        if self._recorder is None:
+            raise RuntimeError("MetaProvider.transcribe requires an AIRunRecorder")
+
+        self.check_transcription(
+            content_type=content_type,
+            duration_seconds=duration_seconds,
+            byte_size=len(audio),
+        )
+        model = META_MODELS["muse-voice-transcribe-1.0"]
+
+        reservation = await self._usage.reserve(
+            team_id=self.team_id,
+            model=model.id,
+            tokens=0,
+            micro_minor=0,
+            limits=self.limits_for(model),
+        )
+        run = await self._recorder.start(
+            user_id=user_id,
+            provider=self.name,
+            model=model.id,
+            prompt_version=0,
+            purpose="speech.transcribe",
+            team_id=self.team_id,
+            reservation_id=reservation.id,
+            currency=model.capabilities.currency,
+        )
+        try:
+            # **Verified shape, and none of it is the OpenAI one.** The
+            # endpoint wants two multipart parts named `request` and
+            # `audio` — an OpenAI-style `file` part returns
+            # "Both a 'request' and an 'audio' part are required" — and
+            # the JSON part must carry `audioEncoding`, which is
+            # case-sensitive: `"WAV"` is accepted and `"wav"` is a
+            # "Malformed request".
+            async with httpx.AsyncClient(timeout=120.0) as http:
+                response = await http.post(
+                    self.transcription_url(),
+                    headers=self.auth_headers(),
+                    files={
+                        "request": (
+                            None,
+                            json.dumps(
+                                {"model": model.id, "audioEncoding": "WAV"}
+                            ),
+                            "application/json",
+                        ),
+                        "audio": ("speech.wav", audio, content_type),
+                    },
+                )
+            response.raise_for_status()
+            body = response.json()
+        except Exception as exc:  # noqa: BLE001 - every failure is recorded
+            await self._usage.release(reservation)
+            await self._recorder.fail(run, code=type(exc).__name__, message=str(exc))
+            raise
+
+        await self._usage.reconcile(reservation, tokens=0, micro_minor=0)
+        await self._recorder.finish(run, images=0, cost_micro_minor=0)
+        # Verified: the response carries `transcript`, plus `turns` and
+        # `audioDurationMs`. `text` is checked too because it costs
+        # nothing and is the more common spelling elsewhere. A missing
+        # one is an empty transcript rather than a crash: silence
+        # transcribes to "" and that is a real answer, not a failure.
+        text = body.get("transcript") or body.get("text") or ""
+        return str(text).strip()
+
     # -- segmentation: declared, labelled, not implemented ----------------- #
     def segment(self, *, image_ref: str, prompt: str) -> None:
         """``sam-3.1`` segmentation — **planned**, not implemented.
@@ -663,6 +959,26 @@ def _payload(raw: Any) -> Mapping[str, Any]:
     if callable(dump):
         return dump()
     return dict(raw)
+
+
+def _usage_from(reported: Mapping[str, Any] | None) -> TokenUsage:
+    """Token usage out of a streamed call's final chunk.
+
+    Zeroes rather than an exception when the vendor sends no usage
+    block: the reservation is then reconciled to nothing, which
+    under-bills rather than over-bills. Getting a person's reply out
+    matters more than a perfectly settled estimate, and the
+    reservation is released either way.
+    """
+    data = reported or {}
+    details = data.get("completion_tokens_details") or {}
+    prompt_details = data.get("prompt_tokens_details") or {}
+    return TokenUsage(
+        input_tokens=int(data.get("prompt_tokens") or 0),
+        output_tokens=int(data.get("completion_tokens") or 0),
+        cached_input_tokens=int(prompt_details.get("cached_tokens") or 0),
+        reasoning_tokens=int(details.get("reasoning_tokens") or 0),
+    )
 
 
 def _parse_chat_response(
@@ -722,3 +1038,41 @@ __all__ = [
     "MetaModel",
     "MetaProvider",
 ]
+
+
+#: What ``/images/generations`` actually returns, verified against the live
+#: endpoint rather than inferred from the OpenAI-shaped client:
+#:
+#:   top level : created, background, data, output_format, quality,
+#:               safety_identifier, size, usage
+#:   data[i]   : b64_json, revised_prompt, url
+#:
+#: ``url`` is always null, so base64 is the only delivery, and
+#: ``output_format`` reported ``webp`` — not the PNG the client's shape
+#: suggests. Both are read from the response instead of assumed.
+DEFAULT_IMAGE_FORMAT = "webp"
+
+
+def _decode_images(response: Any) -> tuple[GeneratedImage, ...]:
+    """Pull the pictures out of an image-generation response.
+
+    Tolerant on purpose. An entry with neither base64 nor a usable format is
+    skipped rather than raised on: the call has already been made and paid
+    for, and one undecodable image among several should not discard the rest.
+    """
+    payload = response.model_dump() if hasattr(response, "model_dump") else dict(response)
+    declared = str(payload.get("output_format") or DEFAULT_IMAGE_FORMAT).lower()
+    content_type = f"image/{declared}"
+
+    images: list[GeneratedImage] = []
+    for entry in payload.get("data") or ():
+        encoded = entry.get("b64_json") if isinstance(entry, dict) else None
+        if not encoded:
+            continue
+        try:
+            images.append(
+                GeneratedImage(data=base64.b64decode(encoded), content_type=content_type)
+            )
+        except (ValueError, TypeError):
+            continue
+    return tuple(images)

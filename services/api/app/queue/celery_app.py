@@ -35,6 +35,7 @@ from __future__ import annotations
 import logging
 
 from celery import Celery
+from celery.schedules import crontab
 from celery.signals import worker_process_init, worker_process_shutdown
 
 from app.config import get_settings
@@ -54,10 +55,43 @@ QUEUES: tuple[str, ...] = (QUEUE_DEFAULT, QUEUE_MEDIA, QUEUE_AI, QUEUE_MAINTENAN
 
 #: Job kind prefix to queue. A kind with no entry goes to the default queue.
 QUEUE_BY_PREFIX: dict[str, str] = {
+    # Drawing an avatar is a paid image call measured at 15-27 seconds, so it
+    # belongs on the same queue as every other model call rather than behind
+    # the media work it would otherwise sit behind.
+    "avatar.": QUEUE_AI,
     "media.": QUEUE_MEDIA,
     "wardrobe.categorise": QUEUE_AI,
     "wardrobe.remove_background": QUEUE_MEDIA,
     "stylist.": QUEUE_AI,
+    # A studio shot is an image edit: the same paid call, the same 15 to 30
+    # seconds, so the same queue. Without this it fell through to `default`
+    # and sat behind the sweeper.
+    "garment.studio": QUEUE_AI,
+    "post.screen": QUEUE_AI,
+    # Rotating and padding a posted picture: pixels and object
+    # storage, no model call, so it belongs with the other media
+    # work rather than behind the sweeper on `default`.
+    "post.shape": QUEUE_MEDIA,
+    # Gathering an account reads every picture somebody owns out of
+    # object storage and writes one zip. Pixels and bytes, no model
+    # call, so it belongs with the other media work - and it must not
+    # sit on `default` behind the sweeper, because somebody is waiting
+    # on a screen for it.
+    "account.export": QUEUE_MEDIA,
+    # Reading the clothes out of a photograph is a vision call, so it
+    # belongs with the other paid work rather than behind the sweeper.
+    "post.describe": QUEUE_AI,
+    # Reading what a picture is OF, so a mislabelled pin is ranked
+    # on the photograph rather than on its hashtags. A vision call,
+    # so the same queue as the other paid work.
+    "post.vision": QUEUE_AI,
+    # Free text in front of strangers, screened like a caption.
+    "comment.screen": QUEUE_AI,
+    "brand.story": QUEUE_AI,
+    # Reading a picture somebody is searching with. The same vision
+    # call the feed makes, and the same queue.
+    "search.visual": QUEUE_AI,
+    "profile.": QUEUE_AI,
 }
 
 
@@ -148,6 +182,44 @@ def build_celery(settings=None) -> Celery:
         worker_hijack_root_logger=False,
         timezone="UTC",
         enable_utc=True,
+        #
+        # -- the re-drive schedule ------------------------------------------ #
+        # The sweeper is what makes a lost Redis message a non-event, and it
+        # only provides that if something runs it. Scheduling it here rather
+        # than leaving it to whatever starts the worker means the guarantee
+        # travels with the application instead of with a deployment detail
+        # someone has to remember.
+        beat_schedule={
+            "sweep-the-queue": {
+                "task": "luxish.sweep",
+                "schedule": cfg.celery_sweep_interval_seconds,
+                "options": {"queue": QUEUE_MAINTENANCE},
+            },
+            # The only thing in this service that sends a notification.
+            #
+            # Scheduled here for the same reason the sweeper is: the
+            # guarantee has to travel with the application. Nothing
+            # queues this task at the moment of the event, because a
+            # row's `send_after` can be hours away under quiet hours
+            # and because a second event about the same subject raises
+            # the tally on a row already waiting rather than writing
+            # another. Without this entry the outbox fills and no
+            # phone ever rings.
+            "deliver-push-notifications": {
+                "task": "luxish.deliver_push",
+                "schedule": cfg.push_drain_interval_seconds,
+                "options": {"queue": QUEUE_DEFAULT},
+            },
+            # Twice a week, so the shelf somebody opens on Thursday is not
+            # the one they saw on Monday. Monday and Thursday at 03:00 UTC:
+            # cohorts are recomputed before anything is generated for them,
+            # and both land outside the hours anybody is using the app.
+            "recompute-taste-cohorts": {
+                "task": "luxish.recompute_cohorts",
+                "schedule": crontab(hour=3, minute=0, day_of_week="mon,thu"),
+                "options": {"queue": QUEUE_MAINTENANCE},
+            },
+        },
     )
 
     # `imports` rather than `autodiscover_tasks`: autodiscover runs during this

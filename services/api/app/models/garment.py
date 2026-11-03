@@ -120,6 +120,17 @@ class Garment(Base, TimestampMixin):
         nullable=True,
     )
 
+    #: True when the picture above is a rendering rather than a photograph.
+    #:
+    #: A garment can be plainly visible in a photo and still impossible to cut
+    #: out of it, because something overlaps it. Those are drawn from what was
+    #: read off them, and this says so. ``media_assets.kind`` is the authority;
+    #: this is denormalised onto the garment so a wardrobe grid can badge every
+    #: tile without a join or a request per tile.
+    image_is_rendered: Mapped[bool] = mapped_column(
+        sa.Boolean, nullable=False, default=False, server_default=sa.false()
+    )
+
     deleted_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True, index=True)
 
     @property

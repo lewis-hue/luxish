@@ -24,6 +24,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/account/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Latest Export
+         * @description The most recent export for this account, or null if there is none.
+         */
+        get: operations["latest_export_v1_account_export_get"];
+        put?: never;
+        /**
+         * Ask For Export
+         * @description Start gathering. Answers at once with a row to watch.
+         *
+         *     Asking again while one is already gathering returns the one that
+         *     is running rather than starting a second: building an export reads
+         *     every picture somebody owns, so an impatient finger must not be
+         *     able to bill that ten times.
+         */
+        post: operations["ask_for_export_v1_account_export_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/account/export/{export_id}/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download Export
+         * @description The archive itself.
+         *
+         *     Owner, state and deadline are all checked in
+         *     `domain.readable`, and any of them failing is the same 404.
+         */
+        get: operations["download_export_v1_account_export__export_id__file_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/auth/session": {
         parameters: {
             query?: never;
@@ -63,7 +115,16 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Update Me
+         * @description Change the name and photograph somebody shows in the app.
+         *
+         *     Only the fields actually present in the body are touched, so a client
+         *     editing the name cannot blank the photograph by omitting it. The
+         *     photograph is given as a media asset id and re-validated against this
+         *     user's own media before it is stored — an id from a client is a claim.
+         */
+        patch: operations["update_me_v1_auth_me_patch"];
         trace?: never;
     };
     "/v1/auth/identity/link": {
@@ -106,6 +167,2155 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/avatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Avatar
+         * @description The avatar, and what it was drawn from.
+         */
+        get: operations["read_avatar_v1_avatar_get"];
+        put?: never;
+        /**
+         * Create Avatar
+         * @description Ask for the avatar to be drawn. Returns at once; poll the render.
+         *
+         *     **202, not 201.** Drawing measured at 27 seconds, which is a connection
+         *     held open for half a minute and a request timeout waiting to happen. The
+         *     work is a durable job like every other paid model call in this service
+         *     (ADR-005, ADR-013); this handler writes a row and queues it.
+         *
+         *     Asking again while one is already drawing returns the same render rather
+         *     than paying for a second picture nobody will look at.
+         */
+        post: operations["create_avatar_v1_avatar_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/avatar/appearance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Appearance
+         * @description Record how somebody says they look.
+         *
+         *     Does not redraw the avatar. Changing a detail and regenerating are two
+         *     decisions, and a billed call should not happen as a side effect of
+         *     answering a question.
+         */
+        put: operations["set_appearance_v1_avatar_appearance_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/avatar/try-on": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Try On
+         * @description Ask for an outfit to be put on the avatar. Returns at once.
+         *
+         *     An image edit rather than a fresh drawing, which is what keeps it the
+         *     same person in the same pose against the same wall; a new figure each
+         *     time would make comparing two outfits meaningless.
+         *
+         *     The pieces travel with the request and are stored as asked for, so the
+         *     finished picture can be labelled and each garment searched without a
+         *     second model call.
+         */
+        post: operations["try_on_v1_avatar_try_on_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/avatar/from-photo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * From Photo
+         * @description Build an avatar that looks like you, from a photograph of you.
+         *
+         *     An edit of your own photograph rather than a figure drawn to a
+         *     description, which is the only way the result actually resembles
+         *     anybody. Your words ride along as a note; nothing is read *out* of
+         *     the picture, and no attribute of your stated appearance is ever
+         *     written from an image.
+         *
+         *     **403 until you have agreed to it.** `likeness` is its own consent:
+         *     a photograph of your face going to a model is a different question
+         *     from letting the stylist read your wardrobe, and one answer must not
+         *     stand in for the other.
+         *
+         *     404 for a photograph that is not yours or not an `avatar_source`
+         *     upload, which are the same answer on purpose.
+         */
+        post: operations["from_photo_v1_avatar_from_photo_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/avatar/photos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Photos
+         * @description Photographs of yourself you have uploaded.
+         *
+         *     Listed so they can be removed. A feature that takes a picture of
+         *     somebody's face and offers no way to find it again is not one they
+         *     can withdraw from in practice.
+         */
+        get: operations["read_photos_v1_avatar_photos_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/avatar/photos/{asset_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Forget Photo
+         * @description Remove a photograph of yourself. 204 either way.
+         *
+         *     Avatars already drawn from it are kept: the link is `SET NULL`, and
+         *     somebody deleting the source is asking for the photograph to go, not
+         *     for a picture they liked to be destroyed.
+         */
+        delete: operations["forget_photo_v1_avatar_photos__asset_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/avatar/renders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Renders
+         * @description Everything this person has asked for, newest first.
+         */
+        get: operations["read_renders_v1_avatar_renders_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/avatar/renders/{render_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Render
+         * @description One render, for polling.
+         *
+         *     404 for somebody else's, rather than 403: distinguishing them would
+         *     confirm the id exists.
+         */
+        get: operations["read_render_v1_avatar_renders__render_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/billing/entitlements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Entitlements
+         * @description The plan, its state, and where the monthly allowance stands.
+         *
+         *     Always answers: the free tier is a real plan, so a person who never
+         *     paid still gets a meter that counts against something rather than a
+         *     404 pretending billing does not exist.
+         */
+        get: operations["read_entitlements_v1_billing_entitlements_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/billing/simulated/subscribe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Simulated Subscribe
+         * @description Grant a subscription from the simulated store. Development only.
+         *
+         *     Idempotent, and the resulting row carries ``store="simulated"`` so it
+         *     can never be mistaken for revenue.
+         */
+        post: operations["simulated_subscribe_v1_billing_simulated_subscribe_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/billing/auto-renew": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set Auto Renew
+         * @description Cancel or resume. Access always runs to the end of the paid period.
+         */
+        post: operations["set_auto_renew_v1_billing_auto_renew_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/studio/capabilities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Capabilities
+         * @description What the studio can do. Static, and the same for everybody.
+         */
+        get: operations["capabilities_v1_studio_capabilities_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/studio/stories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Stories
+         * @description Your stories, newest first, each with its frames.
+         */
+        get: operations["read_stories_v1_studio_stories_get"];
+        put?: never;
+        /**
+         * Create Story
+         * @description Start a set of frames from one product. Answers at once.
+         */
+        post: operations["create_story_v1_studio_stories_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/studio/stories/{story_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Story
+         * @description One story, for polling while its frames are being made.
+         */
+        get: operations["read_story_v1_studio_stories__story_id__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Discard Story
+         * @description Throw a story and its frames away. Only yours, and only once.
+         */
+        delete: operations["discard_story_v1_studio_stories__story_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/community/people": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * People
+         * @description Look somebody up by name.
+         *
+         *     Only people who have published a fit can be found this way; see
+         *     `domain.find_people` for why. A query shorter than two characters
+         *     answers empty rather than returning a slice of the whole table.
+         */
+        get: operations["people_v1_community_people_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/community/follows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Follow Counts */
+        get: operations["follow_counts_v1_community_follows_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/community/followers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Followers
+         * @description The people who follow you.
+         *
+         *     Yours only. A follower list is a list of real people, and serving
+         *     somebody else's would be a way to enumerate who is connected to
+         *     whom; a member's page keeps its counts and stops there.
+         */
+        get: operations["followers_v1_community_followers_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/community/following": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Following
+         * @description The people you follow.
+         */
+        get: operations["following_v1_community_following_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/community/members/{user_id}/followers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Member Followers
+         * @description Who follows them.
+         *
+         *     404 for an account that does not exist, was deleted, or blocked the
+         *     viewer - the same indistinguishable answer their page gives, for
+         *     the same reason. A private account answers 200 with nothing in it
+         *     and `private` set, because the account existing is not the secret:
+         *     the list is.
+         */
+        get: operations["member_followers_v1_community_members__user_id__followers_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/community/members/{user_id}/following": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Member Following
+         * @description Who they follow.
+         */
+        get: operations["member_following_v1_community_members__user_id__following_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/community/follows/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Start Following
+         * @description Follow somebody. Idempotent, so a double tap is not an error.
+         */
+        put: operations["start_following_v1_community_follows__user_id__put"];
+        post?: never;
+        /**
+         * Stop Following
+         * @description Unfollow. Idempotent: unfollowing somebody you do not follow is fine.
+         */
+        delete: operations["stop_following_v1_community_follows__user_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/community/members/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Member
+         * @description One other person's page.
+         *
+         *     404 covers an account that does not exist, one that was deleted, and
+         *     one that blocked the viewer, indistinguishably: a special status for
+         *     the last case would be the disclosure the block exists to prevent.
+         */
+        get: operations["member_v1_community_members__user_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/community/blocks/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Start Block
+         * @description Block somebody. Idempotent, and it severs follows both ways.
+         */
+        put: operations["start_block_v1_community_blocks__user_id__put"];
+        post?: never;
+        /**
+         * End Block
+         * @description Lift a block. Follows it severed stay severed.
+         */
+        delete: operations["end_block_v1_community_blocks__user_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/community/blocks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Blocked List
+         * @description Who this user has blocked. The one place a block is visible.
+         */
+        get: operations["blocked_list_v1_community_blocks_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/community/guidelines": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Guidelines
+         * @description The community guidelines.
+         *
+         *     The same list the screen enforces and the report form offers, served
+         *     so the app can show people the rules they are held to. Static, and
+         *     the same for everybody.
+         */
+        get: operations["guidelines_v1_community_guidelines_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/community/reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * File Report
+         * @description Record a report for the moderation queue.
+         *
+         *     Nothing automated acts on it, and the response does not pretend
+         *     otherwise: the row waits for a person. What *is* automatic is the
+         *     screen every piece of text goes through before it is published;
+         *     this is for what that missed.
+         */
+        post: operations["file_report_v1_community_reports_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/wardrobe/collections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Listing
+         * @description Every folder, with what is in each.
+         */
+        get: operations["listing_v1_wardrobe_collections_get"];
+        put?: never;
+        /** Create */
+        post: operations["create_v1_wardrobe_collections_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/wardrobe/collections/{collection_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove
+         * @description Delete the folder. **The garments in it stay in the wardrobe.**
+         */
+        delete: operations["remove_v1_wardrobe_collections__collection_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Rename
+         * @description Change a folder's name. The clothes in it do not move.
+         */
+        patch: operations["rename_v1_wardrobe_collections__collection_id__patch"];
+        trace?: never;
+    };
+    "/v1/wardrobe/collections/{collection_id}/garments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Add Members
+         * @description Put garments in the folder. Idempotent.
+         */
+        put: operations["add_members_v1_wardrobe_collections__collection_id__garments_put"];
+        post?: never;
+        /**
+         * Remove Members
+         * @description Take garments out of the folder. They stay in the wardrobe.
+         */
+        delete: operations["remove_members_v1_wardrobe_collections__collection_id__garments_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/consents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Consents
+         * @description Every consent this service records, and where the caller stands.
+         */
+        get: operations["read_consents_v1_consents_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/consents/{kind}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Consent
+         * @description Grant or withdraw one consent.
+         *
+         *     `PUT` rather than `POST`: this states what the consent *is*, so sending it
+         *     twice is not two grants, and the client never has to know whether a row
+         *     already existed.
+         */
+        put: operations["set_consent_v1_consents__kind__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/feed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Board
+         * @description Published fits, chosen for this reader. `group` narrows, never filters out.
+         *
+         *     **Two paths, deliberately.** With no group the staged recommender
+         *     builds the grid: a walk over the boards people curate, plus what
+         *     is accelerating, plus a slice of unproven pins, blended to a
+         *     target mix and filtered against what this person has already been
+         *     shown (`app/domain/discovery/README.md`).
+         *
+         *     A group chip is a different question - "show me everything in
+         *     decor" - and the answer to it should be the whole group in a
+         *     sensible order, not a personalised sample of it. Routing a chip
+         *     through the recommender would make it quietly incomplete, and a
+         *     filter that silently omits things is worse than one that does
+         *     not personalise.
+         */
+        get: operations["board_v1_feed_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/feed/groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Groups
+         * @description The chips above the board, with what is actually moving in each.
+         */
+        get: operations["groups_v1_feed_groups_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/feed/saved": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Saved
+         * @description Fits you kept, most recently kept first.
+         *
+         *     The library's pins are other people's posts rather than entries
+         *     from a catalogue, so they come back in the same shape the board
+         *     uses — same counts, same controls, same object.
+         */
+        get: operations["saved_v1_feed_saved_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/feed/{post_id}/comments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Comments
+         * @description A fit's comments, oldest first.
+         *
+         *     Published ones from everybody, plus this reader's own in whatever
+         *     state they are in: a comment that vanished on submission reads as a
+         *     bug and invites a second attempt, so its author sees it waiting.
+         */
+        get: operations["read_comments_v1_feed__post_id__comments_get"];
+        put?: never;
+        /**
+         * Write Comment
+         * @description Leave a comment. Held until it has been screened.
+         *
+         *     201 with the comment in `pending_review`, not 202: the row exists
+         *     and is theirs to see, which is a created thing rather than an
+         *     accepted request.
+         */
+        post: operations["write_comment_v1_feed__post_id__comments_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/feed/comments/{comment_id}/like": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Like Comment
+         * @description Like a comment. Idempotent: liking twice is liking once.
+         *
+         *     Returns the new tally rather than 204, so the row can settle on the
+         *     server's number instead of the one the client guessed.
+         */
+        put: operations["like_comment_v1_feed_comments__comment_id__like_put"];
+        post?: never;
+        /**
+         * Unlike Comment
+         * @description Take a like back. Idempotent, like giving one.
+         */
+        delete: operations["unlike_comment_v1_feed_comments__comment_id__like_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/feed/comments/{comment_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Comment
+         * @description Remove a comment of yours, or one on a fit of yours. 204 either way.
+         *
+         *     Both, because both are owners of the thing: the person who wrote it,
+         *     and the person whose photograph it sits under. Without the second,
+         *     a block would be the only tool available for a single remark.
+         */
+        delete: operations["delete_comment_v1_feed_comments__comment_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/feed/search/visual": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Visual Search
+         * @description Search by picture. Answers at once with something to poll.
+         *
+         *     There is no image index here: the picture is read into words by
+         *     the same model that reads a posted fit, and those words are what
+         *     is searched. The result says what it thought it saw, so the answer
+         *     can be judged rather than only followed.
+         */
+        post: operations["start_visual_search_v1_feed_search_visual_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/feed/search/visual/{job_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Visual Search
+         * @description Where a search by picture got to.
+         */
+        get: operations["read_visual_search_v1_feed_search_visual__job_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/feed/explore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Explore
+         * @description Categories to browse, each wearing a real fit.
+         *
+         *     Declared before `/{post_id}` for the same reason `/tags` is: a path
+         *     parameter typed as a UUID would reject the literal word with a 422
+         *     rather than falling through to this.
+         */
+        get: operations["explore_v1_feed_explore_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/feed/ideas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ideas
+         * @description Tags this reader keeps reaching for, each wearing a real fit.
+         *
+         *     Declared before `/{post_id}` for the same reason `/tags` is: a path
+         *     parameter typed as a UUID would reject the literal word with a 422
+         *     rather than falling through to this.
+         *
+         *     Ranked by what they saved and reacted to. `explore`'s first row is
+         *     ranked by what they *said*, deliberately; this is the other signal,
+         *     and the two are allowed to disagree.
+         */
+        get: operations["ideas_v1_feed_ideas_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/feed/tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Tags
+         * @description The tags with the most fits under them, or the ones matching `q`.
+         *
+         *     With `q` this is the type-ahead under the search field, and the
+         *     suggestions are the app's own hashtags rather than a guessed
+         *     vocabulary: every row offered has fits behind it.
+         *
+         *     Declared before `/{post_id}`, and that ordering is load-bearing: a
+         *     path parameter typed as a UUID would reject the literal word `tags`
+         *     with a 422 rather than falling through to this.
+         */
+        get: operations["tags_v1_feed_tags_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/feed/tags/{tag}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Tag Feed
+         * @description Every fit carrying one hashtag, best first.
+         *
+         *     A tag nobody has used is an empty page rather than a 404: it is a
+         *     search that found nothing, which is a true answer, and a missing
+         *     page would be wrong about a tag somebody is about to use.
+         *
+         *     Not reordered by stated taste. Somebody who tapped a tag has already
+         *     said what they want, and ranking their own search by a profile would
+         *     be overruling them.
+         */
+        get: operations["tag_feed_v1_feed_tags__tag__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/feed/{post_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Detail
+         * @description One fit, its author, and what to look at next.
+         *
+         *     The detail screen's whole payload in one request: three round trips
+         *     to draw one screen is three chances to show it half-built.
+         */
+        get: operations["detail_v1_feed__post_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/feed/{post_id}/hide": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Hide Fit
+         * @description Stop showing one fit on your board. 204 either way.
+         *
+         *     Smaller than a block on purpose: not wanting one photograph again
+         *     is not the same as not wanting its author anywhere, and offering
+         *     only the larger tool makes people reach for it.
+         */
+        put: operations["hide_fit_v1_feed__post_id__hide_put"];
+        post?: never;
+        /**
+         * Unhide Fit
+         * @description Change your mind. 204 either way.
+         */
+        delete: operations["unhide_fit_v1_feed__post_id__hide_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/feed/{post_id}/try-on": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Try On Fit
+         * @description Put the outfit in this fit on your own avatar.
+         *
+         *     202 with a render to poll, like every other paid call here: reading
+         *     the clothes out of the photograph and drawing them on somebody takes
+         *     the better part of a minute between them, and both run on a worker.
+         *
+         *     404 when the fit is withdrawn, its author is blocked either way, or it
+         *     never existed. The reader cannot tell those apart and should not.
+         */
+        post: operations["try_on_fit_v1_feed__post_id__try_on_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/garments/studio/treatments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Treatments
+         * @description What the studio can do. Static, and the same for everybody.
+         */
+        get: operations["treatments_v1_garments_studio_treatments_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/garments/{garment_id}/studio": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Shots
+         * @description Every shot of this garment, newest first, whatever state it is in.
+         */
+        get: operations["shots_v1_garments__garment_id__studio_get"];
+        put?: never;
+        /**
+         * Shoot
+         * @description Ask for one treatment. Answers at once with a queued shot.
+         */
+        post: operations["shoot_v1_garments__garment_id__studio_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/garments/studio/shots/each": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Shoot Each
+         * @description One picture per garment in the photograph, instead of one of the lot.
+         *
+         *     **The grouped shot is the default and this is the opt-in.** Handed
+         *     a photograph of a shirt and trousers, the packshot treatment
+         *     returns a single picture with both in it, which is what somebody
+         *     making an image wants. This is the other case: the same
+         *     photograph as two catalogue images, one per garment.
+         *
+         *     Answers with a job rather than the pictures. How many there will
+         *     be is however many garments a vision call finds, and that call
+         *     belongs on a worker (ADR-013); the shots appear in the studio's
+         *     list as they are made.
+         */
+        post: operations["shoot_each_v1_garments_studio_shots_each_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/garments/studio/shots/{shot_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Shot
+         * @description One shot, for polling while it is being taken.
+         */
+        get: operations["shot_v1_garments_studio_shots__shot_id__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Discard
+         * @description Throw a shot away. Only yours, and only once.
+         */
+        delete: operations["discard_v1_garments_studio_shots__shot_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/garments/studio/shots": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Recent Shots
+         * @description Everything you have shot, newest first.
+         *
+         *     The stylist's view. Shots taken there are often of a photograph with
+         *     no wardrobe row behind it, so there is no garment to group them under.
+         */
+        get: operations["recent_shots_v1_garments_studio_shots_get"];
+        put?: never;
+        /**
+         * Shoot Asset
+         * @description Shoot a photograph you own, wardrobe item or not.
+         *
+         *     The path the stylist uses: it is handed an asset id, which may be a
+         *     garment's photograph or one just uploaded from the camera roll.
+         */
+        post: operations["shoot_asset_v1_garments_studio_shots_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Inbox
+         * @description Conversations, and the people there is a reason to start one with.
+         */
+        get: operations["inbox_v1_messages_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/messages/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Thread
+         * @description The conversation with one person, oldest first.
+         *
+         *     An empty list is a normal answer: a conversation nobody has started
+         *     is a perfectly good screen, and opening it must not put a row on
+         *     the other person's list.
+         */
+        get: operations["thread_v1_messages__user_id__get"];
+        put?: never;
+        /**
+         * Write
+         * @description Send one message. The thread is created here if there was none.
+         */
+        post: operations["write_v1_messages__user_id__post"];
+        /**
+         * Clear Thread
+         * @description Delete this conversation, for the caller only. 204 either way.
+         *
+         *     Their copy is theirs: this draws a line under what you have seen
+         *     rather than reaching into somebody else's phone. 204 whether or
+         *     not a thread exists, so the refusal confirms nothing.
+         */
+        delete: operations["clear_thread_v1_messages__user_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/messages/{user_id}/messages/{message_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Unsend
+         * @description Take back one message you sent. 404 when it is not yours.
+         *
+         *     Both copies: a message is its sender's, and a delete that left it
+         *     standing in the other person's conversation would be a button that
+         *     lies.
+         */
+        delete: operations["unsend_v1_messages__user_id__messages__message_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/messages/{user_id}/messages/{message_id}/hide": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Hide
+         * @description Take one message out of your own copy. 404 if it is not yours to see.
+         *
+         *     **The other half of unsending, for the person who received it.**
+         *     Unsending is the sender's and removes the message from both
+         *     conversations. This is the reader's and removes it from theirs:
+         *     the sender's copy is untouched, and they are not told, because
+         *     somebody choosing not to look at something is not an event in
+         *     their conversation.
+         *
+         *     `PUT`, not `DELETE`: nothing is deleted. It is idempotent, which
+         *     is the other reason - hiding a message twice is the same state.
+         */
+        put: operations["hide_v1_messages__user_id__messages__message_id__hide_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/messages/{user_id}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Read
+         * @description Everything up to now is read. 204 whether or not there is a thread.
+         */
+        put: operations["read_v1_messages__user_id__read_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/messages/{user_id}/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Settings
+         * @description Notifications and hiding, which are facts about one participant.
+         *
+         *     Hiding is not deleting: the other person's copy is theirs, and a
+         *     new message brings this one back rather than being swallowed.
+         */
+        patch: operations["settings_v1_messages__user_id__settings_patch"];
+        trace?: never;
+    };
+    "/v1/moodboards": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Boards
+         * @description Every board this person has, newest first, each with what is on it.
+         *
+         *     Pins come back with the board rather than behind a second request: a
+         *     board with no pictures is not a board, so a client that had to fetch
+         *     them separately would render a list of empty rectangles first.
+         */
+        get: operations["read_boards_v1_moodboards_get"];
+        put?: never;
+        /** Create Board */
+        post: operations["create_board_v1_moodboards_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/moodboards/{board_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Board
+         * @description Remove a board and everything on it. 204 either way.
+         */
+        delete: operations["delete_board_v1_moodboards__board_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Rename Board
+         * @description Change the name or the note. Omitting either leaves it alone.
+         */
+        patch: operations["rename_board_v1_moodboards__board_id__patch"];
+        trace?: never;
+    };
+    "/v1/moodboards/{board_id}/posts/{post_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Pin Post
+         * @description Put a fit somebody published on a board.
+         *
+         *     404 if the fit is withdrawn, its author is blocked either way, or it
+         *     never existed: the reader cannot tell those apart, and should not.
+         */
+        put: operations["pin_post_v1_moodboards__board_id__posts__post_id__put"];
+        post?: never;
+        /**
+         * Unpin Post
+         * @description Take a fit off, closing the gap in the arrangement.
+         */
+        delete: operations["unpin_post_v1_moodboards__board_id__posts__post_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/moodboards/{board_id}/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Reorder Board
+         * @description Set the arrangement.
+         *
+         *     Anything on the board but not in the list keeps its relative order after
+         *     everything named, rather than being removed: a partial list means a
+         *     client that knows about fewer pins than exist.
+         */
+        put: operations["reorder_board_v1_moodboards__board_id__order_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Inbox
+         * @description What happened while you were away, newest first.
+         *
+         *     An empty list is a real answer. Nothing here manufactures an item to
+         *     avoid an empty screen.
+         */
+        get: operations["read_inbox_v1_notifications_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/notifications/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark Read
+         * @description Move the read watermark to now.
+         *
+         *     Monotonic: a device that opens the inbox after another one cannot
+         *     un-read what the first already saw.
+         */
+        post: operations["mark_read_v1_notifications_read_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/notifications/preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Preferences
+         * @description Every notification toggle, with defaults resolved.
+         *
+         *     A fresh account gets all-on without a row existing, so the settings
+         *     screen never has to invent a default of its own.
+         */
+        get: operations["read_preferences_v1_notifications_preferences_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Write Preferences
+         * @description Flip the toggles present in the body and return the full set.
+         *
+         *     Partial like the profile PATCH: absent means untouched. A muted inbox
+         *     kind stops appearing in `GET /v1/notifications` from the next read.
+         */
+        patch: operations["write_preferences_v1_notifications_preferences_patch"];
+        trace?: never;
+    };
+    "/v1/planner": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Planner
+         * @description Plans in a range, earliest first. Both ends inclusive.
+         *
+         *     Defaults to the fortnight from today, which is what a week strip scrolls
+         *     through without needing a second request.
+         */
+        get: operations["read_planner_v1_planner_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/planner/{day}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Plan Day
+         * @description Plan one day, or change what is planned for it.
+         */
+        put: operations["plan_day_v1_planner__day__put"];
+        post?: never;
+        /**
+         * Unplan Day
+         * @description Clear one day.
+         *
+         *     204 whether or not anything was there. Clearing an already-empty day is
+         *     work that is done, and an error would make a retried delete look failed.
+         */
+        delete: operations["unplan_day_v1_planner__day__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/planner/{day}/worn": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set Worn
+         * @description Answer "did you wear it".
+         *
+         *     Separate from `PUT` because it is a different act: one is planning, the
+         *     other is reporting. Folded together, a client wanting to record a day as
+         *     worn would have to resend the clothes, which is how a report accidentally
+         *     becomes an edit.
+         */
+        post: operations["set_worn_v1_planner__day__worn_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/posts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create
+         * @description Publish a fit, into review.
+         *
+         *     Media and garment ids are re-validated against the caller's own rows;
+         *     an id belonging to anybody else is a 404, not a 403, so the refusal
+         *     confirms nothing.
+         */
+        post: operations["create_v1_posts_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/posts/feed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Feed
+         * @description Published fits from the people you follow, newest first.
+         */
+        get: operations["feed_v1_posts_feed_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/posts/mine": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Mine
+         * @description Your own fits, with their states and any held note.
+         */
+        get: operations["mine_v1_posts_mine_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/posts/{post_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete
+         * @description Take a fit down. Only the author can, and only theirs.
+         */
+        delete: operations["delete_v1_posts__post_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/posts/{post_id}/visibility": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Visibility
+         * @description Show this fit to people, or stop. Only the author can.
+         *
+         *     Separate from deleting, because they are different decisions: a
+         *     private fit is still the author's and still theirs to put back,
+         *     and somebody who only wanted it off the board should not have to
+         *     destroy it to get that.
+         *
+         *     404 for a fit that is not theirs, the same answer as for one that
+         *     does not exist - otherwise this would report whether a given id is
+         *     somebody's post.
+         */
+        put: operations["visibility_v1_posts__post_id__visibility_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/posts/{post_id}/save": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Save
+         * @description Keep a fit. Idempotent, so a double tap is not an error.
+         */
+        put: operations["save_v1_posts__post_id__save_put"];
+        post?: never;
+        /**
+         * Unsave
+         * @description Forget a fit. Idempotent in the same way.
+         */
+        delete: operations["unsave_v1_posts__post_id__save_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/posts/{post_id}/reaction": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * React
+         * @description React to a fit, change the reaction, or take it back with `null`.
+         *
+         *     One per person, replaced rather than added to: a tally one
+         *     enthusiast can run up by pressing five buttons measures nothing.
+         */
+        put: operations["react_v1_posts__post_id__reaction_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/profile/taste": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Taste Profile
+         * @description Which collections to lead each shelf with, for this person.
+         *
+         *     Three queries and no model call, which is what makes it safe to ask for
+         *     on every Discover open.
+         */
+        get: operations["read_taste_profile_v1_profile_taste_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/profile/inspiration": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Inspiration
+         * @description What to put on "how to wear what you own" for this person.
+         *
+         *     A set generated for their cohort when one is current; otherwise a ranking
+         *     from their own wardrobe, honestly marked as not being a group's. Never an
+         *     empty shelf, and never the general order presented as theirs.
+         */
+        get: operations["read_inspiration_v1_profile_inspiration_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/profiles/reactions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Reactions
+         * @description The reaction set. Fixed, and the app renders exactly these.
+         */
+        get: operations["reactions_v1_profiles_reactions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/profiles/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Mine
+         * @description Your own profile, including anything still in review.
+         */
+        get: operations["mine_v1_profiles_me_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update
+         * @description Change the handle, the bio, or the links. Only what is sent.
+         */
+        patch: operations["update_v1_profiles_me_patch"];
+        trace?: never;
+    };
+    "/v1/profiles/{handle}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Public
+         * @description Somebody else's profile, by handle. Only the approved bio crosses.
+         *
+         *     **Blocks apply here, in both directions.** This endpoint shipped
+         *     without that check while every other surface had it, which left a
+         *     blocked person's handle, bio and links readable by anybody who knew
+         *     the name — and left the blocker just as visible to them. A profile
+         *     is the one surface that is *about* a person rather than about
+         *     clothes, so it is the last place that rule should be missing.
+         *
+         *     A deleted account is gone for the same reason, and all three
+         *     refusals are the same 404: "blocked", "deleted" and "never existed"
+         *     must be indistinguishable, or the refusal confirms what it denies.
+         */
+        get: operations["public_v1_profiles__handle__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/push/devices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Register
+         * @description Register this phone, or refresh what is known about it.
+         *
+         *     Idempotent, and safe to call on every launch: the same token is
+         *     the same device, so the row is updated rather than duplicated.
+         *     Calling it also un-revokes, which is what signing back in means.
+         *
+         *     409 when the token is live under another account. A real client
+         *     never sees it: a token comes from Expo on this handset, and a
+         *     handset changing hands goes through a sign-out that frees the row
+         *     first. Presenting one somebody else is currently reachable on is
+         *     either a stale sign-out or an attempt to silence them, and neither
+         *     is answered by moving the row.
+         */
+        put: operations["register_v1_push_devices_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/push/devices/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Forget
+         * @description Stop sending to this phone. 204 whether or not it was known.
+         *
+         *     Called on sign-out. 204 either way because forgetting something
+         *     already forgotten is work that is done, and a different answer
+         *     would tell the caller whether a token exists - or whose it is.
+         *
+         *     Scoped to the caller: only your own device can be forgotten. A
+         *     token is opaque, but that is secrecy rather than authorization,
+         *     and one that leaked would otherwise let its holder silence
+         *     somebody else's notifications.
+         */
+        delete: operations["forget_v1_push_devices__token__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/shopping/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search
+         * @description Offers resembling the ask, best first.
+         *
+         *     Every result is labelled with how much the match actually knows:
+         *     `similar_style` is the ceiling the curated catalogue's evidence
+         *     supports, and an unknown ask simply returns nothing.
+         */
+        get: operations["search_v1_shopping_search_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/shopping/recommendations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Recommendations
+         * @description What to look at, from the stylist's unfilled slots and your taste.
+         *
+         *     Sections are omitted when empty rather than padded with "popular":
+         *     a recommendation this app cannot explain is one it does not make.
+         */
+        get: operations["recommendations_v1_shopping_recommendations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/shopping/for-fit/{post_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * For Fit
+         * @description Something like each garment in one posted fit, a section per piece.
+         *
+         *     **What "shop the look" was always supposed to mean.** That row
+         *     pushed the generic recommendations screen - a shelf built from
+         *     gaps in your own wardrobe - which is a fine shelf and has
+         *     nothing to do with the photograph it was tapped from.
+         *
+         *     404 when the fit is not one this reader may see, which is the
+         *     same answer as never having existed: the sections name the
+         *     garments in it, so handing them over would describe a private
+         *     fit to somebody who cannot open it.
+         *
+         *     Empty sections are omitted and an empty list is a real answer -
+         *     the catalogue simply has nothing like that garment. It is not
+         *     padded, for the reason the recommendations route gives: a
+         *     suggestion this app cannot explain is one it does not make.
+         */
+        get: operations["for_fit_v1_shopping_for_fit__post_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/shops/nearby": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Nearby
+         * @description Clothing shops near a point, from OpenStreetMap.
+         *
+         *     **Refused without `location_coarse`.** Somebody has to have
+         *     agreed to this before their whereabouts is sent anywhere, and the
+         *     refusal names the consent so the client can ask for it rather
+         *     than showing an error.
+         */
+        get: operations["nearby_v1_shops_nearby_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/shops/retailers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Retailers
+         * @description The big stores - Zara, H&M, a Shopify storefront.
+         *
+         *     **Answers honestly that it cannot search them.** None of them
+         *     has a usable public search: Zara publishes no API, a Shopify
+         *     storefront needs a token from that store's owner, and the
+         *     aggregators that cover them are paid and keyed. Returning an
+         *     empty list would tell somebody nothing matched; this tells them
+         *     nobody looked, which is the true and more useful thing.
+         */
+        get: operations["retailers_v1_shops_retailers_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/speech/transcribe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Transcribe
+         * @description Turn a recording into text. Answers inline: this is seconds, not minutes.
+         */
+        post: operations["transcribe_v1_speech_transcribe_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/uploads/authorize": {
         parameters: {
             query?: never;
@@ -136,7 +2346,21 @@ export interface paths {
         /** List Garments */
         get: operations["list_garments_v1_wardrobe_garments_get"];
         put?: never;
-        /** Create Garment */
+        /**
+         * Create Garment
+         * @description Create one garment and start the work its photograph needs.
+         *
+         *     The pipeline is queued here and not only in the bulk endpoint. Uploading a
+         *     single photograph is the ordinary path through the app, and without this a
+         *     garment created that way keeps a null category for ever: nothing
+         *     categorises it, nothing cuts it out, and nothing looks at what is being
+         *     worn in it. The client reads that as still-processing and shows a spinner
+         *     with no end, which is what it did.
+         *
+         *     ``enqueue_media_pipeline`` is a no-op for a garment with no photograph, and
+         *     its idempotency keys are derived from the garment, so a retried request
+         *     cannot queue the work, or the spend, twice.
+         */
         post: operations["create_garment_v1_wardrobe_garments_post"];
         delete?: never;
         options?: never;
@@ -375,6 +2599,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/studio/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Overview
+         * @description What other people did with the fits you published, in one window.
+         *
+         *     Every number excludes the owner's own activity. A fresh account gets
+         *     zeroes over its empty shelf, which is the honest answer rather than a
+         *     404 pretending the studio does not exist yet.
+         */
+        get: operations["overview_v1_studio_overview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stylist/can": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Capabilities
+         * @description What you can ask for, and what is not available.
+         *
+         *     Static and the same for everybody. A client renders these as examples
+         *     of what to say, never as buttons: the point of routing by sentence is
+         *     that the screen stays one input box.
+         */
+        get: operations["capabilities_v1_stylist_can_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/stylist/runs": {
         parameters: {
             query?: never;
@@ -492,6 +2764,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/stylist/ask": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ask
+         * @description Answer a question about this person's wardrobe, streaming.
+         *
+         *     Server-sent events, one JSON object per line:
+         *
+         *         {"event": "token",    "text": "Yes, you "}
+         *         {"event": "verdict",  "has_match": true, "using": [...]}
+         *         {"event": "shopping", "items": [...]}
+         *         {"event": "render",   "render_id": "..."}
+         *         {"event": "done"}
+         *
+         *     **SSE rather than a websocket** because this is one short
+         *     one-directional burst per question. A socket would be a
+         *     connection to keep alive, authenticate separately and reconnect,
+         *     for a stream that lives six seconds.
+         */
+        post: operations["ask_v1_stylist_ask_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/taste/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Options
+         * @description Every answer this service accepts.
+         *
+         *     Unauthenticated on purpose: it is a vocabulary, not anybody's data, and
+         *     the sign-up screen that needs it runs before there is a session.
+         */
+        get: operations["read_options_v1_taste_options_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/taste": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Taste
+         * @description What this person said, and what it implies for their shelves.
+         */
+        get: operations["read_taste_v1_taste_get"];
+        /**
+         * Set Taste
+         * @description Record the answers. An empty body is a valid answer: declining.
+         */
+        put: operations["set_taste_v1_taste_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/account": {
         parameters: {
             query?: never;
@@ -517,6 +2869,111 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         /**
+         * AppearanceIn
+         * @description What someone says about how they look.
+         *
+         *     Every field optional and defaulting to unspecified. This is asked, never
+         *     derived: nothing in this service may read presentation off a wardrobe, and
+         *     an avatar with nothing stated is still drawn.
+         */
+        AppearanceIn: {
+            /**
+             * Presentation
+             * @default unspecified
+             * @enum {string}
+             */
+            presentation: "feminine" | "masculine" | "androgynous" | "unspecified";
+            /**
+             * Body Type
+             * @default unspecified
+             * @enum {string}
+             */
+            body_type: "slim" | "average" | "athletic" | "curvy" | "plus" | "unspecified";
+            /**
+             * Height
+             * @default unspecified
+             * @enum {string}
+             */
+            height: "tall" | "average" | "short" | "unspecified";
+            /**
+             * Age Band
+             * @default unspecified
+             * @enum {string}
+             */
+            age_band: "20s" | "30s" | "40s" | "50s" | "60s_plus" | "unspecified";
+            /**
+             * Skin Tone
+             * @default unspecified
+             * @enum {string}
+             */
+            skin_tone: "very_fair" | "fair" | "medium" | "olive" | "brown" | "dark_brown" | "deep" | "unspecified";
+        };
+        /** AppearanceOut */
+        AppearanceOut: {
+            /**
+             * Presentation
+             * @default unspecified
+             * @enum {string}
+             */
+            presentation: "feminine" | "masculine" | "androgynous" | "unspecified";
+            /**
+             * Body Type
+             * @default unspecified
+             * @enum {string}
+             */
+            body_type: "slim" | "average" | "athletic" | "curvy" | "plus" | "unspecified";
+            /**
+             * Height
+             * @default unspecified
+             * @enum {string}
+             */
+            height: "tall" | "average" | "short" | "unspecified";
+            /**
+             * Age Band
+             * @default unspecified
+             * @enum {string}
+             */
+            age_band: "20s" | "30s" | "40s" | "50s" | "60s_plus" | "unspecified";
+            /**
+             * Skin Tone
+             * @default unspecified
+             * @enum {string}
+             */
+            skin_tone: "very_fair" | "fair" | "medium" | "olive" | "brown" | "dark_brown" | "deep" | "unspecified";
+        };
+        /**
+         * AskCreate
+         * @description A question about this person's own wardrobe.
+         *
+         *     `post_id` is the pin they are looking at, when they came from
+         *     one. It is what makes "match the fit above" answerable: the
+         *     photograph goes to the model, not just the caption.
+         */
+        AskCreate: {
+            /** Question */
+            question: string;
+            /** Post Id */
+            post_id?: string | null;
+        };
+        /**
+         * AssistantOut
+         * @description What the assistant can do, and what it cannot.
+         */
+        AssistantOut: {
+            /** Items */
+            items?: components["schemas"]["CapabilityOut"][];
+            /**
+             * Video
+             * @default blocked
+             */
+            video: string;
+            /**
+             * Video Reason
+             * @default
+             */
+            video_reason: string;
+        };
+        /**
          * AttachmentIn
          * @description Imported text offered with a request. Treated as data, always.
          */
@@ -530,6 +2987,75 @@ export interface components {
             text: string;
             /** Origin Url */
             origin_url?: string | null;
+        };
+        /** AutoRenewIn */
+        AutoRenewIn: {
+            /** Auto Renew */
+            auto_renew: boolean;
+        };
+        /** AvatarOut */
+        AvatarOut: {
+            /** Asset Id */
+            asset_id?: string | null;
+            appearance: components["schemas"]["AppearanceOut"];
+        };
+        /** BlockedListOut */
+        BlockedListOut: {
+            /** Items */
+            items?: components["schemas"]["BlockedPersonOut"][];
+        };
+        /** BlockedPersonOut */
+        BlockedPersonOut: {
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+            /** Name */
+            name: string;
+        };
+        /**
+         * BoardFitOut
+         * @description One pinned fit: what to show, and what to open.
+         */
+        BoardFitOut: {
+            /**
+             * Post Id
+             * Format: uuid
+             */
+            post_id: string;
+            /** Cover Asset Id */
+            cover_asset_id?: string | null;
+        };
+        /**
+         * BoardIn
+         * @description Create or edit. On a `PATCH`, omitting a field leaves it alone.
+         */
+        BoardIn: {
+            /** Name */
+            name?: string | null;
+            /** Note */
+            note?: string | null;
+        };
+        /** BoardOut */
+        BoardOut: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Note */
+            note?: string | null;
+            /** Post Ids */
+            post_ids?: string[];
+            /** Posts */
+            posts?: components["schemas"]["BoardFitOut"][];
+            /** Refs */
+            refs?: string[];
+        };
+        /** BoardsResponse */
+        BoardsResponse: {
+            /** Items */
+            items: components["schemas"]["BoardOut"][];
         };
         /** BulkDeleteIn */
         BulkDeleteIn: {
@@ -614,6 +3140,280 @@ export interface components {
             failed: number;
         };
         /**
+         * CapabilityOut
+         * @description One thing the assistant can be asked for, in its own words.
+         *
+         *     Returned as data so a client can show examples of what to *say*. It is
+         *     deliberately not a list of buttons: the capabilities live behind the
+         *     sentence, which is what keeps the screen to one input box.
+         */
+        CapabilityOut: {
+            /** Intent */
+            intent: string;
+            /** Label */
+            label: string;
+            /** Description */
+            description: string;
+            /** Needs */
+            needs?: string[];
+        };
+        /** CollectionIn */
+        CollectionIn: {
+            /** Name */
+            name: string;
+            /** Description */
+            description?: string | null;
+        };
+        /** CollectionMembersIn */
+        CollectionMembersIn: {
+            /** Garment Ids */
+            garment_ids?: string[];
+        };
+        /** CollectionOut */
+        CollectionOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description?: string | null;
+            /** Garment Ids */
+            garment_ids?: string[];
+        };
+        /** CollectionRenameIn */
+        CollectionRenameIn: {
+            /** Name */
+            name: string;
+        };
+        /** CollectionsOut */
+        CollectionsOut: {
+            /** Items */
+            items?: components["schemas"]["CollectionOut"][];
+        };
+        /** CommentIn */
+        CommentIn: {
+            /** Body */
+            body: string;
+            /** Parent Id */
+            parent_id?: string | null;
+        };
+        /**
+         * CommentLikeOut
+         * @description The tally after a like or an un-like, so the row can settle.
+         */
+        CommentLikeOut: {
+            /** Likes */
+            likes: number;
+            /** Liked By Me */
+            liked_by_me: boolean;
+        };
+        /** CommentOut */
+        CommentOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Author Id
+             * Format: uuid
+             */
+            author_id: string;
+            /** Author Name */
+            author_name: string;
+            /** Body */
+            body: string;
+            /** State */
+            state: string;
+            /** Note */
+            note?: string | null;
+            /** Parent Id */
+            parent_id?: string | null;
+            /**
+             * Mine
+             * @default false
+             */
+            mine: boolean;
+            /** Created At */
+            created_at?: string | null;
+            /**
+             * Likes
+             * @default 0
+             */
+            likes: number;
+            /**
+             * Liked By Me
+             * @default false
+             */
+            liked_by_me: boolean;
+        };
+        /** CommentsOut */
+        CommentsOut: {
+            /** Items */
+            items?: components["schemas"]["CommentOut"][];
+        };
+        /** ConsentOut */
+        ConsentOut: {
+            /** Kind */
+            kind: string;
+            /** Granted */
+            granted: boolean;
+            /** Granted At */
+            granted_at?: string | null;
+            /** Revoked At */
+            revoked_at?: string | null;
+        };
+        /** ConsentSetIn */
+        ConsentSetIn: {
+            /** Granted */
+            granted: boolean;
+            /** Source */
+            source?: string | null;
+        };
+        /** ConsentsResponse */
+        ConsentsResponse: {
+            /** Items */
+            items: components["schemas"]["ConsentOut"][];
+        };
+        /** ContactOut */
+        ContactOut: {
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+            /** Name */
+            name: string;
+            /** Handle */
+            handle?: string | null;
+        };
+        /**
+         * DeviceIn
+         * @description A phone announcing itself.
+         */
+        DeviceIn: {
+            /** Token */
+            token: string;
+            /**
+             * Platform
+             * @default expo
+             */
+            platform: string;
+            /** Timezone */
+            timezone?: string | null;
+        };
+        /** DeviceOut */
+        DeviceOut: {
+            /** Token */
+            token: string;
+            /** Platform */
+            platform: string;
+            /** Timezone */
+            timezone?: string | null;
+        };
+        /**
+         * DoorOut
+         * @description One category tile on the search screen.
+         */
+        DoorOut: {
+            /**
+             * Kind
+             * @default tag
+             */
+            kind: string;
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /**
+             * Posts
+             * @default 0
+             */
+            posts: number;
+            /** Cover Asset Id */
+            cover_asset_id?: string | null;
+        };
+        /** EntitlementsOut */
+        EntitlementsOut: {
+            /**
+             * Plan
+             * @enum {string}
+             */
+            plan: "free" | "plus";
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "free" | "active" | "ending";
+            /** Store */
+            store?: ("simulated" | "app_store" | "play_billing") | null;
+            /** Period End */
+            period_end?: string | null;
+            /** Auto Renew */
+            auto_renew: boolean;
+            /** Allowance */
+            allowance: number;
+            /** Used */
+            used: number;
+            /** Remaining */
+            remaining: number;
+            /**
+             * Resets At
+             * Format: date-time
+             */
+            resets_at: string;
+            /** Simulated */
+            simulated: boolean;
+        };
+        /**
+         * ExploreOut
+         * @description What to look at, in two rows.
+         *
+         *     `for_you` comes from stated taste; `popular` from what is busy for
+         *     this reader. A new account with nothing stated gets the busiest
+         *     tags in the first row rather than an empty one.
+         */
+        ExploreOut: {
+            /** For You */
+            for_you?: components["schemas"]["DoorOut"][];
+            /** Popular */
+            popular?: components["schemas"]["DoorOut"][];
+        };
+        /** ExportOut */
+        ExportOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** State */
+            state: string;
+            /** Byte Size */
+            byte_size?: number | null;
+            /**
+             * Pictures Included
+             * @default 0
+             */
+            pictures_included: number;
+            /**
+             * Pictures Omitted
+             * @default 0
+             */
+            pictures_omitted: number;
+            /** Failure */
+            failure?: string | null;
+            /** Expires At */
+            expires_at?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /**
          * FavouriteIdsOut
          * @description Just the ids, for a client — or the stylist — that weights favourites.
          *
@@ -637,6 +3437,69 @@ export interface components {
             items: components["schemas"]["GarmentMediaOut"][];
             /** Next Cursor */
             next_cursor?: string | null;
+        };
+        /** FeedItemOut */
+        FeedItemOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Author Id
+             * Format: uuid
+             */
+            author_id: string;
+            /** Author Name */
+            author_name: string;
+            /** Caption */
+            caption?: string | null;
+            /**
+             * Caption Is Described
+             * @default false
+             */
+            caption_is_described: boolean;
+            /** Occasion */
+            occasion?: string | null;
+            /** Media Asset Ids */
+            media_asset_ids?: string[];
+            /** Cover Ratio */
+            cover_ratio?: number | null;
+            /** Tags */
+            tags?: string[];
+            /** Groups */
+            groups?: string[];
+            /**
+             * Reactions
+             * @default 0
+             */
+            reactions: number;
+            /**
+             * Saves
+             * @default 0
+             */
+            saves: number;
+            /**
+             * Comments
+             * @default 0
+             */
+            comments: number;
+            /** My Reaction */
+            my_reaction?: string | null;
+            /**
+             * Saved By Me
+             * @default false
+             */
+            saved_by_me: boolean;
+            /** Published At */
+            published_at?: string | null;
+        };
+        /** FeedOut */
+        FeedOut: {
+            /** Group */
+            group: string;
+            /** Items */
+            items?: components["schemas"]["FeedItemOut"][];
         };
         /** FeedbackCreate */
         FeedbackCreate: {
@@ -667,6 +3530,113 @@ export interface components {
             kind: "would_wear" | "wore" | "dislike";
             /** Note */
             note?: string | null;
+        };
+        /** FitAuthorOut */
+        FitAuthorOut: {
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+            /** Name */
+            name: string;
+            /** Handle */
+            handle?: string | null;
+            /** Bio */
+            bio?: string | null;
+            /**
+             * Followed
+             * @default false
+             */
+            followed: boolean;
+            /** Website */
+            website?: string | null;
+        };
+        /** FitDetailOut */
+        FitDetailOut: {
+            fit: components["schemas"]["FeedItemOut"];
+            author: components["schemas"]["FitAuthorOut"];
+            /**
+             * Link
+             * @default
+             */
+            link: string;
+            /** More */
+            more?: components["schemas"]["FeedItemOut"][];
+            /** Pieces */
+            pieces?: components["schemas"]["FitPieceOut"][];
+            /**
+             * Mine
+             * @default false
+             */
+            mine: boolean;
+            /** Items */
+            items?: components["schemas"]["PostItemOut"][];
+            /** Visibility */
+            visibility?: ("public" | "private") | null;
+        };
+        /**
+         * FitPieceOut
+         * @description One garment from a fit, cut out of the photograph it was worn in.
+         */
+        FitPieceOut: {
+            /**
+             * Media Asset Id
+             * Format: uuid
+             */
+            media_asset_id: string;
+            /** Position */
+            position: number;
+            /** Name */
+            name?: string | null;
+            /** Colour */
+            colour?: string | null;
+            /** Category */
+            category?: string | null;
+        };
+        /** FollowCountsOut */
+        FollowCountsOut: {
+            /** Following */
+            following: number;
+            /** Followers */
+            followers: number;
+        };
+        /**
+         * FoundPersonOut
+         * @description A search hit: a first name, and the two numbers that justify a follow.
+         */
+        FoundPersonOut: {
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+            /** Name */
+            name: string;
+            /** Followed */
+            followed: boolean;
+            /** Follower Count */
+            follower_count: number;
+            /** Fits */
+            fits: number;
+        };
+        /** FrameOut */
+        FrameOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Scene */
+            scene: string;
+            /** Position */
+            position: number;
+            /** State */
+            state: string;
+            /** Media Asset Id */
+            media_asset_id?: string | null;
+            /** Error */
+            error?: string | null;
         };
         /** GarmentCreate */
         GarmentCreate: {
@@ -711,6 +3681,13 @@ export interface components {
             availability: "available" | "laundry" | "unavailable" | "archived";
             /** Media Asset Id */
             media_asset_id: string | null;
+            /** Background Removed Asset Id */
+            background_removed_asset_id?: string | null;
+            /**
+             * Image Is Rendered
+             * @default false
+             */
+            image_is_rendered: boolean;
             /** Confirmed Attributes */
             confirmed_attributes: {
                 [key: string]: unknown;
@@ -742,8 +3719,6 @@ export interface components {
              * @default false
              */
             is_favourite: boolean;
-            /** Background Removed Asset Id */
-            background_removed_asset_id?: string | null;
             /** Categorisation Confidence */
             categorisation_confidence?: number | null;
         };
@@ -765,6 +3740,13 @@ export interface components {
             availability: "available" | "laundry" | "unavailable" | "archived";
             /** Media Asset Id */
             media_asset_id: string | null;
+            /** Background Removed Asset Id */
+            background_removed_asset_id?: string | null;
+            /**
+             * Image Is Rendered
+             * @default false
+             */
+            image_is_rendered: boolean;
             /** Confirmed Attributes */
             confirmed_attributes: {
                 [key: string]: unknown;
@@ -815,6 +3797,24 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
+        /** GroupOut */
+        GroupOut: {
+            /** Group */
+            group: string;
+            /** Posts */
+            posts: number;
+            /** People */
+            people: number;
+            /** Trending */
+            trending: boolean;
+        };
+        /** GroupsOut */
+        GroupsOut: {
+            /** Min People */
+            min_people: number;
+            /** Items */
+            items?: components["schemas"]["GroupOut"][];
+        };
         /**
          * GuidanceConflictView
          * @description Two reviewed sources disagreeing. Reported, never silently resolved.
@@ -833,10 +3833,48 @@ export interface components {
             /** Note */
             note: string;
         };
+        /**
+         * GuidelineOut
+         * @description One community guideline, in the words people are held to.
+         */
+        GuidelineOut: {
+            /** Id */
+            id: string;
+            /** Title */
+            title: string;
+            /** Body */
+            body: string;
+            /**
+             * Reportable
+             * @default true
+             */
+            reportable: boolean;
+        };
+        /** GuidelinesOut */
+        GuidelinesOut: {
+            /** Items */
+            items?: components["schemas"]["GuidelineOut"][];
+            /**
+             * Note
+             * @default Everything written here is checked automatically before other people see it. If something gets through, report it and it will be looked at.
+             */
+            note: string;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /**
+         * IdeasOut
+         * @description A shelf of tags this reader keeps reaching for.
+         *
+         *     The same tile as `explore`'s, ranked differently: by what they
+         *     saved and reacted to rather than by what they said they liked.
+         */
+        IdeasOut: {
+            /** Items */
+            items?: components["schemas"]["DoorOut"][];
         };
         /** IdentityLinkConfirmRequest */
         IdentityLinkConfirmRequest: {
@@ -862,6 +3900,83 @@ export interface components {
              */
             user_id: string;
         };
+        /** InboxResponse */
+        InboxResponse: {
+            /** Items */
+            items: components["schemas"]["NotificationOut"][];
+            /** Unread */
+            unread: number;
+            /** Window Days */
+            window_days: number;
+        };
+        /**
+         * InspirationOut
+         * @description The "how to wear what you own" shelf, with its provenance.
+         *
+         *     `personalised` is not decoration. False means this is a ranking from the
+         *     viewer's own wardrobe or the general order, *not* a set made for a group
+         *     they are in, and a client that renders the two identically is making a
+         *     claim the data does not support.
+         */
+        InspirationOut: {
+            /** Collections */
+            collections: string[];
+            /** Rationale */
+            rationale: string;
+            /** Personalised */
+            personalised: boolean;
+            /** Cohort Size */
+            cohort_size: number;
+        };
+        /**
+         * LikenessIn
+         * @description Build an avatar from a photograph of yourself.
+         */
+        LikenessIn: {
+            /** Media Asset Id */
+            media_asset_id: string;
+            /** Note */
+            note?: string | null;
+        };
+        /**
+         * LikenessPhotoOut
+         * @description One photograph you uploaded of yourself, so you can remove it.
+         */
+        LikenessPhotoOut: {
+            /** Asset Id */
+            asset_id: string;
+            /** Content Type */
+            content_type?: string | null;
+            /** Created At */
+            created_at?: string | null;
+        };
+        /** LikenessPhotosOut */
+        LikenessPhotosOut: {
+            /** Items */
+            items?: components["schemas"]["LikenessPhotoOut"][];
+            /**
+             * Note
+             * @default Removing a photograph deletes the picture you uploaded. Avatars already drawn from it are kept, and you can delete those separately.
+             */
+            note: string;
+        };
+        /** LinkOut */
+        LinkOut: {
+            /** Platform */
+            platform: string;
+            /** Handle */
+            handle: string;
+            /** Url */
+            url: string;
+        };
+        /** MarkReadOut */
+        MarkReadOut: {
+            /**
+             * Read At
+             * Format: date-time
+             */
+            read_at: string;
+        };
         /** MeResponse */
         MeResponse: {
             /**
@@ -878,6 +3993,247 @@ export interface components {
             email_verified: boolean;
             /** Display Name */
             display_name?: string | null;
+            /** Profile Photo Asset Id */
+            profile_photo_asset_id?: string | null;
+        };
+        /**
+         * MemberFitOut
+         * @description One tile on somebody's page: what to show, and what to open.
+         */
+        MemberFitOut: {
+            /**
+             * Post Id
+             * Format: uuid
+             */
+            post_id: string;
+            /** Cover Asset Id */
+            cover_asset_id?: string | null;
+        };
+        /**
+         * MemberOut
+         * @description One other person's page: who they are, and what they have made.
+         *
+         *     The identity doctrine from the router holds: a first name, plus the
+         *     handle and approved bio they chose to publish. No email, no last
+         *     name, no face carried between accounts.
+         *
+         *     **The following count is shown.** It used to be withheld on the
+         *     reasoning that it was "a list of other people's names in numeric
+         *     form", which does not survive examination: a count discloses no
+         *     name, and the list behind it stays private and unreadable by
+         *     anybody but its owner. Withholding it made the page say less than
+         *     every comparable surface while protecting nothing.
+         *
+         *     **Their published fits are not gated.** Putting an outfit in front
+         *     of strangers is what publishing is, so a fit already on the board
+         *     discloses nothing new on its author's page. What they *saved* is a
+         *     different thing and stays behind `community_sharing`.
+         */
+        MemberOut: {
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+            /** Name */
+            name: string;
+            /** Handle */
+            handle?: string | null;
+            /** Bio */
+            bio?: string | null;
+            /** Links */
+            links?: {
+                [key: string]: string;
+            };
+            /** Banner Asset Id */
+            banner_asset_id?: string | null;
+            /** Followed */
+            followed: boolean;
+            /** Follows You */
+            follows_you: boolean;
+            /** Follower Count */
+            follower_count: number;
+            /**
+             * Following Count
+             * @default 0
+             */
+            following_count: number;
+            /** Shares */
+            shares: boolean;
+            /** Posts */
+            posts?: components["schemas"]["MemberFitOut"][];
+            /**
+             * Post Count
+             * @default 0
+             */
+            post_count: number;
+            /** Saved Posts */
+            saved_posts?: components["schemas"]["MemberFitOut"][];
+            /** Blocked */
+            blocked: boolean;
+            /**
+             * Private
+             * @default false
+             */
+            private: boolean;
+        };
+        /** MessageIn */
+        MessageIn: {
+            /**
+             * Body
+             * @default
+             */
+            body: string;
+            /** Asset Id */
+            asset_id?: string | null;
+        };
+        /** MessageOut */
+        MessageOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Sender Id
+             * Format: uuid
+             */
+            sender_id: string;
+            /** Body */
+            body: string;
+            /**
+             * Sent At
+             * Format: date-time
+             */
+            sent_at: string;
+            /** Mine */
+            mine: boolean;
+            /** Asset Id */
+            asset_id?: string | null;
+            /** Media Kind */
+            media_kind?: string | null;
+            /**
+             * Read
+             * @default false
+             */
+            read: boolean;
+        };
+        /**
+         * MessagesOut
+         * @description The messages screen in one request.
+         *
+         *     Conversations and contacts together: the screen shows both, and two
+         *     round trips to draw one list is one more chance to show it half
+         *     built.
+         */
+        MessagesOut: {
+            /** Threads */
+            threads?: components["schemas"]["ThreadSummaryOut"][];
+            /** Contacts */
+            contacts?: components["schemas"]["ContactOut"][];
+        };
+        /** MyProfileOut */
+        MyProfileOut: {
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+            /** Handle */
+            handle?: string | null;
+            /** Bio */
+            bio?: string | null;
+            /**
+             * Bio State
+             * @enum {string}
+             */
+            bio_state: "pending_review" | "published" | "held";
+            /** Bio Note */
+            bio_note?: string | null;
+            /** Links */
+            links?: components["schemas"]["LinkOut"][];
+            /** Platforms */
+            platforms?: string[];
+            /** Banner Asset Id */
+            banner_asset_id?: string | null;
+            /**
+             * Banner State
+             * @default published
+             * @enum {string}
+             */
+            banner_state: "pending_review" | "published" | "held";
+            /** Banner Note */
+            banner_note?: string | null;
+            /**
+             * Private
+             * @default false
+             */
+            private: boolean;
+        };
+        /** NearbyShopsOut */
+        NearbyShopsOut: {
+            /** Items */
+            items: components["schemas"]["ShopOut"][];
+            /**
+             * Reachable
+             * @default true
+             */
+            reachable: boolean;
+            /** Attribution */
+            attribution: string;
+            /** Note */
+            note?: string | null;
+        };
+        /** NotificationOut */
+        NotificationOut: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "wardrobe_sorted" | "stylist_ready" | "fit_reactions";
+            /**
+             * Occurred At
+             * Format: date-time
+             */
+            occurred_at: string;
+            /** Title */
+            title: string;
+            /** Body */
+            body: string;
+            /** Target */
+            target?: string | null;
+            /** People */
+            people?: number | null;
+        };
+        /**
+         * NotificationPrefsOut
+         * @description Every toggle, resolved. Defaults are filled in server-side, so the
+         *     client renders what is true rather than re-deriving it.
+         */
+        NotificationPrefsOut: {
+            /** Wardrobe Sorted */
+            wardrobe_sorted: boolean;
+            /** Stylist Ready */
+            stylist_ready: boolean;
+            /** Fit Reactions */
+            fit_reactions: boolean;
+            /** Plan Reminders */
+            plan_reminders: boolean;
+        };
+        /**
+         * NotificationPrefsPatch
+         * @description A partial update. Absent means untouched, so one flipped switch
+         *     cannot quietly reset the others.
+         */
+        NotificationPrefsPatch: {
+            /** Wardrobe Sorted */
+            wardrobe_sorted?: boolean | null;
+            /** Stylist Ready */
+            stylist_ready?: boolean | null;
+            /** Fit Reactions */
+            fit_reactions?: boolean | null;
+            /** Plan Reminders */
+            plan_reminders?: boolean | null;
         };
         /** OccasionGuidanceView */
         OccasionGuidanceView: {
@@ -889,6 +4245,54 @@ export interface components {
             avoid?: string[];
             /** Note */
             note?: string | null;
+        };
+        /** OfferMatchOut */
+        OfferMatchOut: {
+            /**
+             * Product Id
+             * Format: uuid
+             */
+            product_id: string;
+            /** Title */
+            title: string;
+            /** Brand */
+            brand: string;
+            /** Category Id */
+            category_id: string;
+            /** Slot */
+            slot: string;
+            /** Colour */
+            colour?: string | null;
+            retailer: components["schemas"]["RetailerOut"];
+            /** Price Minor */
+            price_minor: number;
+            /** Currency */
+            currency: string;
+            /** Sizes */
+            sizes?: string[];
+            /**
+             * Availability
+             * @enum {string}
+             */
+            availability: "unverified" | "in_stock" | "out_of_stock";
+            /**
+             * Retrieved At
+             * Format: date-time
+             */
+            retrieved_at: string;
+            /** Stale */
+            stale: boolean;
+            /** Source Url */
+            source_url: string;
+            /**
+             * Match Label
+             * @enum {string}
+             */
+            match_label: "confirmed_item" | "likely_match" | "similar_style";
+            /** Evidence */
+            evidence?: {
+                [key: string]: string[] | string;
+            };
         };
         /** OutfitItemOut */
         OutfitItemOut: {
@@ -941,6 +4345,46 @@ export interface components {
             /** Next Cursor */
             next_cursor?: string | null;
         };
+        /** PeopleSearchOut */
+        PeopleSearchOut: {
+            /** Items */
+            items?: components["schemas"]["FoundPersonOut"][];
+            /**
+             * Private
+             * @default false
+             */
+            private: boolean;
+        };
+        /** PieceIn */
+        PieceIn: {
+            /** Name */
+            name: string;
+            /** Colour */
+            colour?: string | null;
+            /** Category */
+            category?: string | null;
+        };
+        /**
+         * PieceOut
+         * @description One garment in a picture, as it was asked for.
+         *
+         *     Never detected back out of the finished image: when the avatar is dressed
+         *     in an outfit the garments are already known, so re-reading them would pay a
+         *     vision call to guess at something in hand.
+         */
+        PieceOut: {
+            /** Name */
+            name: string;
+            /** Colour */
+            colour?: string | null;
+            /** Category */
+            category?: string | null;
+        };
+        /** PinsResponse */
+        PinsResponse: {
+            /** Refs */
+            refs: string[];
+        };
         /**
          * PlaceIn
          * @description A place the user named. Never a coordinate.
@@ -954,6 +4398,50 @@ export interface components {
             name?: string | null;
             /** Manual */
             manual?: string | null;
+        };
+        /** PlanIn */
+        PlanIn: {
+            /** Garment Ids */
+            garment_ids?: string[];
+            /** Note */
+            note?: string | null;
+            /** Worn */
+            worn?: boolean | null;
+            /** Reference Post Id */
+            reference_post_id?: string | null;
+        };
+        /** PlanOut */
+        PlanOut: {
+            /**
+             * Planned For
+             * Format: date
+             */
+            planned_for: string;
+            /** Garment Ids */
+            garment_ids?: string[];
+            /** Note */
+            note?: string | null;
+            /** Worn */
+            worn?: boolean | null;
+            /** Reference Post Id */
+            reference_post_id?: string | null;
+            /** Reference Asset Id */
+            reference_asset_id?: string | null;
+        };
+        /** PlannerResponse */
+        PlannerResponse: {
+            /** Items */
+            items: components["schemas"]["PlanOut"][];
+            /**
+             * Start
+             * Format: date
+             */
+            start: string;
+            /**
+             * End
+             * Format: date
+             */
+            end: string;
         };
         /**
          * PlatformCapability
@@ -975,6 +4463,249 @@ export interface components {
             can_store: boolean;
             /** Authorised Now */
             authorised_now: boolean;
+        };
+        /** PostCreateIn */
+        PostCreateIn: {
+            /** Caption */
+            caption?: string | null;
+            /** Occasion */
+            occasion?: string | null;
+            /** Media Asset Ids */
+            media_asset_ids?: string[];
+            /** Garment Ids */
+            garment_ids?: string[];
+            /** Product Ids */
+            product_ids?: string[];
+        };
+        /** PostCreatedOut */
+        PostCreatedOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "published" | "pending_review";
+            /** Note */
+            note: string;
+        };
+        /** PostFeedOut */
+        PostFeedOut: {
+            /** Items */
+            items?: components["schemas"]["PostOut"][];
+        };
+        /** PostItemOut */
+        PostItemOut: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "garment" | "product" | "gone";
+            /** Category Id */
+            category_id?: string | null;
+            /** Colour */
+            colour?: string | null;
+            /** Title */
+            title?: string | null;
+            /** Brand */
+            brand?: string | null;
+            /** Retailer */
+            retailer?: string | null;
+            /** Price Minor */
+            price_minor?: number | null;
+            /** Currency */
+            currency?: string | null;
+            /** Source Url */
+            source_url?: string | null;
+        };
+        /** PostMineListOut */
+        PostMineListOut: {
+            /** Items */
+            items?: components["schemas"]["PostMineOut"][];
+        };
+        /**
+         * PostMineOut
+         * @description The author's own view carries the state and the held note.
+         */
+        PostMineOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Author Id
+             * Format: uuid
+             */
+            author_id: string;
+            /** Author Name */
+            author_name: string;
+            /** Caption */
+            caption?: string | null;
+            /** Occasion */
+            occasion?: string | null;
+            /** Media Asset Ids */
+            media_asset_ids?: string[];
+            /** Items */
+            items?: components["schemas"]["PostItemOut"][];
+            /** Published At */
+            published_at?: string | null;
+            /**
+             * Saves
+             * @default 0
+             */
+            saves: number;
+            /**
+             * Saved By Me
+             * @default false
+             */
+            saved_by_me: boolean;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "pending_review" | "published" | "held" | "removed";
+            /**
+             * Visibility
+             * @default public
+             * @enum {string}
+             */
+            visibility: "public" | "private";
+            /** Cover Ratio */
+            cover_ratio?: number | null;
+            /** Screen Mode */
+            screen_mode?: string | null;
+            /** Screen Note */
+            screen_note?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** PostOut */
+        PostOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Author Id
+             * Format: uuid
+             */
+            author_id: string;
+            /** Author Name */
+            author_name: string;
+            /** Caption */
+            caption?: string | null;
+            /** Occasion */
+            occasion?: string | null;
+            /** Media Asset Ids */
+            media_asset_ids?: string[];
+            /** Items */
+            items?: components["schemas"]["PostItemOut"][];
+            /** Published At */
+            published_at?: string | null;
+            /**
+             * Saves
+             * @default 0
+             */
+            saves: number;
+            /**
+             * Saved By Me
+             * @default false
+             */
+            saved_by_me: boolean;
+        };
+        /** PostReactIn */
+        PostReactIn: {
+            /** Kind */
+            kind?: string | null;
+        };
+        /** PostReactionsOut */
+        PostReactionsOut: {
+            /** Counts */
+            counts?: {
+                [key: string]: number;
+            };
+            /**
+             * Total
+             * @default 0
+             */
+            total: number;
+            /** Mine */
+            mine?: string | null;
+        };
+        /** PostSaveOut */
+        PostSaveOut: {
+            /** Saves */
+            saves: number;
+            /** Saved By Me */
+            saved_by_me: boolean;
+        };
+        /**
+         * PostVisibilityIn
+         * @description Show this fit to people, or stop.
+         */
+        PostVisibilityIn: {
+            /**
+             * Visibility
+             * @enum {string}
+             */
+            visibility: "public" | "private";
+        };
+        /** PostVisibilityOut */
+        PostVisibilityOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Visibility
+             * @enum {string}
+             */
+            visibility: "public" | "private";
+        };
+        /** ProfileIn */
+        ProfileIn: {
+            /** Handle */
+            handle?: string | null;
+            /** Bio */
+            bio?: string | null;
+            /** Links */
+            links?: {
+                [key: string]: string;
+            } | null;
+            /** Banner Asset Id */
+            banner_asset_id?: string | null;
+            /** Private */
+            private?: boolean | null;
+        };
+        /**
+         * ProfileOut
+         * @description What the app needs to personalise, and nothing about the person.
+         *
+         *     Deliberately not the raw signals. A client has no use for the garment
+         *     counts and every reason not to hold them, so what crosses the wire is the
+         *     conclusion: which collections to lead each shelf with, and the two facts
+         *     a screen needs to explain itself honestly.
+         */
+        ProfileOut: {
+            /** Formula */
+            formula: string[];
+            /** Aesthetics */
+            aesthetics: string[];
+            /** Wardrobe Size */
+            wardrobe_size: number;
+            /** Gaps */
+            gaps: string[];
+            /** Answered */
+            answered: boolean;
         };
         /** ProvenanceView */
         ProvenanceView: {
@@ -1000,6 +4731,34 @@ export interface components {
             version: number;
             /** Supersedes */
             supersedes?: string | null;
+        };
+        /** PublicProfileOut */
+        PublicProfileOut: {
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+            /** Handle */
+            handle?: string | null;
+            /** Bio */
+            bio?: string | null;
+            /** Links */
+            links?: components["schemas"]["LinkOut"][];
+            /** Banner Asset Id */
+            banner_asset_id?: string | null;
+        };
+        /** ReactionKindOut */
+        ReactionKindOut: {
+            /** Kind */
+            kind: string;
+            /** Emoji */
+            emoji: string;
+        };
+        /** ReactionsCatalogueOut */
+        ReactionsCatalogueOut: {
+            /** Items */
+            items?: components["schemas"]["ReactionKindOut"][];
         };
         /** ReferenceCreate */
         ReferenceCreate: {
@@ -1097,6 +4856,99 @@ export interface components {
             notes?: string | null;
         };
         /**
+         * RenderOut
+         * @description A picture that was asked for, and where it got to.
+         *
+         *     `state` is the whole point: drawing takes 15 to 27 seconds on a worker,
+         *     so a client is told immediately what it asked for and polls this.
+         */
+        RenderOut: {
+            /** Id */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "base" | "try_on" | "from_photo";
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "queued" | "running" | "ready" | "failed";
+            /** Asset Id */
+            asset_id?: string | null;
+            /** Outfit */
+            outfit?: string | null;
+            /** Pieces */
+            pieces?: components["schemas"]["PieceOut"][];
+            /** Error */
+            error?: string | null;
+        };
+        /** RendersResponse */
+        RendersResponse: {
+            /** Items */
+            items: components["schemas"]["RenderOut"][];
+        };
+        /** ReorderIn */
+        ReorderIn: {
+            /** Refs */
+            refs: string[];
+        };
+        /** ReportIn */
+        ReportIn: {
+            /**
+             * Subject Kind
+             * @enum {string}
+             */
+            subject_kind: "account" | "post" | "comment";
+            /** Subject User Id */
+            subject_user_id?: string | null;
+            /** Post Id */
+            post_id?: string | null;
+            /** Comment Id */
+            comment_id?: string | null;
+            /**
+             * Reason
+             * @enum {string}
+             */
+            reason: "impersonation" | "inappropriate" | "spam" | "other";
+            /** Guideline Id */
+            guideline_id?: string | null;
+            /** Note */
+            note?: string | null;
+        };
+        /** ReportOut */
+        ReportOut: {
+            /**
+             * Report Id
+             * Format: uuid
+             */
+            report_id: string;
+        };
+        /** RetailerOut */
+        RetailerOut: {
+            /** Name */
+            name: string;
+            /** Homepage */
+            homepage: string;
+            /** Verified */
+            verified: boolean;
+        };
+        /** RetailerSearchOut */
+        RetailerSearchOut: {
+            /** Items */
+            items: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Configured
+             * @default false
+             */
+            configured: boolean;
+            /** Note */
+            note?: string | null;
+        };
+        /**
          * RunAccepted
          * @description The 202 body. A run id to poll, and where it is.
          */
@@ -1131,6 +4983,12 @@ export interface components {
             attachments?: components["schemas"]["AttachmentIn"][];
             /** Conversation Id */
             conversation_id?: string | null;
+            /** Garment Id */
+            garment_id?: string | null;
+            /** Media Asset Id */
+            media_asset_id?: string | null;
+            /** Post Id */
+            post_id?: string | null;
         };
         /** RunOut */
         RunOut: {
@@ -1180,6 +5038,21 @@ export interface components {
             /** Required */
             required?: string[];
         };
+        /** SceneOut */
+        SceneOut: {
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Description */
+            description: string;
+            /** Use */
+            use: string;
+            /** Aspect */
+            aspect: string;
+            /** Wears */
+            wears: boolean;
+        };
         /** SeasonGuidanceView */
         SeasonGuidanceView: {
             /** Name */
@@ -1215,6 +5088,265 @@ export interface components {
              */
             expires_at: string;
         };
+        /** ShopOut */
+        ShopOut: {
+            /** Name */
+            name: string;
+            /** Kind */
+            kind: string;
+            /** Latitude */
+            latitude: number;
+            /** Longitude */
+            longitude: number;
+            /** Distance M */
+            distance_m?: number | null;
+            /** Brand */
+            brand?: string | null;
+            /** Opening Hours */
+            opening_hours?: string | null;
+        };
+        /** ShopRecommendationsOut */
+        ShopRecommendationsOut: {
+            /** Sections */
+            sections?: components["schemas"]["ShopSectionOut"][];
+            /**
+             * Provider
+             * @default curated
+             * @constant
+             */
+            provider: "curated";
+        };
+        /** ShopSectionOut */
+        ShopSectionOut: {
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /** Reason */
+            reason: string;
+            /** Items */
+            items?: components["schemas"]["OfferMatchOut"][];
+        };
+        /** ShoppingSearchOut */
+        ShoppingSearchOut: {
+            /** Items */
+            items?: components["schemas"]["OfferMatchOut"][];
+            /**
+             * Provider
+             * @default curated
+             * @constant
+             */
+            provider: "curated";
+        };
+        /**
+         * ShotFromAssetIn
+         * @description Shoot a photograph directly, with no wardrobe item behind it.
+         *
+         *     This is the stylist's path: somebody hands it a picture from their
+         *     camera roll and asks for a packshot, and that picture never becomes a
+         *     garment. `garment_id` is accepted so the wardrobe can use the same
+         *     endpoint and keep the provenance.
+         */
+        ShotFromAssetIn: {
+            /** Treatment */
+            treatment: string;
+            /** Media Asset Id */
+            media_asset_id?: string | null;
+            /** Garment Id */
+            garment_id?: string | null;
+            /**
+             * Landscape
+             * @default false
+             */
+            landscape: boolean;
+            /** Brief */
+            brief?: string | null;
+        };
+        /** ShotOut */
+        ShotOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Source Asset Id
+             * Format: uuid
+             */
+            source_asset_id: string;
+            /** Garment Id */
+            garment_id?: string | null;
+            /** Treatment */
+            treatment: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "queued" | "running" | "ready" | "failed";
+            /** Media Asset Id */
+            media_asset_id?: string | null;
+            /** Error */
+            error?: string | null;
+            /** Brief */
+            brief?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** ShotRequestIn */
+        ShotRequestIn: {
+            /** Treatment */
+            treatment: string;
+        };
+        /** ShotsOut */
+        ShotsOut: {
+            /** Items */
+            items?: components["schemas"]["ShotOut"][];
+        };
+        /** SimulatedSubscribeIn */
+        SimulatedSubscribeIn: {
+            /**
+             * Plan
+             * @default plus
+             * @constant
+             */
+            plan: "plus";
+        };
+        /**
+         * SplitStartedOut
+         * @description A split has been queued. How many pictures is not known yet.
+         *
+         *     Deciding what a photograph contains is a model call, so it happens
+         *     on a worker and never in a handler (ADR-013) - which means the
+         *     count cannot be in this reply. The shots appear in the studio's
+         *     own list as the worker creates them, which is where somebody is
+         *     already looking while they wait.
+         */
+        SplitStartedOut: {
+            /**
+             * Job Id
+             * Format: uuid
+             */
+            job_id: string;
+        };
+        /** StoriesOut */
+        StoriesOut: {
+            /** Items */
+            items?: components["schemas"]["StoryOut"][];
+        };
+        /** StoryCreate */
+        StoryCreate: {
+            /**
+             * Kind
+             * @default launch
+             */
+            kind: string;
+            /** Scenes */
+            scenes?: string[] | null;
+            /** Title */
+            title?: string | null;
+            /** Brief */
+            brief?: string | null;
+            /** Cast */
+            cast?: {
+                [key: string]: string;
+            } | null;
+            /** Garment Id */
+            garment_id?: string | null;
+            /** Media Asset Id */
+            media_asset_id?: string | null;
+            /** Reference Post Id */
+            reference_post_id?: string | null;
+        };
+        /** StoryKindOut */
+        StoryKindOut: {
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Description */
+            description: string;
+            /** Scenes */
+            scenes?: string[];
+        };
+        /** StoryOut */
+        StoryOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Kind */
+            kind: string;
+            /** Title */
+            title?: string | null;
+            /** Brief */
+            brief?: string | null;
+            /** Cast */
+            cast?: {
+                [key: string]: string;
+            };
+            /** State */
+            state: string;
+            /** Reference Post Id */
+            reference_post_id?: string | null;
+            /** Style Note */
+            style_note?: string | null;
+            /** Frames */
+            frames?: components["schemas"]["FrameOut"][];
+            /** Created At */
+            created_at?: string | null;
+        };
+        /**
+         * StudioCapabilitiesOut
+         * @description What the brand studio can and cannot do, stated plainly.
+         */
+        StudioCapabilitiesOut: {
+            /** Scenes */
+            scenes?: components["schemas"]["SceneOut"][];
+            /** Kinds */
+            kinds?: components["schemas"]["StoryKindOut"][];
+            /** Cast Options */
+            cast_options?: {
+                [key: string]: string[];
+            };
+            /**
+             * Video
+             * @default blocked
+             */
+            video: string;
+            /**
+             * Video Reason
+             * @default
+             */
+            video_reason: string;
+            /**
+             * Source Note
+             * @default
+             */
+            source_note: string;
+        };
+        /** StudioOverviewOut */
+        StudioOverviewOut: {
+            /** Window */
+            window: string;
+            /** Fits */
+            fits: number;
+            /** Saves */
+            saves: number;
+            /** Reach */
+            reach: number;
+            /** Followers */
+            followers: number;
+            /** Followers Gained */
+            followers_gained: number;
+            /** Series */
+            series?: number[];
+            /** Top Fits */
+            top_fits?: components["schemas"]["TopFitOut"][];
+        };
         /** StyleVariantView */
         StyleVariantView: {
             /** Kind */
@@ -1237,6 +5369,196 @@ export interface components {
             slot: "top" | "bottom" | "dress" | "outer" | "shoes" | "bag" | "accessory";
         };
         /**
+         * TagFeedOut
+         * @description One hashtag, and everything under it.
+         */
+        TagFeedOut: {
+            /** Tag */
+            tag: string;
+            /** Items */
+            items?: components["schemas"]["FeedItemOut"][];
+            /** Related */
+            related?: string[];
+        };
+        /** TagOut */
+        TagOut: {
+            /** Tag */
+            tag: string;
+            /**
+             * Posts
+             * @default 0
+             */
+            posts: number;
+        };
+        /** TagsOut */
+        TagsOut: {
+            /** Items */
+            items?: components["schemas"]["TagOut"][];
+        };
+        /**
+         * TasteIn
+         * @description What somebody says they like. Every field optional.
+         *
+         *     Sending `{}` is a valid, meaningful request: it is somebody declining the
+         *     questions, which is a different state from never having been asked.
+         */
+        TasteIn: {
+            /** Aesthetics */
+            aesthetics?: string[];
+            /** Occasions */
+            occasions?: string[];
+            /**
+             * Dress Code
+             * @default unspecified
+             */
+            dress_code: string;
+            /** Goal */
+            goal?: string | null;
+        };
+        /**
+         * TasteOptions
+         * @description The vocabularies, so a client renders what the server will accept.
+         *
+         *     Served rather than hardcoded in the app: an aesthetic added here and not
+         *     there is a question nobody can answer, and one removed here but still
+         *     offered is an answer that is rejected after somebody taps it.
+         */
+        TasteOptions: {
+            /**
+             * Aesthetics
+             * @default [
+             *       "streetwear",
+             *       "quiet-luxury",
+             *       "clean-girl",
+             *       "downtown-romantic",
+             *       "dark-academia",
+             *       "gorpcore",
+             *       "blokecore",
+             *       "y2k",
+             *       "minimalist",
+             *       "monochrome",
+             *       "heritage",
+             *       "modest"
+             *     ]
+             */
+            aesthetics: string[];
+            /**
+             * Occasions
+             * @default [
+             *       "office",
+             *       "evening",
+             *       "date-night",
+             *       "wedding-guest",
+             *       "festival",
+             *       "travel"
+             *     ]
+             */
+            occasions: string[];
+            /**
+             * Dress Codes
+             * @default [
+             *       "none",
+             *       "smart_casual",
+             *       "business",
+             *       "formal",
+             *       "unspecified"
+             *     ]
+             */
+            dress_codes: string[];
+            /**
+             * Goals
+             * @default [
+             *       "more_from_what_i_own",
+             *       "what_to_wear_to",
+             *       "find_my_look"
+             *     ]
+             */
+            goals: string[];
+            /**
+             * Max Choices
+             * @default 6
+             */
+            max_choices: number;
+        };
+        /** TasteOut */
+        TasteOut: {
+            /** Aesthetics */
+            aesthetics?: string[];
+            /** Occasions */
+            occasions?: string[];
+            /**
+             * Dress Code
+             * @default unspecified
+             */
+            dress_code: string;
+            /** Goal */
+            goal?: string | null;
+            /** Answered */
+            answered: boolean;
+            /** Lens Order */
+            lens_order: string[];
+        };
+        /**
+         * ThreadOut
+         * @description One conversation, as its reader sees it.
+         */
+        ThreadOut: {
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+            /** Name */
+            name: string;
+            /** Handle */
+            handle?: string | null;
+            /**
+             * Followed
+             * @default false
+             */
+            followed: boolean;
+            /** Items */
+            items?: components["schemas"]["MessageOut"][];
+            /**
+             * Notifies
+             * @default true
+             */
+            notifies: boolean;
+            /**
+             * Hidden
+             * @default false
+             */
+            hidden: boolean;
+        };
+        /** ThreadSettingsIn */
+        ThreadSettingsIn: {
+            /** Notifies */
+            notifies?: boolean | null;
+            /** Hidden */
+            hidden?: boolean | null;
+        };
+        /** ThreadSummaryOut */
+        ThreadSummaryOut: {
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+            /** Name */
+            name: string;
+            /** Handle */
+            handle?: string | null;
+            /** Last */
+            last?: string | null;
+            /** Last At */
+            last_at?: string | null;
+            /**
+             * Unread
+             * @default 0
+             */
+            unread: number;
+        };
+        /**
          * ToolExecutionOut
          * @description One dispatch attempt. ``ok=false`` means it was refused, not that it ran.
          */
@@ -1248,6 +5570,107 @@ export interface components {
             /** Error Code */
             error_code?: string | null;
         };
+        /** TopFitOut */
+        TopFitOut: {
+            /**
+             * Post Id
+             * Format: uuid
+             */
+            post_id: string;
+            /** People */
+            people: number;
+            /** Saves */
+            saves: number;
+        };
+        /** TranscriptIn */
+        TranscriptIn: {
+            /** Audio Base64 */
+            audio_base64: string;
+            /**
+             * Content Type
+             * @default audio/wav
+             */
+            content_type: string;
+            /**
+             * Duration Seconds
+             * @default 0
+             */
+            duration_seconds: number;
+        };
+        /** TranscriptOut */
+        TranscriptOut: {
+            /** Text */
+            text: string;
+        };
+        /**
+         * TreatmentOut
+         * @description One shot the studio can take, described before it is paid for.
+         */
+        TreatmentOut: {
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Description */
+            description: string;
+        };
+        /** TreatmentsOut */
+        TreatmentsOut: {
+            /** Items */
+            items?: components["schemas"]["TreatmentOut"][];
+            /** Note */
+            note: string;
+        };
+        /**
+         * TryOnFitOut
+         * @description A try-on that was asked for, and where it got to.
+         *
+         *     The render is polled on the avatar routes, which already own render
+         *     state; this only hands back the id to poll and what was asked for.
+         */
+        TryOnFitOut: {
+            /**
+             * Render Id
+             * Format: uuid
+             */
+            render_id: string;
+            /** State */
+            state: string;
+            /** Outfit */
+            outfit?: string | null;
+        };
+        /** TryOnIn */
+        TryOnIn: {
+            /** Outfit */
+            outfit: string;
+            /** Pieces */
+            pieces?: components["schemas"]["PieceIn"][];
+        };
+        /**
+         * UpdateMeRequest
+         * @description What somebody may change about their own profile.
+         *
+         *     Both fields are three-valued and the distinction is the whole point of
+         *     the shape: absent means "leave it alone", a value sets it, and `null`
+         *     clears it. A two-valued field cannot express "remove my photograph"
+         *     without a second endpoint to do the removing.
+         *
+         *     Nothing here touches the email or the verified flag. Those come from the
+         *     identity provider on every token, so accepting them would let a client
+         *     write a claim the next sign-in silently overwrites.
+         */
+        UpdateMeRequest: {
+            /**
+             * Display Name
+             * @description Shown in the app. Null clears it and falls back to the email.
+             */
+            display_name?: string | null;
+            /**
+             * Profile Photo Asset Id
+             * @description A media asset this user owns. Null removes the photograph.
+             */
+            profile_photo_asset_id?: string | null;
+        };
         /** UploadAuthorizeRequest */
         UploadAuthorizeRequest: {
             /**
@@ -1255,7 +5678,7 @@ export interface components {
              * @default garment_photo
              * @enum {string}
              */
-            kind: "garment_photo" | "outfit_photo" | "inspiration" | "avatar";
+            kind: "garment_photo" | "outfit_photo" | "inspiration" | "avatar" | "avatar_source" | "profile_banner" | "message_media";
             /** Content Type */
             content_type: string;
             /** Content Length */
@@ -1297,6 +5720,46 @@ export interface components {
             /** Context */
             ctx?: Record<string, never>;
         };
+        /** VisualSearchIn */
+        VisualSearchIn: {
+            /**
+             * Media Asset Id
+             * Format: uuid
+             */
+            media_asset_id: string;
+        };
+        /**
+         * VisualSearchOut
+         * @description Where a search by picture got to.
+         *
+         *     `queued` and `running` mean keep polling. Reading a photograph
+         *     takes five to nine seconds, which is the real cost of the thing;
+         *     the state says so rather than leaving a spinner to imply it is
+         *     nearly done.
+         */
+        VisualSearchOut: {
+            /**
+             * Job Id
+             * Format: uuid
+             */
+            job_id: string;
+            /** State */
+            state: string;
+            /** Tags */
+            tags?: string[];
+            /**
+             * Outfit
+             * @default
+             */
+            outfit: string;
+            /** Error */
+            error?: string | null;
+        };
+        /** WornIn */
+        WornIn: {
+            /** Worn */
+            worn: boolean;
+        };
     };
     responses: never;
     parameters: never;
@@ -1324,6 +5787,77 @@ export interface operations {
                     "application/json": {
                         [key: string]: string;
                     };
+                };
+            };
+        };
+    };
+    latest_export_v1_account_export_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExportOut"] | null;
+                };
+            };
+        };
+    };
+    ask_for_export_v1_account_export_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExportOut"];
+                };
+            };
+        };
+    };
+    download_export_v1_account_export__export_id__file_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                export_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -1386,6 +5920,39 @@ export interface operations {
             };
         };
     };
+    update_me_v1_auth_me_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateMeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     confirm_identity_link_v1_auth_identity_link_post: {
         parameters: {
             query?: never;
@@ -1434,6 +6001,3140 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    read_avatar_v1_avatar_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AvatarOut"];
+                };
+            };
+        };
+    };
+    create_avatar_v1_avatar_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RenderOut"];
+                };
+            };
+        };
+    };
+    set_appearance_v1_avatar_appearance_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AppearanceIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppearanceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    try_on_v1_avatar_try_on_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TryOnIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RenderOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    from_photo_v1_avatar_from_photo_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LikenessIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RenderOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_photos_v1_avatar_photos_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LikenessPhotosOut"];
+                };
+            };
+        };
+    };
+    forget_photo_v1_avatar_photos__asset_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_renders_v1_avatar_renders_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RendersResponse"];
+                };
+            };
+        };
+    };
+    read_render_v1_avatar_renders__render_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                render_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RenderOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_entitlements_v1_billing_entitlements_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntitlementsOut"];
+                };
+            };
+        };
+    };
+    simulated_subscribe_v1_billing_simulated_subscribe_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SimulatedSubscribeIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntitlementsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_auto_renew_v1_billing_auto_renew_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AutoRenewIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntitlementsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    capabilities_v1_studio_capabilities_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudioCapabilitiesOut"];
+                };
+            };
+        };
+    };
+    read_stories_v1_studio_stories_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoriesOut"];
+                };
+            };
+        };
+    };
+    create_story_v1_studio_stories_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StoryCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoryOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_story_v1_studio_stories__story_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                story_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoryOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    discard_story_v1_studio_stories__story_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                story_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    people_v1_community_people_get: {
+        parameters: {
+            query?: {
+                q?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PeopleSearchOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    follow_counts_v1_community_follows_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FollowCountsOut"];
+                };
+            };
+        };
+    };
+    followers_v1_community_followers_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PeopleSearchOut"];
+                };
+            };
+        };
+    };
+    following_v1_community_following_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PeopleSearchOut"];
+                };
+            };
+        };
+    };
+    member_followers_v1_community_members__user_id__followers_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PeopleSearchOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    member_following_v1_community_members__user_id__following_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PeopleSearchOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_following_v1_community_follows__user_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stop_following_v1_community_follows__user_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    member_v1_community_members__user_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_block_v1_community_blocks__user_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    end_block_v1_community_blocks__user_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    blocked_list_v1_community_blocks_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BlockedListOut"];
+                };
+            };
+        };
+    };
+    guidelines_v1_community_guidelines_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GuidelinesOut"];
+                };
+            };
+        };
+    };
+    file_report_v1_community_reports_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReportIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listing_v1_wardrobe_collections_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionsOut"];
+                };
+            };
+        };
+    };
+    create_v1_wardrobe_collections_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CollectionIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_v1_wardrobe_collections__collection_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                collection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rename_v1_wardrobe_collections__collection_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                collection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CollectionRenameIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_members_v1_wardrobe_collections__collection_id__garments_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                collection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CollectionMembersIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_members_v1_wardrobe_collections__collection_id__garments_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                collection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CollectionMembersIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_consents_v1_consents_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConsentsResponse"];
+                };
+            };
+        };
+    };
+    set_consent_v1_consents__kind__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConsentSetIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConsentOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    board_v1_feed_get: {
+        parameters: {
+            query?: {
+                group?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeedOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    groups_v1_feed_groups_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroupsOut"];
+                };
+            };
+        };
+    };
+    saved_v1_feed_saved_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeedOut"];
+                };
+            };
+        };
+    };
+    read_comments_v1_feed__post_id__comments_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                post_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommentsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    write_comment_v1_feed__post_id__comments_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                post_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CommentIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommentOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    like_comment_v1_feed_comments__comment_id__like_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                comment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommentLikeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unlike_comment_v1_feed_comments__comment_id__like_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                comment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommentLikeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_comment_v1_feed_comments__comment_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                comment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_visual_search_v1_feed_search_visual_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VisualSearchIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VisualSearchOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_visual_search_v1_feed_search_visual__job_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VisualSearchOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    explore_v1_feed_explore_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExploreOut"];
+                };
+            };
+        };
+    };
+    ideas_v1_feed_ideas_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IdeasOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    tags_v1_feed_tags_get: {
+        parameters: {
+            query?: {
+                q?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    tag_feed_v1_feed_tags__tag__get: {
+        parameters: {
+            query?: {
+                photographs_only?: boolean;
+            };
+            header?: never;
+            path: {
+                tag: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagFeedOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    detail_v1_feed__post_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                post_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FitDetailOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    hide_fit_v1_feed__post_id__hide_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                post_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unhide_fit_v1_feed__post_id__hide_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                post_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    try_on_fit_v1_feed__post_id__try_on_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                post_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TryOnFitOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    treatments_v1_garments_studio_treatments_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TreatmentsOut"];
+                };
+            };
+        };
+    };
+    shots_v1_garments__garment_id__studio_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                garment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShotsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    shoot_v1_garments__garment_id__studio_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                garment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ShotRequestIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShotOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    shoot_each_v1_garments_studio_shots_each_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ShotFromAssetIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SplitStartedOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    shot_v1_garments_studio_shots__shot_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                shot_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShotOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    discard_v1_garments_studio_shots__shot_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                shot_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    recent_shots_v1_garments_studio_shots_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShotsOut"];
+                };
+            };
+        };
+    };
+    shoot_asset_v1_garments_studio_shots_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ShotFromAssetIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShotOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    inbox_v1_messages_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessagesOut"];
+                };
+            };
+        };
+    };
+    thread_v1_messages__user_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    write_v1_messages__user_id__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MessageIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clear_thread_v1_messages__user_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unsend_v1_messages__user_id__messages__message_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+                message_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    hide_v1_messages__user_id__messages__message_id__hide_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+                message_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_v1_messages__user_id__read_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    settings_v1_messages__user_id__settings_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ThreadSettingsIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_boards_v1_moodboards_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BoardsResponse"];
+                };
+            };
+        };
+    };
+    create_board_v1_moodboards_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BoardIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BoardOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_board_v1_moodboards__board_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                board_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rename_board_v1_moodboards__board_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                board_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BoardIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BoardOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    pin_post_v1_moodboards__board_id__posts__post_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                board_id: string;
+                post_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BoardOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unpin_post_v1_moodboards__board_id__posts__post_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                board_id: string;
+                post_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BoardOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reorder_board_v1_moodboards__board_id__order_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                board_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReorderIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PinsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_inbox_v1_notifications_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InboxResponse"];
+                };
+            };
+        };
+    };
+    mark_read_v1_notifications_read_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarkReadOut"];
+                };
+            };
+        };
+    };
+    read_preferences_v1_notifications_preferences_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationPrefsOut"];
+                };
+            };
+        };
+    };
+    write_preferences_v1_notifications_preferences_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NotificationPrefsPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationPrefsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_planner_v1_planner_get: {
+        parameters: {
+            query?: {
+                start?: string | null;
+                end?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlannerResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    plan_day_v1_planner__day__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                day: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlanIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unplan_day_v1_planner__day__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                day: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_worn_v1_planner__day__worn_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                day: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WornIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_v1_posts_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PostCreateIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PostCreatedOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    feed_v1_posts_feed_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PostFeedOut"];
+                };
+            };
+        };
+    };
+    mine_v1_posts_mine_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PostMineListOut"];
+                };
+            };
+        };
+    };
+    delete_v1_posts__post_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                post_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    visibility_v1_posts__post_id__visibility_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                post_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PostVisibilityIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PostVisibilityOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_v1_posts__post_id__save_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                post_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PostSaveOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unsave_v1_posts__post_id__save_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                post_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PostSaveOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    react_v1_posts__post_id__reaction_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                post_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PostReactIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PostReactionsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_taste_profile_v1_profile_taste_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfileOut"];
+                };
+            };
+        };
+    };
+    read_inspiration_v1_profile_inspiration_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InspirationOut"];
+                };
+            };
+        };
+    };
+    reactions_v1_profiles_reactions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReactionsCatalogueOut"];
+                };
+            };
+        };
+    };
+    mine_v1_profiles_me_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyProfileOut"];
+                };
+            };
+        };
+    };
+    update_v1_profiles_me_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProfileIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyProfileOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    public_v1_profiles__handle__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                handle: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicProfileOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    register_v1_push_devices_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeviceIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeviceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    forget_v1_push_devices__token__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    search_v1_shopping_search_get: {
+        parameters: {
+            query?: {
+                category?: string | null;
+                slot?: string | null;
+                colour?: string | null;
+                aesthetic?: string[];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShoppingSearchOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    recommendations_v1_shopping_recommendations_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShopRecommendationsOut"];
+                };
+            };
+        };
+    };
+    for_fit_v1_shopping_for_fit__post_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                post_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShopRecommendationsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    nearby_v1_shops_nearby_get: {
+        parameters: {
+            query: {
+                lat: number;
+                lon: number;
+                radius_m?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NearbyShopsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retailers_v1_shops_retailers_get: {
+        parameters: {
+            query: {
+                q: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailerSearchOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    transcribe_v1_speech_transcribe_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TranscriptIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TranscriptOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };
@@ -1940,6 +9641,57 @@ export interface operations {
             };
         };
     };
+    overview_v1_studio_overview_get: {
+        parameters: {
+            query?: {
+                window?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudioOverviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    capabilities_v1_stylist_can_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssistantOut"];
+                };
+            };
+        };
+    };
     create_run_v1_stylist_runs_post: {
         parameters: {
             query?: never;
@@ -2124,6 +9876,112 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OutfitPageOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ask_v1_stylist_ask_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AskCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_options_v1_taste_options_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TasteOptions"];
+                };
+            };
+        };
+    };
+    read_taste_v1_taste_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TasteOut"];
+                };
+            };
+        };
+    };
+    set_taste_v1_taste_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TasteIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TasteOut"];
                 };
             };
             /** @description Validation Error */

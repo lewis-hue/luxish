@@ -168,3 +168,101 @@ describe('client behaviour', () => {
     expect(seen[0]).toBe('https://api.test/healthz');
   });
 });
+
+/**
+ * A response that behaves like the platform's but is **not** an instance of the
+ * `Response` that `openapi-fetch`'s `instanceof` check resolves to.
+ *
+ * This is the React Native case, and it is the entire reason the bug it pins
+ * reached a device: under Node, `new Response()` satisfies that check, so the
+ * suite stayed green while every successful call on a phone threw
+ * "onResponse: must return new Response() when modifying the response".
+ */
+class ForeignResponse {
+  readonly status: number;
+  readonly statusText = '';
+  readonly headers: Headers;
+  readonly body = null;
+  readonly #text: string;
+
+  constructor(text: string, init: { status: number; headers?: Record<string, string> }) {
+    this.#text = text;
+    this.status = init.status;
+    this.headers = new Headers(init.headers ?? {});
+  }
+
+  get ok(): boolean {
+    return this.status >= 200 && this.status < 300;
+  }
+
+  async text(): Promise<string> {
+    return this.#text;
+  }
+
+  async json(): Promise<unknown> {
+    return JSON.parse(this.#text);
+  }
+
+  clone(): ForeignResponse {
+    return new ForeignResponse(this.#text, { status: this.status });
+  }
+}
+
+function foreignJson(status: number, body: unknown, headers: Record<string, string> = {}) {
+  return new ForeignResponse(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json', ...headers },
+  }) as unknown as Response;
+}
+
+describe('responses from a runtime whose Response is not the global one', () => {
+  it('returns the data rather than throwing', async () => {
+    const client = createApiClient({
+      baseUrl: 'https://api.test',
+      fetch: async () => foreignJson(200, { status: 'ok' }),
+    });
+
+    // Before the fix this rejected with "onResponse: must return new
+    // Response() when modifying the response", because the middleware handed
+    // the untouched response straight back and it failed `instanceof`.
+    const result = await client.GET('/healthz');
+    expect(result.data).toEqual({ status: 'ok' });
+    expect(result.error).toBeUndefined();
+  });
+
+  it('still reports a failure as a typed ApiError', async () => {
+    const client = createApiClient({
+      baseUrl: 'https://api.test',
+      fetch: async () =>
+        foreignJson(409, { code: 'identity_link_required', message: 'Link required' }, {
+          'x-request-id': 'req-rn',
+        }),
+    });
+
+    await expect(client.GET('/healthz')).rejects.toMatchObject({
+      name: 'ApiError',
+      status: 409,
+      code: 'identity_link_required',
+      requestId: 'req-rn',
+    });
+  });
+
+  it('replays once after a recovered 401 and hands back a usable response', async () => {
+    let call = 0;
+    const client = createApiClient({
+      baseUrl: 'https://api.test',
+      getToken: () => (call === 0 ? 'stale' : 'fresh'),
+      onUnauthorized: async () => true,
+      fetch: async () => {
+        call += 1;
+        return call === 1
+          ? foreignJson(401, { code: 'unauthorized', message: 'no' })
+          : foreignJson(200, { status: 'ok' });
+      },
+    });
+
+    const result = await client.GET('/healthz');
+    expect(result.data).toEqual({ status: 'ok' });
+    expect(call).toBe(2);
+  });
+});

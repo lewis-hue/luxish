@@ -9,6 +9,15 @@ request timeout makes the alternative a liability, and a styling turn that
 makes several provider calls would sit well inside it. The client polls
 ``GET /v1/stylist/runs/{id}``, which reports ``state``, ``progress``, the
 outfit when there is one, and an ``explanation_code`` when there is not.
+
+``POST /v1/stylist/ask`` is the one exception, and it is a deliberate
+one. It answers a question in words and streams them back as they are
+written. The rule it bends is "no model call in a handler"; the reason
+the rule exists is Cloud Run's request timeout against image work that
+takes 15 to 30 seconds, and this is a short text completion measured at
+six. The expensive half - drawing the avatar - is still queued from
+inside it. Cheap and interactive in the request; expensive and durable
+on a worker.
 """
 
 from __future__ import annotations
@@ -16,10 +25,14 @@ from __future__ import annotations
 import uuid
 
 from fastapi import APIRouter, Query, status
+from fastapi.responses import StreamingResponse
 
 from app.deps import AuthDep, SessionDep
 from app.domain import stylist
 from app.schemas.stylist import (
+    AskCreate,
+    AssistantOut,
+    CapabilityOut,
     FeedbackCreate,
     FeedbackOut,
     OutfitItemOut,
@@ -84,6 +97,32 @@ def _run_out(view: stylist.StylistRunView) -> RunOut:
     )
 
 
+@router.get("/can", response_model=AssistantOut)
+async def capabilities() -> AssistantOut:
+    """What you can ask for, and what is not available.
+
+    Static and the same for everybody. A client renders these as examples
+    of what to say, never as buttons: the point of routing by sentence is
+    that the screen stays one input box.
+    """
+    from app.domain import assistant
+    from app.workers.brand_studio import VIDEO_REASON, VIDEO_STATUS
+
+    return AssistantOut(
+        items=[
+            CapabilityOut(
+                intent=item.intent,
+                label=item.label,
+                description=item.description,
+                needs=list(item.needs),
+            )
+            for item in assistant.what_it_can_do()
+        ],
+        video=VIDEO_STATUS,
+        video_reason=VIDEO_REASON,
+    )
+
+
 @router.post("/runs", response_model=RunAccepted, status_code=status.HTTP_202_ACCEPTED)
 async def create_run(payload: RunCreate, db: SessionDep, ctx: AuthDep) -> RunAccepted:
     """Queue a styling run. Returns 202 with an id to poll.
@@ -98,6 +137,9 @@ async def create_run(payload: RunCreate, db: SessionDep, ctx: AuthDep) -> RunAcc
         occasion=payload.occasion,
         place=payload.place_name,
         date=payload.date,
+        garment_id=payload.garment_id,
+        asset_id=payload.media_asset_id,
+        post_id=payload.post_id,
         attachments=[
             stylist.Attachment(
                 source=item.source, text=item.text, origin_url=item.origin_url
@@ -168,3 +210,87 @@ async def list_outfits(
     return OutfitPageOut(
         items=[_outfit_out(view) for view in page.items], next_cursor=page.next_cursor
     )
+
+@router.post("/ask")
+async def ask(payload: AskCreate, db: SessionDep, ctx: AuthDep) -> StreamingResponse:
+    """Answer a question about this person's wardrobe, streaming.
+
+    Server-sent events, one JSON object per line:
+
+        {"event": "token",    "text": "Yes, you "}
+        {"event": "verdict",  "has_match": true, "using": [...]}
+        {"event": "shopping", "items": [...]}
+        {"event": "render",   "render_id": "..."}
+        {"event": "done"}
+
+    **SSE rather than a websocket** because this is one short
+    one-directional burst per question. A socket would be a
+    connection to keep alive, authenticate separately and reconnect,
+    for a stream that lives six seconds.
+    """
+    import json as _json
+
+    from app.domain import stylist_ask
+    from app.providers.base import AIRunRecorder
+    from app.providers.meta import MetaProvider
+
+    provider = MetaProvider(recorder=AIRunRecorder(db))
+
+    async def events():
+        try:
+            async for name, body in stylist_ask.stream_answer(
+                db,
+                user_id=ctx.user_id,
+                question=payload.question,
+                post_id=payload.post_id,
+                history=[(t.who, t.text) for t in payload.history],
+                provider=provider,
+            ):
+                if name == "token":
+                    line = {"event": "token", "text": body}
+                elif name == "verdict":
+                    line = {
+                        "event": "verdict",
+                        "has_match": body.has_match,
+                        "using": [str(g) for g in body.using],
+                        "missing": list(body.missing),
+                    }
+                elif name == "shopping":
+                    line = {
+                        "event": "shopping",
+                        "items": [_offer(m) for m in body],
+                    }
+                elif name == "render":
+                    line = {"event": "render", "render_id": str(body)}
+                else:
+                    line = {"event": "done"}
+                yield f"data: {_json.dumps(line)}\n\n"
+            await db.commit()
+        except Exception:  # noqa: BLE001
+            # The stream has already started, so there is no status
+            # code left to change. Saying so in-band is the only way
+            # the client learns anything.
+            yield 'data: {"event": "error"}\n\n'
+
+    return StreamingResponse(
+        events(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-store",
+            # Proxies that buffer would hold the whole reply and
+            # undo the streaming entirely.
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+def _offer(match) -> dict:
+    """One shoppable thing, as the client renders it."""
+    product = getattr(match, "product", None)
+    return {
+        "product_id": str(getattr(match, "product_id", "") or ""),
+        "title": getattr(product, "title", None) or getattr(match, "title", None),
+        "retailer": getattr(product, "retailer", None),
+        "url": getattr(product, "url", None),
+        "match_label": getattr(match, "match_label", None),
+    }

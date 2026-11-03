@@ -1,0 +1,272 @@
+/*
+ * The sign-in page, in the app's own clothes.
+ *
+ * This is the one screen in the product we do not draw: the mobile app hands
+ * off to Keycloak in a system browser, because an in-app WebView could read a
+ * Google password as it is typed. That hand-off is a security requirement, and
+ * it has a cost — the person taps "Continue with Google" on a warm paper
+ * screen set in Bodoni and lands on stock PatternFly blue. Nothing is broken,
+ * but it reads as having been handed to somebody else, which is exactly the
+ * feeling a sign-in page must not produce.
+ *
+ * So: the same paper, the same ink, the same two faces, the same button. Only
+ * the stylesheet changes. The markup stays Keycloak's, which is what keeps
+ * this surviving an upgrade (see theme.properties).
+ *
+ * Values are copied from apps/mobile/src/constants/theme.ts rather than
+ * imported, because a CSS file in a Docker volume cannot import a TypeScript
+ * module. They are written out once here, named, and must be changed in both
+ * places — which is the trade for not forking Keycloak's templates.
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,400..900&family=Archivo:wdth,wght@62..125,100..900&display=swap');
+
+:root {
+  /* apps/mobile/src/constants/theme.ts -> Colors.light */
+  --luxish-paper: #faf7f2;
+  --luxish-surface: #f2ede5;
+  --luxish-ink: #1f1b1a;
+  --luxish-ink-soft: #6b625c;
+  --luxish-rule: #e0d8cc;
+  --luxish-rule-strong: #9a8c7e;
+  --luxish-accent: #7a1f3d;
+  --luxish-on-accent: #ffffff;
+  --luxish-danger: #9b2226;
+  /* Radius.md, with the app's continuous curve approximated. */
+  --luxish-radius: 12px;
+  /* Laid over the photographs so the card and its text stay legible. Heavy
+     enough to read type over, light enough that the pictures are still
+     pictures rather than a tint. */
+  --luxish-scrim: rgba(250, 247, 242, 0.84);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* Colors.dark */
+    --luxish-paper: #121010;
+    --luxish-surface: #1e1a19;
+    --luxish-ink: #f5f0ea;
+    --luxish-ink-soft: #a79e96;
+    --luxish-rule: #332d2b;
+    --luxish-rule-strong: #6b6157;
+    --luxish-accent: #d98a9e;
+    --luxish-on-accent: #2b0d18;
+    --luxish-danger: #f08a82;
+    --luxish-scrim: rgba(18, 16, 16, 0.86);
+  }
+}
+
+/* --- the page ---------------------------------------------------------- */
+
+body,
+body.login-pf,
+.login-pf body,
+.pf-v5-c-login,
+.pf-v5-c-login__container {
+  /* `background-color`, not the `background` shorthand: the shorthand resets
+     `background-image`, and the backdrop below is set on the same element.
+     The two rules would then fight over source order rather than compose. */
+  background-color: var(--luxish-paper) !important;
+  color: var(--luxish-ink);
+  font-family: 'Archivo', system-ui, -apple-system, sans-serif;
+}
+
+/*
+ * The backdrop: the same three crops the app's own sign-in screen shows.
+ *
+ * PatternFly paints its own photograph here, and that image is what says
+ * "an identity server" regardless of the colour behind it. Replacing it
+ * rather than merely clearing it is what closes the hand-off: the person
+ * taps Continue on a screen showing a cuff, a coat shoulder and a pair of
+ * trainers, and lands on the same three. Flush thirds, no gaps, exactly as
+ * `DetailStrip` lays them out in the app.
+ *
+ * Layer order is top-first. The grain lies over everything, as it does in
+ * the app; the scrim sits between it and the photographs so the card stays
+ * legible over whatever is behind it.
+ */
+.login-pf body,
+body.login-pf {
+  background-image:
+    url('../img/grain.webp'),
+    linear-gradient(var(--luxish-scrim), var(--luxish-scrim)),
+    url('../img/step.webp'),
+    url('../img/shoulder.webp'),
+    url('../img/cuff.webp') !important;
+  background-size: 512px 512px, cover, 33.34% 100%, 33.34% 100%, 33.34% 100% !important;
+  background-position: top left, center, right center, center center, left center !important;
+  background-repeat: repeat, no-repeat, no-repeat, no-repeat, no-repeat !important;
+  background-attachment: fixed, fixed, fixed, fixed, fixed !important;
+}
+
+/*
+ * One crop on a narrow screen. Three thirds on a phone is three slivers,
+ * and a sliver of a photograph is a texture rather than a picture.
+ */
+@media (max-width: 700px) {
+  .login-pf body,
+  body.login-pf {
+    background-image:
+      url('../img/grain.webp'),
+      linear-gradient(var(--luxish-scrim), var(--luxish-scrim)),
+      url('../img/shoulder.webp') !important;
+    background-size: 512px 512px, cover, cover !important;
+    background-position: top left, center, center !important;
+    background-repeat: repeat, no-repeat, no-repeat !important;
+  }
+}
+
+.pf-v5-c-login__main {
+  background: var(--luxish-paper);
+  border: 1px solid var(--luxish-rule);
+  border-radius: var(--luxish-radius);
+  /* A lift, now that it sits over a photograph rather than flat paper —
+     the same shadow the app puts under a print in the collage. */
+  box-shadow: 0 6px 18px rgba(31, 27, 26, 0.16);
+}
+
+/* --- type -------------------------------------------------------------- */
+
+/*
+ * Bodoni for the heading, Archivo for everything read or tapped, which is the
+ * same split the app uses. The optical-size axis is pinned low for the same
+ * reason it is on the welcome screen: Bodoni's display cuts thin their
+ * hairlines until the thin strokes of a U or an X stop being there.
+ */
+.pf-v5-c-login__main-header h1,
+.pf-v5-c-title,
+#kc-page-title {
+  font-family: 'Bodoni Moda', Georgia, serif;
+  font-variation-settings: 'opsz' 8, 'wght' 500;
+  font-weight: 500;
+  color: var(--luxish-ink);
+  letter-spacing: -0.01em;
+}
+
+label,
+.pf-v5-c-form__label,
+.pf-v5-c-form__label-text {
+  font-family: 'Archivo', system-ui, sans-serif;
+  font-variation-settings: 'wght' 400;
+  color: var(--luxish-ink-soft);
+}
+
+/* --- fields ------------------------------------------------------------ */
+
+input.pf-v5-c-form-control,
+.pf-v5-c-form-control,
+.pf-v5-c-form-control > input {
+  background: var(--luxish-paper);
+  border: 1px solid var(--luxish-rule);
+  border-radius: var(--luxish-radius);
+  color: var(--luxish-ink);
+  font-family: 'Archivo', system-ui, sans-serif;
+  /* PatternFly draws a thick bottom rule under inputs; the app uses a
+     hairline box, so the rule is flattened rather than recoloured. */
+  box-shadow: none;
+  --pf-v5-c-form-control--BorderBottomColor: var(--luxish-rule);
+  --pf-v5-c-form-control--BorderBottomWidth: 1px;
+}
+
+input.pf-v5-c-form-control:focus,
+.pf-v5-c-form-control:focus-within {
+  border-color: var(--luxish-ink);
+  outline: 2px solid transparent;
+  /* A visible focus ring that is not a colour alone, so it survives both
+     themes and a monochrome display. */
+  box-shadow: 0 0 0 2px var(--luxish-paper), 0 0 0 4px var(--luxish-rule-strong);
+}
+
+/* --- buttons ----------------------------------------------------------- */
+
+/*
+ * The primary button is the app's: solid ink, page-coloured label, the same
+ * radius. Not the accent — the app's accent is a deep claret used for marks
+ * and badges, and the thing you press to get in is ink there too.
+ */
+.pf-v5-c-button.pf-m-primary,
+input[type='submit'].pf-v5-c-button {
+  background: var(--luxish-ink);
+  color: var(--luxish-paper);
+  border: 1px solid var(--luxish-ink);
+  border-radius: var(--luxish-radius);
+  font-family: 'Archivo', system-ui, sans-serif;
+  font-variation-settings: 'wght' 800;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  min-height: 52px;
+}
+
+.pf-v5-c-button.pf-m-primary:hover,
+.pf-v5-c-button.pf-m-primary:focus {
+  background: var(--luxish-ink);
+  opacity: 0.88;
+}
+
+.pf-v5-c-button.pf-m-secondary,
+.pf-v5-c-button.pf-m-tertiary {
+  background: transparent;
+  color: var(--luxish-ink);
+  border: 1px solid var(--luxish-rule-strong);
+  border-radius: var(--luxish-radius);
+  font-family: 'Archivo', system-ui, sans-serif;
+  font-variation-settings: 'wght' 800;
+  min-height: 52px;
+}
+
+.pf-v5-c-button.pf-m-link,
+a {
+  color: var(--luxish-ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* --- identity providers ------------------------------------------------ */
+
+.pf-v5-c-login__main-footer-links-item a,
+#kc-social-providers a {
+  border-radius: var(--luxish-radius);
+  border: 1px solid var(--luxish-rule-strong);
+  color: var(--luxish-ink);
+  text-decoration: none;
+}
+
+/* --- messages ---------------------------------------------------------- */
+
+/*
+ * A dot and plain text, not a tinted banner. The washes available on warm
+ * paper compute to about 1.1:1 against the page, so a filled alert adds
+ * markup and no signal — the app makes the same call on its own error rows.
+ */
+.pf-v5-c-alert {
+  background: transparent;
+  border: 0;
+  border-left: 2px solid var(--luxish-rule-strong);
+  border-radius: 0;
+  padding-left: 12px;
+  box-shadow: none;
+}
+
+.pf-v5-c-alert.pf-m-danger,
+.pf-v5-c-alert.pf-m-error {
+  border-left-color: var(--luxish-danger);
+}
+
+.pf-v5-c-alert__title,
+.pf-v5-c-helper-text__item-text {
+  color: var(--luxish-ink);
+  font-family: 'Archivo', system-ui, sans-serif;
+}
+
+.pf-m-error .pf-v5-c-helper-text__item-text {
+  color: var(--luxish-danger);
+}
+
+/* --- motion ------------------------------------------------------------ */
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+}

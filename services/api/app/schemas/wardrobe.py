@@ -41,6 +41,14 @@ class GarmentOut(BaseModel):
     category: str | None
     availability: Availability
     media_asset_id: uuid.UUID | None
+    #: The cut-out, once background removal has produced one. Separate from
+    #: ``media_asset_id`` rather than replacing it: the photograph is the
+    #: evidence the cut-out was derived from, and a client may want either.
+    background_removed_asset_id: uuid.UUID | None = None
+    #: True when the picture is a rendering rather than a photograph of this
+    #: garment. The client must say so: a drawing of a garment like yours is
+    #: not evidence that you own that one.
+    image_is_rendered: bool = False
     confirmed_attributes: dict[str, Any]
     inferred_attributes: dict[str, Any]
     inference_confidence: float | None

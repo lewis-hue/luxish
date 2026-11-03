@@ -1,7 +1,14 @@
 import { Pressable, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { Colors, Display, Radius, Spacing } from '@/constants/theme';
+import { Collage, type CollageFrame } from '@/components/ui/collage';
+import {
+  Colors,
+  Radius,
+  Spacing,
+  labelType,
+} from '@/constants/theme';
+import { EMPTY_STAGE } from '@/features/discover/sheets';
 import { useScheme } from '@/hooks/use-theme';
 
 type Status = 'empty' | 'planned' | 'blocked' | 'error' | 'offline';
@@ -17,6 +24,18 @@ type EmptyStateProps = {
   /** Plain explanation. For `blocked`, say what would unblock it. */
   body: string;
   action?: { label: string; onPress: () => void };
+  /**
+   * A pile of prints above the heading, saying what the screen is for by
+   * showing it rather than describing it.
+   *
+   * **Ignored unless `status` is `empty`.** A failure, an offline state or
+   * something not built yet has to look like what it is; dressing one up is
+   * how a broken screen gets mistaken for a working one, and the brief
+   * requires that a capability never misrepresent its readiness.
+   */
+  sheet?: readonly CollageFrame[];
+  /** Stage proportion for the sheet. Defaults to the shallow empty-state one. */
+  sheetAspectRatio?: number;
 };
 
 const STATUS_LABEL: Record<Status, string | null> = {
@@ -33,15 +52,20 @@ const STATUS_LABEL: Record<Status, string | null> = {
  * One component for all five so a screen cannot accidentally present an
  * unimplemented feature as merely empty — the difference is the whole point.
  */
-export function EmptyState({ status, title, body, action }: EmptyStateProps) {
+export function EmptyState({
+  status,
+  title,
+  body,
+  action,
+  sheet,
+  sheetAspectRatio = EMPTY_STAGE,
+}: EmptyStateProps) {
   const colors = Colors[useScheme()];
   const label = STATUS_LABEL[status];
+  const showSheet = status === 'empty' && sheet && sheet.length > 0;
 
   return (
     <View
-      // Announced as one unit so a screen reader does not read it as fragments.
-      accessible
-      accessibilityLabel={`${label ? `${label}. ` : ''}${title}. ${body}`}
       style={{
         alignItems: 'center',
         justifyContent: 'center',
@@ -49,6 +73,16 @@ export function EmptyState({ status, title, body, action }: EmptyStateProps) {
         paddingVertical: Spacing.six,
         paddingHorizontal: Spacing.three,
       }}>
+      {/* Outside the `accessible` grouping above would be ideal, but the
+          wrapper owns the label; the cards set `accessible={false}` through
+          `Collage`'s own alt handling, and the grouped label already names
+          what this screen is. */}
+      {showSheet ? (
+        <View style={{ width: '100%' }}>
+          <Collage frames={sheet} aspectRatio={sheetAspectRatio} />
+        </View>
+      ) : null}
+
       {label ? (
         <View
           style={{
@@ -69,23 +103,32 @@ export function EmptyState({ status, title, body, action }: EmptyStateProps) {
         </View>
       ) : null}
 
-      <ThemedText
-        style={{
-          fontFamily: Display.regular,
-          fontSize: 24,
-          lineHeight: 30,
-          textAlign: 'center',
-          color: colors.text,
-        }}>
-        {title}
-      </ThemedText>
+      {/* The text is announced as one unit; the button is not inside it.
+          This wrapper used to be the whole component, with `accessible` on
+          it — which collapses every descendant into a single element and
+          made the action unreachable to a screen reader. An empty state
+          whose only way forward cannot be focused is worse than one with no
+          button at all. */}
+      <View
+        accessible
+        accessibilityLabel={`${label ? `${label}. ` : ''}${title}. ${body}`}
+        style={{ alignItems: 'center', gap: Spacing.three }}>
+        <ThemedText
+          style={{
+            ...labelType(24, 800),
+            textAlign: 'center',
+            color: colors.text,
+          }}>
+          {title}
+        </ThemedText>
 
-      <ThemedText
-        type="small"
-        themeColor="textSecondary"
-        style={{ textAlign: 'center', maxWidth: 320 }}>
-        {body}
-      </ThemedText>
+        <ThemedText
+          type="small"
+          themeColor="textSecondary"
+          style={{ textAlign: 'center', maxWidth: 320 }}>
+          {body}
+        </ThemedText>
+      </View>
 
       {action ? (
         <Pressable

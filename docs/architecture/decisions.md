@@ -67,6 +67,46 @@ query"; §9 "find similar or confirmed products from an inspiration image") is *
 delivered by attribute retrieval. It is tracked as blocked-on-embeddings and the UI must
 not imply it works.
 
+### Amendment, 2026-11-03: the trigger fired, and the answer was not pgvector
+
+**What happened.** "Visual find-similar committed as a shipping feature" — the second
+trigger above — was met: a mislabelled pin (a boucle bed captioned "Wedding guest, not
+upstaging anybody", tagged `#weddingguest`) was offering women's eveningwear on its
+related shelf, because every relatedness signal in the app ultimately read author
+hashtags. Tags are a claim typed once by one person. Board co-occurrence is better but
+needs somebody to have saved the pin first, so it cannot help in the hours a mislabelled
+pin does its damage.
+
+**Re-verified, not recited.** `POST https://api.meta.ai/v1/embeddings` returns **404** on
+every model in the catalogue (`muse-wonder-1.0`, `muse-spark-1.3`, `muse-image-1.0`),
+checked with a live key on 2026-11-03. The original finding stands: there is no
+embeddings model and no embeddings endpoint.
+
+**Decision.** The content signal comes from the vision model the app already pays for,
+not from a second provider. `app/domain/discovery/subject.py` defines a closed
+vocabulary — eight subjects, thirty-odd facets — that `muse-spark-1.3` fills in through
+structured output; `post_vision` stores the result and a unit vector built from it.
+Retrieval scores cosine similarity over those vectors, and `GOES_UNDER` gates by subject
+before ranking.
+
+**Why this rather than waiting for a dense embedding.** The gate is the part that
+matters and a cosine cannot provide it. A cream boucle sofa and a cream knit dress are
+genuinely close in *any* visual space — that is not a weakness of CLIP, it is true of
+the pictures — and they must still never sit under one another. A hard category can say
+that; a distance cannot. The vocabulary is also explainable, so "why am I seeing this"
+has an answer.
+
+**Still deferred: pgvector.** The search is a scan over a few hundred unit vectors,
+which is microseconds. §2's "where measured retrieval needs justify it" is not yet met.
+The trigger is a scan that stops being fast enough — not a vector column existing.
+
+**Still open: a dense embedder.** The vocabulary is coarser than CLIP and cannot
+distinguish two pins that pick the same words. `subject.Embedder` is the seam, and
+`post_vision.model` records which embedder produced each row, so a better one rolls in
+one post at a time rather than needing a flag day. Candidates unchanged: a self-hosted
+open model (free, ~400MB, CPU) or Vertex AI multimodal (paid, needs credentials this
+project does not have).
+
 ---
 
 ## ADR-005: Garment segmentation uses `sam-3.1`
@@ -164,7 +204,7 @@ than inventing a native redirect.
 
 ## ADR-009: Social import is link + attribution + user-supplied media
 
-**Decision.** A pasted or shared Instagram / TikTok / Pinterest URL is stored as an
+**Decision.** A pasted or shared a third-party platform URL is stored as an
 **external content reference**: canonical URL, platform, author handle when the URL
 carries one, fetch timestamp. We render the platform's official embed where its terms
 allow, and we do **not** download, store, or run perception over platform-hosted media.
@@ -506,8 +546,11 @@ mechanism, not from a documented preference.
 
 ## ADR-019: Visual direction, measured against what premium retail ships
 
-**Status.** Accepted. Implemented in `apps/mobile/src/constants/theme.ts`,
-`components/ui/skeleton.tsx`, `components/ui/motion.tsx`, and enforced by
+**Status.** Accepted, **amended 2026-10-29** — see *Typography: two bundled
+faces* below, which reverses this ADR's original position on body copy.
+Implemented in `apps/mobile/src/constants/theme.ts`,
+`components/themed-text.tsx`, `components/ui/skeleton.tsx`,
+`components/ui/motion.tsx`, and enforced by
 `constants/__tests__/theme.test.ts` and `components/ui/__tests__/copy.test.ts`.
 
 **Context.** The brief is warm, clean, professional and visually appealing, with
@@ -640,6 +683,101 @@ uncapped, cell 30 would wait 1.2s and the grid would appear to load slowly when
 it had already loaded. Every primitive collapses to nothing under Reduce Motion
 rather than running faster, because a shortened version of an unwanted animation
 is still unwanted.
+
+### Typography, second amendment: out of the generated-page cluster
+
+**Amends the amendment below, same day, 2026-10-29.** The pairing recorded
+there — Playfair Display with Space Grotesk — shipped, the product owner
+looked at it running, and said the fonts read as AI-generated. They were
+right, and the evidence was already written down: the house frontend guidance
+names "a warm cream background with a high-contrast serif display" as the
+first of the generated-page palettes and "Inter or Space Grotesk as the
+'safe' face" as another. This app had both, over `#FAF7F2`. It was inside the
+cluster.
+
+**What ships now:**
+
+* **Bodoni Moda** (`wght` 400-900, `opsz` 6-96) for headings.
+* **Archivo** (`wght` 100-900, `wdth` 62-125) for labels, controls and body.
+
+**This is not a lateral swap, and that is the argument for it.** It recovers
+one capability and delivers another that had to be refused:
+
+* **The optical-size axis is back.** The previous amendment recorded losing
+  it as a real cost — Playfair has no `opsz`, so a didone's stem-and-hairline
+  contrast could not be corrected for size and only the tracking could. Bodoni
+  Moda carries `opsz` 6-96, measured from the file, so a heading is once again
+  cut for the size it is set at.
+* **The brief's weights are finally available.** The brief asked for radical
+  contrast, 100/200 against 800/900, and that had to be reported as
+  impossible: Playfair stops at 400 and Space Grotesk at 300. Archivo runs
+  100 to 900. `LabelWeight` is now `200 | 400 | 800`, which is the spread
+  that was asked for rather than the closest the files allowed.
+
+**The uppercase eyebrow went with them.** A tracked-out all-caps label above
+every heading is listed in the same guidance as template chrome, and on a
+170px board tile it was also the congestion the owner reported: a
+twenty-three character cue in caps with 1.2 of extra tracking wraps to two
+lines, so every tile carried three lines of text under its photograph.
+`capsLabel` is now sentence case at weight 800, the `Tracking` token is
+deleted because nothing needed it any more, and Discover's tiles caption with
+a title alone.
+
+**What this does not change.** Still two bundled variable files, still no
+system face anywhere, still monospace as the one documented exception. The
+reasoning in the amendment below for *why* the app bundles its own faces
+stands; only which faces changed.
+
+### Typography: two bundled faces, no system font
+
+**Amends this ADR, 2026-10-29.** The original position was that only headings
+get a custom face and body copy stays on San Francisco and Roboto, on the
+grounds that a custom UI font is the fastest way to make a native app feel
+like a website wearing a costume. The product owner's brief asks for the
+opposite — "never inject standard system fonts" — and reaffirmed it when the
+conflict was put to them. The brief wins, and this records what that actually
+costs rather than pretending there is no trade.
+
+**What ships.** Two variable files, both weight-only:
+
+* **Playfair Display** (`wght` 400-900) for every heading.
+* **Space Grotesk** (`wght` 300-700) for labels, controls and body copy.
+
+**Bodoni Moda is retired.** It was the previous display face and it is a
+second didone doing Playfair's job. Three faces in one app is one more than
+any of them can justify, and Playfair is the one the brief names.
+
+**What the retirement costs, named so nobody rediscovers it.** Bodoni Moda
+shipped an `opsz` axis and this ADR's predecessor decision used it: a didone's
+contrast is only correct at the size it was cut for, so the pixel size was
+passed straight to the axis. Playfair Display has **no `opsz` axis at all** —
+measured from the file, its only axis is `wght` 400-900. The replacement is a
+tracking curve in `displayType()`: nothing under 24px is touched, and larger
+headings tighten by about 1.5%. That is the standard editorial correction and
+it addresses spacing, which is the part of the problem that is visible at a
+heading's size. It does not restore stem-and-hairline correction, and nothing
+can, short of a third file.
+
+**The brief's weights do not exist.** It asks for 100/200 against 800/900.
+Measured from the files: Playfair Display has nothing below 400, and Space
+Grotesk nothing below 300 or above 700. The widest real spread is 400 against
+900 within the serif and 300 against 700 within the grotesque, and at a
+heading's size Playfair 400 reads as the hairline the brief is describing.
+`DisplayWeight` and `LabelWeight` are union types rather than `number`, so the
+medium weights the brief argues against are a compile error rather than a
+convention somebody has to remember.
+
+**One known failure mode.** Space Grotesk's default instance is its 300, so
+anywhere `fontVariationSettings` is unsupported — Android below API 26, a 2017
+floor — every weight renders light rather than wrong. Adding `fontWeight` as a
+fallback was considered and rejected: on a light master the platform
+synthesises a bold, which looks materially worse than a slightly light
+paragraph.
+
+**Monospace is the one documented exception.** Neither face has a monospaced
+cut, and `code` exists only for strings that must not be re-spaced. A third
+bundled file for a handful of technical values would cost more than it buys,
+so `Mono` is a platform stack and is the only place in the app that names one.
 
 ### What was rejected
 

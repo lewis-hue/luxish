@@ -77,6 +77,32 @@ class AttachmentIn(BaseModel):
     origin_url: str | None = Field(default=None, max_length=2048)
 
 
+class CapabilityOut(BaseModel):
+    """One thing the assistant can be asked for, in its own words.
+
+    Returned as data so a client can show examples of what to *say*. It is
+    deliberately not a list of buttons: the capabilities live behind the
+    sentence, which is what keeps the screen to one input box.
+    """
+
+    intent: str
+    label: str
+    description: str
+    #: What has to be attached, if anything.
+    needs: list[str] = Field(default_factory=list)
+
+
+class AssistantOut(BaseModel):
+    """What the assistant can do, and what it cannot."""
+
+    items: list[CapabilityOut] = Field(default_factory=list)
+    #: Moving pictures, labelled honestly. Every model this service can
+    #: reach accepts video and none produces it, so this is `blocked`
+    #: rather than `planned`, with the reason.
+    video: str = "blocked"
+    video_reason: str = ""
+
+
 class RunCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -87,6 +113,17 @@ class RunCreate(BaseModel):
     date: datetime.date | None = None
     attachments: list[AttachmentIn] = Field(default_factory=list, max_length=MAX_ATTACHMENTS)
     conversation_id: uuid.UUID | None = None
+
+    # What the request is *about*. The assistant is one input box rather
+    # than a grid of capability tiles, so what can be asked for depends on
+    # which kind of picture is in hand. Every id is re-validated against
+    # the asker on the worker: naming one is a claim, not an entitlement.
+    #: A piece out of your own wardrobe.
+    garment_id: uuid.UUID | None = None
+    #: A photograph you uploaded, wardrobe row or not.
+    media_asset_id: uuid.UUID | None = None
+    #: A fit somebody else published: to try on, or to take styling from.
+    post_id: uuid.UUID | None = None
 
     @property
     def place_name(self) -> str | None:
@@ -204,3 +241,33 @@ __all__ = [
     "SwapRequest",
     "ToolExecutionOut",
 ]
+
+
+class AskTurn(BaseModel):
+    """One thing already said, by one side."""
+
+    #: `you` for the person, `stylist` for the assistant.
+    who: str = Field(pattern="^(you|stylist)$")
+    text: str = Field(min_length=1, max_length=2000)
+
+
+class AskCreate(BaseModel):
+    """A question about this person's own wardrobe.
+
+    `post_id` is the pin they are looking at, when they came from
+    one. It is what makes "match the fit above" answerable: the
+    photograph goes to the model, not just the caption.
+    """
+
+    question: str = Field(min_length=1, max_length=500)
+    post_id: uuid.UUID | None = None
+    #: What has already been said in this conversation, oldest first.
+    #:
+    #: **Sent by the client rather than kept on the server**, which
+    #: is the right trade for a conversation this short: it is a few
+    #: turns about one wardrobe, it ends when the screen closes, and
+    #: storing it would mean a table, a retention rule and an export
+    #: entry for something nobody asked to keep.
+    #:
+    #: Capped so a client cannot grow the prompt without bound.
+    history: list[AskTurn] = Field(default_factory=list, max_length=20)
