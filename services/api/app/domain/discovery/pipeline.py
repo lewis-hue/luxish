@@ -265,13 +265,25 @@ async def _looks_like(
         for row in everything
         if row.post_id not in set(queries)
     }
+    presents = {
+        row.post_id: (row.presentation or "unspecified") for row in everything
+    }
 
     # Scored against each thing they liked, keeping the best match
     # rather than the sum: a pin that strongly resembles one saved
     # photograph is a better recommendation than one that vaguely
     # resembles ten.
+    #
+    # **Plus a lean toward the same presentation.** Opening a menswear
+    # fit and being shown a rail of dresses is not a weak answer, it is
+    # the wrong one. A lean rather than a filter, so an androgynous
+    # piece that genuinely suits still gets through and a clearly
+    # better visual match still wins - see `subject.leans_together`,
+    # which scores nothing when either side is `unspecified`, because
+    # not knowing is not a reason to push something down.
     best: dict[uuid.UUID, float] = {}
     for seed in liked:
+        seen_as = seed.presentation or "unspecified"
         for post_id, score in subjects.nearest(
             viewing_subject=seed.subject,
             viewing_vector=list(seed.vector or []),
@@ -279,8 +291,11 @@ async def _looks_like(
             limit=limit,
         ):
             key = uuid.UUID(post_id)
-            if score > best.get(key, 0.0):
-                best[key] = score
+            leaned = score + subjects.leans_together(
+                seen_as, presents.get(key, "unspecified")
+            )
+            if leaned > best.get(key, 0.0):
+                best[key] = leaned
     return best
 
 

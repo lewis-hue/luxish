@@ -74,6 +74,55 @@ GOES_UNDER: dict[str, frozenset[str]] = {
     "other": frozenset(SUBJECTS),
 }
 
+#: Who the clothes are cut and styled for, as the picture presents it.
+#:
+#: **A separate axis, not a facet.** A facet nudges a cosine; this has
+#: to steer retrieval on its own, because opening a menswear fit and
+#: being shown a rail of dresses is not a weak recommendation, it is
+#: the wrong answer. Keeping it out of the vector also keeps it out of
+#: the similarity score, so it can be applied as a lean that a strong
+#: visual match is still allowed to outweigh.
+#:
+#: **It describes the garments, never the person.** "Masculine" here
+#: means cut and styled as menswear. Nothing infers anybody's gender,
+#: and `unspecified` is both the default and a perfectly ordinary
+#: answer - a flat-lay of a scarf has no presentation, and neither
+#: does most of what this app shows.
+PRESENTATIONS: tuple[str, ...] = (
+    "masculine",
+    "feminine",
+    "androgynous",
+    "unspecified",
+)
+
+#: How much a shared presentation is worth against a visual match.
+#:
+#: A lean, deliberately, not a gate like `GOES_UNDER`. Somebody looking
+#: at menswear is mostly after more menswear, and is not served by a
+#: filter that hides an androgynous piece that would suit them. Set so
+#: that a same-presentation pin beats a differently-presented one of
+#: roughly equal similarity, and loses to one that is clearly closer.
+PRESENTATION_LEAN = 0.18
+
+
+def leans_together(viewing: str, candidate: str) -> float:
+    """How much to add for the two presentations agreeing.
+
+    `unspecified` on either side scores nothing rather than counting
+    as a mismatch: not knowing is not a reason to push something down.
+    Androgynous sits with both, which is what the word means.
+    """
+    if viewing not in PRESENTATIONS or candidate not in PRESENTATIONS:
+        return 0.0
+    if "unspecified" in (viewing, candidate):
+        return 0.0
+    if viewing == candidate:
+        return PRESENTATION_LEAN
+    if "androgynous" in (viewing, candidate):
+        return PRESENTATION_LEAN / 2
+    return 0.0
+
+
 #: Descriptive facets, each a dimension of the vector.
 #:
 #: One closed list rather than free text: a vector is only comparable
@@ -111,6 +160,9 @@ class Reading:
 
     subject: str
     facets: tuple[str, ...] = ()
+    #: One of `PRESENTATIONS`. See the note there: this is about the
+    #: clothes, not about anybody in the photograph.
+    presentation: str = "unspecified"
     #: One short phrase, for the "why am I seeing this" line. Never
     #: shown as a caption: it is a machine's description, and this
     #: app does not put those where an author's words go.
@@ -126,10 +178,19 @@ class Reading:
         one typo would quietly create a category of one.
         """
         subject = self.subject if self.subject in SUBJECTS else "other"
+        presentation = (
+            self.presentation
+            if self.presentation in PRESENTATIONS
+            else "unspecified"
+        )
         facets = tuple(f for f in dict.fromkeys(self.facets) if f in FACETS)
         confidence = min(1.0, max(0.0, self.confidence))
         return Reading(
-            subject=subject, facets=facets, note=self.note, confidence=confidence
+            subject=subject,
+            facets=facets,
+            presentation=presentation,
+            note=self.note,
+            confidence=confidence,
         )
 
 
@@ -223,11 +284,14 @@ __all__ = [
     "DIMENSIONS",
     "FACETS",
     "GOES_UNDER",
+    "PRESENTATIONS",
+    "PRESENTATION_LEAN",
     "SUBJECTS",
     "SUBJECT_WEIGHT",
     "Embedder",
     "Reading",
     "Shelf",
+    "leans_together",
     "may_sit_under",
     "nearest",
     "normalise",

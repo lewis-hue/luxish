@@ -92,12 +92,85 @@ async def get(db: AsyncSession, *, user_id: uuid.UUID) -> Profile | None:
     )
 
 
+#: The words a minted handle is built from.
+#:
+#: Chosen to read as something a person might have picked: short, in
+#: this app's vocabulary, and inoffensive in combination. No surnames,
+#: no places, nothing that could read as a claim about who somebody is.
+_FIRST = (
+    "amber", "ash", "bias", "boucle", "brim", "cuff", "denim", "drape",
+    "dune", "ember", "flax", "gingham", "hem", "indigo", "ivory", "lapel",
+    "linen", "loom", "mica", "ochre", "pleat", "poplin", "raw", "sable",
+    "satin", "seam", "slate", "stitch", "suede", "tweed", "twill", "velvet",
+)
+_SECOND = (
+    "atlas", "bloom", "cove", "drift", "field", "frost", "garden", "harbour",
+    "lane", "meadow", "north", "orbit", "quay", "ridge", "river", "shore",
+    "solstice", "stone", "thicket", "tide", "vale", "willow",
+)
+
+#: How many times to try before widening the number range.
+_TRIES = 12
+
+
+async def mint_handle(db: AsyncSession) -> str:
+    """A handle nobody has, readable enough that somebody might keep it.
+
+    **Every account has one from the moment it exists.** The handle is
+    the unique thing other people address somebody by, and it used to
+    be nullable and unset until a person went looking for the field -
+    so an account created through Google or email had no address at
+    all, and `@` followed by nothing is not an identity. Somebody who
+    dislikes what they were given can change it; nobody has to invent
+    one before they have seen the app.
+
+    Two words and a number rather than a slug of their email: an email
+    local-part is personal data and often a real name, and minting
+    `@firstname.lastname` from it would publish something they never
+    chose to publish.
+    """
+    import secrets
+
+    span = 99
+    for attempt in range(_TRIES * 3):
+        candidate = (
+            f"{secrets.choice(_FIRST)}{secrets.choice(_SECOND)}"
+            f"{secrets.randbelow(span) + 1}"
+        )
+        # Widen the number range as collisions mount, so a crowded
+        # vocabulary cannot turn into an unbounded loop.
+        if attempt and attempt % _TRIES == 0:
+            span *= 100
+        taken = await db.scalar(
+            sa.select(Profile.id).where(Profile.handle == candidate)
+        )
+        if taken is None:
+            return candidate
+
+    # Vanishingly unlikely, and it still has to terminate with a handle
+    # rather than an exception: an account with no address is the thing
+    # this function exists to prevent.
+    return f"luxe{uuid.uuid4().hex[:12]}"
+
+
 async def ensure(db: AsyncSession, *, user_id: uuid.UUID) -> Profile:
-    """The row, made on first use. Nothing is set until somebody sets it."""
+    """The row, made on first use, carrying a handle from the start.
+
+    A minted handle is the one thing set here. Everything else stays
+    empty until somebody fills it in - see `mint_handle` for why an
+    account cannot be allowed to exist without an address.
+    """
     found = await get(db, user_id=user_id)
     if found is not None:
+        # An account made before handles were minted. Giving it one now
+        # is cheaper than a migration that has to invent uniqueness in
+        # SQL, and it happens on the next read of their own profile.
+        if not found.handle:
+            found.handle = await mint_handle(db)
+            await db.commit()
+            await db.refresh(found)
         return found
-    profile = Profile(user_id=user_id, links={})
+    profile = Profile(user_id=user_id, links={}, handle=await mint_handle(db))
     db.add(profile)
     await db.commit()
     await db.refresh(profile)

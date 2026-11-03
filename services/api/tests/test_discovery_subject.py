@@ -218,3 +218,70 @@ def test_a_floor_keeps_unrelated_pins_off_the_shelf() -> None:
         floor=0.9,
     )
     assert ranked == []
+
+
+# --------------------------------------------------------------------------- #
+# Presentation: a lean, never a gate
+#
+# From the reported failure: opening a menswear fit and being offered a
+# rail of dresses. The tags could not help - `menswear` was on 61 pins
+# and `womenswear` on none - so the reading carries the axis instead.
+# --------------------------------------------------------------------------- #
+def test_the_same_presentation_is_worth_something() -> None:
+    from app.domain.discovery.subject import PRESENTATION_LEAN, leans_together
+
+    assert leans_together("masculine", "masculine") == PRESENTATION_LEAN
+    assert leans_together("feminine", "feminine") == PRESENTATION_LEAN
+
+
+def test_the_opposite_presentation_is_worth_nothing_not_a_penalty() -> None:
+    """**Nothing, not negative.**
+
+    A penalty would make this a filter wearing a lean's clothes: a
+    womenswear pin that is genuinely the closest visual match should
+    still be able to win under a menswear one.
+    """
+    from app.domain.discovery.subject import leans_together
+
+    assert leans_together("masculine", "feminine") == 0.0
+    assert leans_together("feminine", "masculine") == 0.0
+
+
+def test_androgynous_sits_with_both() -> None:
+    """Which is what the word means."""
+    from app.domain.discovery.subject import PRESENTATION_LEAN, leans_together
+
+    half = PRESENTATION_LEAN / 2
+    assert leans_together("masculine", "androgynous") == half
+    assert leans_together("feminine", "androgynous") == half
+
+
+def test_not_knowing_is_not_a_reason_to_push_something_down() -> None:
+    """Every row written before the column existed holds `unspecified`,
+    and a backfill is not a precondition for the feed working."""
+    from app.domain.discovery.subject import leans_together
+
+    assert leans_together("masculine", "unspecified") == 0.0
+    assert leans_together("unspecified", "feminine") == 0.0
+    assert leans_together("unspecified", "unspecified") == 0.0
+
+
+def test_a_lean_cannot_outrank_a_clearly_better_match() -> None:
+    """The property that makes this a lean rather than a gate.
+
+    Cosine similarity runs 0-1; the lean is 0.18. A candidate that is
+    0.2 closer wins despite presenting differently, which is the
+    behaviour a filter would destroy.
+    """
+    from app.domain.discovery.subject import PRESENTATION_LEAN
+
+    same_presentation_weaker_match = 0.60 + PRESENTATION_LEAN
+    other_presentation_stronger_match = 0.85
+    assert other_presentation_stronger_match > same_presentation_weaker_match
+
+
+def test_an_invented_presentation_is_dropped() -> None:
+    from app.domain.discovery.subject import Reading
+
+    got = Reading(subject="outfit", presentation="masc").clean()
+    assert got.presentation == "unspecified"

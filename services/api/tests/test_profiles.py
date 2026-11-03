@@ -295,3 +295,76 @@ def test_a_website_link_is_built_not_stored() -> None:
 
     assert _website(_Bare()) is None
     assert _website(None) is None
+
+
+# --------------------------------------------------------------------------- #
+# Every account has an address from the moment it exists
+# --------------------------------------------------------------------------- #
+async def test_a_new_profile_is_born_with_a_handle(db: AsyncSession) -> None:
+    """**`@` followed by nothing is not an identity.**
+
+    The handle was nullable and unset until somebody went looking for
+    the field, so an account created through Google or email had no
+    address at all. Signing up must not require inventing one, so it
+    is minted.
+    """
+    from app.domain import profiles
+
+    me = await make_user(db)
+    profile = await profiles.ensure(db, user_id=me)
+    assert profile.handle
+    # And it is a handle the ordinary rules would accept.
+    assert profiles.clean_handle(profile.handle) == profile.handle
+
+
+async def test_two_accounts_never_share_a_handle(db: AsyncSession) -> None:
+    """It is the unique identifier, so uniqueness is the whole point."""
+    from app.domain import profiles
+
+    seen = set()
+    for _ in range(12):
+        who = await make_user(db)
+        handle = (await profiles.ensure(db, user_id=who)).handle
+        assert handle not in seen, f"minted {handle} twice"
+        seen.add(handle)
+
+
+async def test_a_minted_handle_can_be_changed(db: AsyncSession) -> None:
+    """Given, not imposed."""
+    from app.domain import profiles
+
+    me = await make_user(db)
+    given = (await profiles.ensure(db, user_id=me)).handle
+    changed = await profiles.set_handle(db, user_id=me, handle="lew254")
+    assert changed.handle == "lew254"
+    assert changed.handle != given
+
+
+async def test_an_account_from_before_minting_gets_one_on_next_read(
+    db: AsyncSession,
+) -> None:
+    """Rather than a migration inventing uniqueness in SQL."""
+    from app.domain import profiles
+
+    me = await make_user(db)
+    profile = await profiles.ensure(db, user_id=me)
+    profile.handle = None
+    await db.commit()
+
+    again = await profiles.ensure(db, user_id=me)
+    assert again.handle
+
+
+async def test_a_minted_handle_is_not_built_from_the_email(
+    db: AsyncSession,
+) -> None:
+    """An email local-part is personal data and often a real name.
+
+    Minting `@firstname.lastname` from it would publish something
+    nobody chose to publish.
+    """
+    from app.domain import profiles
+
+    me = await make_user(db)
+    handle = (await profiles.ensure(db, user_id=me)).handle
+    assert "@" not in handle

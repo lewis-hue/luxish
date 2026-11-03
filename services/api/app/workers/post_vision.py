@@ -26,7 +26,12 @@ import json
 import uuid
 from typing import Any
 
-from app.domain.discovery.subject import FACETS, SUBJECTS, Reading
+from app.domain.discovery.subject import (
+    FACETS,
+    PRESENTATIONS,
+    SUBJECTS,
+    Reading,
+)
 from app.providers.base import JsonSchemaFormat
 
 VISION_JOB_KIND = "post.vision"
@@ -82,9 +87,19 @@ POST_VISION_USER_TEXT = (
 POST_VISION_SCHEMA: dict[str, Any] = {
     "type": "object",
     "additionalProperties": False,
-    "required": ["subject", "facets", "confidence", "note"],
+    "required": ["subject", "facets", "presentation", "confidence", "note"],
     "properties": {
         "subject": {"type": "string", "enum": list(SUBJECTS)},
+        "presentation": {
+            "type": "string",
+            "enum": list(PRESENTATIONS),
+            "description": (
+                "Who the garments are cut and styled for. Describe the "
+                "clothes, never the person: say unspecified whenever the "
+                "cut does not clearly read one way, and for anything that "
+                "is not an outfit."
+            ),
+        },
         "facets": {
             "type": "array",
             "items": {"type": "string", "enum": list(FACETS)},
@@ -202,6 +217,7 @@ def parse(text: str | None) -> Reading:
     return Reading(
         subject=str(payload.get("subject") or "other"),
         facets=facets,
+        presentation=str(payload.get("presentation") or "unspecified"),
         note=(note.strip()[:160] if isinstance(note, str) and note.strip() else None),
         confidence=confidence,
     ).clean()
@@ -280,6 +296,7 @@ async def read_post_vision(
     row = existing or PostVisionRow(post_id=post_id)
     row.asset_id = asset.id
     row.subject = reading.subject
+    row.presentation = reading.presentation
     row.confidence = reading.confidence
     row.facets = list(reading.facets)
     row.vector = vector_for(reading)

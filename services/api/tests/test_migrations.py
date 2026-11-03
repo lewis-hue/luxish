@@ -79,6 +79,7 @@ EXPECTED_ORDER = [
     "0051_shot_landscape",
     "0052_account_exports",
     "0053_post_vision",
+    "0054_vision_presentation",
 ]
 
 

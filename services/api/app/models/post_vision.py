@@ -57,6 +57,16 @@ class PostVisionRow(Base, TimestampMixin):
     #: One of `app.domain.discovery.subject.SUBJECTS`. The gate.
     subject: Mapped[str] = mapped_column(sa.String(24), nullable=False)
 
+    #: One of `app.domain.discovery.subject.PRESENTATIONS`.
+    #:
+    #: A lean on retrieval, not a gate, and a statement about the
+    #: garments rather than about anybody in the photograph. Defaults
+    #: to "unspecified", which is both the honest answer for most pins
+    #: and what every row written before this column existed holds.
+    presentation: Mapped[str] = mapped_column(
+        sa.String(16), nullable=False, server_default="unspecified"
+    )
+
     #: How sure the model was about `subject`, 0-1.
     confidence: Mapped[float] = mapped_column(
         sa.Float(), nullable=False, default=1.0
