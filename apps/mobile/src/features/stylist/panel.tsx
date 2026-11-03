@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, TextInput, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
@@ -42,6 +42,7 @@ import {
   settled as chatSettled,
   shopped as chatShopped,
   streamed as chatStreamed,
+  type Turn,
 } from '@/features/stylist/conversation';
 import { Thread } from '@/features/stylist/thread';
 import {
@@ -173,9 +174,34 @@ export function StylistPanel({
    * everywhere else, and the rows simply do not appear.
    */
   onAddGarment,
+  /**
+   * A conversation restored from the device's history.
+   *
+   * `null` means the history has not been read yet, which is not the
+   * same as an empty thread: mounting with `[]` and then replacing it
+   * a moment later would flash the greeting over a conversation that
+   * was already there.
+   */
+  restored = null,
+  /**
+   * Called whenever the thread changes, so it can be written down.
+   *
+   * The panel does not know about SQLite and should not: it owns the
+   * conversation, the caller owns whether conversations are kept.
+   */
+  onTurns,
+  /**
+   * Remounts the thread when it changes. The history screen hands back
+   * a session id; this is what makes switching to it actually swap the
+   * conversation rather than merging two.
+   */
+  sessionKey,
 }: {
   embedded?: boolean;
   onAddGarment?: (source: 'camera' | 'library') => void;
+  restored?: readonly Turn[] | null;
+  onTurns?: (turns: readonly Turn[]) => void;
+  sessionKey?: string;
 } = {}) {
   const [attachment, setAttachment] = useState<StylistAttachment | null>(null);
   const [attachedFor, setAttachedFor] = useState<string | null>(null);
@@ -241,6 +267,34 @@ export function StylistPanel({
    * to had already left the screen.
    */
   const [chat, setChat] = useState(beginChat());
+
+  // **Restored turns replace the thread, once, per session.**
+  //
+  // Derived during render rather than copied in an effect: an effect
+  // that calls setState on mount re-renders the screen a second time
+  // and trips `react-hooks/set-state-in-effect`. `shownFor` is the
+  // session the current `chat` belongs to, so switching sessions
+  // swaps the thread and a re-render with the same session does not.
+  const [shownFor, setShownFor] = useState<string | undefined>(sessionKey);
+  if (sessionKey !== shownFor) {
+    setShownFor(sessionKey);
+    setChat(
+      restored && restored.length
+        ? { turns: [...restored], next: restored.length + 1 }
+        : beginChat(),
+    );
+  }
+
+  // Report the thread upward whenever it changes, so the caller can
+  // write it down. Guarded on the turns themselves rather than on the
+  // conversation object, which is new on every reducer call.
+  const lastReported = useRef<readonly Turn[] | null>(null);
+  useEffect(() => {
+    if (!onTurns) return;
+    if (lastReported.current === chat.turns) return;
+    lastReported.current = chat.turns;
+    onTurns(chat.turns);
+  }, [chat.turns, onTurns]);
   /** Whether the "what can I ask?" suggestions are open. Closed. */
   const [showingPrompts, setShowingPrompts] = useState(false);
 

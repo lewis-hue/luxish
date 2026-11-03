@@ -1,13 +1,19 @@
 import { router } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
+import { SymbolView, type SymbolViewProps } from 'expo-symbols';
 import { Alert, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
-import { MotionPressable, successFeedback, tapFeedback } from '@/components/ui/motion';
+import {
+  MotionPressable,
+  successFeedback,
+  tapFeedback,
+  useMotiTiming,
+} from '@/components/ui/motion';
 import {
   BottomTabInset,
   Colors,
+  Motion,
   Spacing,
   TapTarget,
   labelType,
@@ -19,6 +25,12 @@ import { useWardrobe } from '@/features/wardrobe/store';
 import { usePullToRefresh } from '@/components/ui/pull-to-refresh';
 import { useKeyboardInset } from '@/hooks/use-keyboard-inset';
 import { useScheme } from '@/hooks/use-theme';
+import { useState } from 'react';
+import { MotiView } from 'moti';
+import { greetingName, useMe } from '@/api/queries/me';
+import { useAuth } from '@/features/auth/session';
+import { HistorySheet } from '@/features/stylist/history-sheet';
+import { useChatHistory } from '@/features/stylist/use-history';
 
 /**
  * The assistant, on the page it belongs to.
@@ -31,10 +43,23 @@ import { useScheme } from '@/hooks/use-theme';
  * filtering live, and the page somebody opens to *ask* is now about
  * asking.
  *
- * **The outfit and the avatar render in place.** Both used to be on
+ * **The outfit and the figure render in place.** Both used to be on
  * other screens. An outfit is four garment names, which is a
  * description of a look rather than a look, so the stylist offers to
- * draw it on this person's avatar right under the answer.
+ * draw it on a figure right under the answer.
+ *
+ * **It opens on a greeting, not on a form.** An assistant whose empty
+ * state is a title, a count and an input box reads as a search page.
+ * One mark, one line naming the person, and the composer at the
+ * bottom where the thumb is - everything else arrives as the
+ * conversation does.
+ *
+ * **And it remembers.** The thread used to live in component state
+ * and die with the screen, so leaving the tab threw away everything
+ * that had been said. Conversations are kept on the device
+ * (`features/stylist/history`), reachable from the button in the
+ * header, and reopening one restores its turns so the next question
+ * carries the same context it would have had.
  */
 export default function WardrobeScreen() {
   const colors = Colors[useScheme()];
@@ -48,6 +73,17 @@ export default function WardrobeScreen() {
   // keyboard and they cannot see their own words - the screen is a
   // plain ScrollView, so nothing was getting out of the way.
   const keyboard = useKeyboardInset();
+  const timing = useMotiTiming();
+  const auth = useAuth();
+  const signedIn = auth.status === 'signedIn';
+  const me = useMe(signedIn);
+  const name = greetingName(me.data ?? undefined);
+  const history = useChatHistory();
+  const [showHistory, setShowHistory] = useState(false);
+  // The greeting stands only while nothing has been said. Derived
+  // from the restored thread rather than from a flag, so a
+  // conversation reopened from history never flashes it.
+  const [saidAnything, setSaidAnything] = useState(false);
 
   const owned = wardrobe.entries.filter((entry) => !entry.isSample);
 
@@ -95,24 +131,21 @@ export default function WardrobeScreen() {
           Spacing.five,
         gap: Spacing.three,
       }}>
-      {/* The title and the way to the clothes, on one line.
+      {/* The header: the name of the page, the way back into an
+          earlier conversation, and a clean slate.
 
-          The count used to be a full-width filled card of its own
-          under the heading - an icon, two lines of text and a
-          chevron, about a tenth of the screen, repeating a number
-          nobody came here to read. It is a link now, set beside the
-          title at footnote size, and the conversation starts where
-          the card used to.
-
-          It is still the thing that tells somebody whether there is
-          anything to style from, so it keeps the count and keeps its
-          tap target; it just stops being furniture. */}
+          Three things, all of them small. An assistant screen earns
+          its space by what the conversation puts there, so the chrome
+          above it is a line of icons rather than a card. The count of
+          pieces lives behind the hanger: it is the one fact worth
+          knowing on a page that is not showing the clothes, and it is
+          a destination rather than a statistic. */}
       <View
         style={{
           flexDirection: 'row',
-          alignItems: 'baseline',
+          alignItems: 'center',
           justifyContent: 'space-between',
-          gap: Spacing.three,
+          gap: Spacing.two,
         }}>
         <ThemedText
           accessibilityRole="header"
@@ -120,45 +153,147 @@ export default function WardrobeScreen() {
           Wardrobe
         </ThemedText>
 
-        <MotionPressable
-          accessibilityRole="button"
-          accessibilityLabel={`Your clothes, ${owned.length} pieces`}
-          accessibilityHint="Opens all your pieces, where you can rename or remove them"
-          animateEntrance={false}
-          onPress={() => {
-            void tapFeedback();
-            router.push('/closet');
-          }}
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: Spacing.one,
-            // The row is short, so the tap target is widened rather
-            // than made taller - a 44pt-tall link beside a title
-            // would reintroduce the band this change removed.
-            minHeight: TapTarget,
-            paddingLeft: Spacing.two,
-          }}>
-          <ThemedText type="small" themeColor="textSecondary">
-            {owned.length === 0
-              ? 'Add clothes'
-              : `${owned.length} ${owned.length === 1 ? 'piece' : 'pieces'}`}
-          </ThemedText>
-          <SymbolView
-            name={{
-              ios: 'chevron.right',
-              android: 'chevron_right',
-              web: 'chevron_right',
-            }}
-            size={14}
-            tintColor={colors.textSecondary}
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <HeaderButton
+            label={`Your clothes, ${owned.length} pieces`}
+            hint="Opens all your pieces, where you can rename or remove them"
+            icon={{ ios: 'hanger', android: 'apparel', web: 'apparel' }}
+            onPress={() => router.push('/closet')}
           />
-        </MotionPressable>
+          <HeaderButton
+            label="Earlier conversations"
+            hint="Pick up a conversation you had before"
+            icon={{
+              ios: 'clock.arrow.circlepath',
+              android: 'history',
+              web: 'history',
+            }}
+            onPress={() => setShowHistory(true)}
+          />
+          <HeaderButton
+            label="New conversation"
+            hint="Starts an empty thread. The old one is kept."
+            icon={{
+              ios: 'square.and.pencil',
+              android: 'edit_square',
+              web: 'edit_square',
+            }}
+            onPress={() => {
+              history.startNew();
+              setSaidAnything(false);
+            }}
+          />
+        </View>
       </View>
+
+      {/* The greeting, while there is nothing else to show.
+
+          It is the whole screen on arrival, and deliberately almost
+          nothing: a mark, a line, and the composer waiting at the
+          bottom. The alternative - a title, a count and an empty
+          input - reads as a search page, which is what this screen
+          was and what it is not any more.
+
+          It goes the moment anything is said, rather than scrolling
+          away above the conversation. */}
+      {!saidAnything ? (
+        <MotiView
+          from={{ opacity: 0, translateY: 8 }}
+          animate={{ opacity: 1, translateY: 0 }}
+          transition={timing({ duration: Motion.slow, delay: 120 })}
+          style={{
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: Spacing.three,
+            // Enough to sit in the middle of what is left once the
+            // header and the composer have taken theirs, without
+            // reaching for a measured height.
+            paddingVertical: Spacing.six,
+          }}>
+          <SymbolView
+            name={{ ios: 'sparkles', android: 'auto_awesome', web: 'auto_awesome' }}
+            size={30}
+            tintColor={colors.accent}
+          />
+          <ThemedText
+            style={{
+              ...labelType(22, 400),
+              lineHeight: 28,
+              color: colors.text,
+              textAlign: 'center',
+            }}>
+            {name ? `Back at it, ${name}` : 'What are you wearing today?'}
+          </ThemedText>
+        </MotiView>
+      ) : null}
 
       {/* The assistant. Idle it is one line and a `+`; the outfit and
           the picture of it worn appear beneath as they arrive. */}
-      <StylistPanel embedded onAddGarment={add} />
+      <StylistPanel
+        embedded
+        onAddGarment={add}
+        sessionKey={history.sessionId}
+        restored={history.restored}
+        onTurns={(turns) => {
+          setSaidAnything(turns.length > 0);
+          history.remember(turns);
+        }}
+      />
+
+      <HistorySheet
+        open={showHistory}
+        sessions={history.sessions}
+        currentId={history.sessionId}
+        onClose={() => setShowHistory(false)}
+        onResume={(id) => void history.resume(id)}
+        onForget={(id) => void history.forget(id)}
+        onForgetAll={() => void history.forgetAll()}
+        onStartNew={() => {
+          history.startNew();
+          setSaidAnything(false);
+        }}
+      />
     </ScrollView>
+  );
+}
+
+/**
+ * One icon in the header row.
+ *
+ * Icon-only, so each carries its own label and hint: without them a
+ * screen reader announces three unnamed buttons. 44pt square even
+ * though the glyph is 18, because the target is what has to be
+ * tappable, not the drawing.
+ */
+function HeaderButton({
+  label,
+  hint,
+  icon,
+  onPress,
+}: {
+  label: string;
+  hint: string;
+  icon: SymbolViewProps['name'];
+  onPress: () => void;
+}) {
+  const colors = Colors[useScheme()];
+  return (
+    <MotionPressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityHint={hint}
+      animateEntrance={false}
+      onPress={() => {
+        void tapFeedback();
+        onPress();
+      }}
+      style={{
+        width: TapTarget,
+        height: TapTarget,
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}>
+      <SymbolView name={icon} size={18} tintColor={colors.text} />
+    </MotionPressable>
   );
 }

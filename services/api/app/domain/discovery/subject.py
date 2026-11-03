@@ -56,6 +56,29 @@ SUBJECTS: tuple[str, ...] = (
     "other",
 )
 
+#: What this app is for.
+#:
+#: Clothes, and the things worn with them. Not furniture, not rooms,
+#: not food - a wardrobe app that hosts a photograph of a bed is a
+#: worse version of a general pinboard, and the recommender spends its
+#: effort learning a vocabulary nobody came here for. Narrowed to this
+#: on the product owner's instruction (2026-11-03).
+#:
+#: **`interior` and `other` stay in `SUBJECTS` deliberately.** The
+#: vision model needs words for what it is looking at in order to say
+#: "this is not clothes", and that sentence is what keeps a photograph
+#: of a sofa out. Deleting the label would not stop sofas arriving; it
+#: would stop the app being able to name one.
+FASHION_SUBJECTS: frozenset[str] = frozenset(
+    {"outfit", "garment", "footwear", "bag", "jewellery", "beauty"}
+)
+
+
+def belongs_here(subject: str) -> bool:
+    """Whether a pin of this subject is something this app hosts."""
+    return subject in FASHION_SUBJECTS
+
+
 #: Subjects that may be recommended under one another.
 #:
 #: **Not symmetric, and not transitive.** Jewellery under an outfit is
@@ -283,6 +306,7 @@ def nearest(
 __all__ = [
     "DIMENSIONS",
     "FACETS",
+    "FASHION_SUBJECTS",
     "GOES_UNDER",
     "PRESENTATIONS",
     "PRESENTATION_LEAN",
@@ -291,6 +315,7 @@ __all__ = [
     "Embedder",
     "Reading",
     "Shelf",
+    "belongs_here",
     "leans_together",
     "may_sit_under",
     "nearest",

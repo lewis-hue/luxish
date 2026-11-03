@@ -62,6 +62,35 @@ async def unrenderable(session) -> list[tuple[str, str]]:
     return [(str(r[0]), str(r[1])) for r in rows]
 
 
+async def not_fashion(session) -> list[tuple[str, str]]:
+    """Published pins whose subject is not something this app hosts.
+
+    The vision reading already names every pin's subject, so this is a
+    lookup against `FASHION_SUBJECTS` rather than a judgement made here.
+    """
+    from app.domain.discovery.subject import FASHION_SUBJECTS
+
+    rows = (
+        await session.execute(
+            sa.text(
+                """
+                select p.id, v.subject
+                from posts p
+                join post_vision v on v.post_id = p.id
+                where p.state = 'published'
+                  and p.deleted_at is null
+                order by p.created_at
+                """
+            )
+        )
+    ).all()
+    return [
+        (str(r[0]), str(r[1]))
+        for r in rows
+        if str(r[1]) not in FASHION_SUBJECTS
+    ]
+
+
 async def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -76,14 +105,30 @@ async def main() -> int:
     try:
         async with maker() as session:
             broken = await unrenderable(session)
-            if not broken:
-                print("Every published pin has a photograph. Nothing to do.")
+            offtopic = await not_fashion(session)
+            if not broken and not offtopic:
+                print(
+                    "Every published pin has a photograph and is about "
+                    "clothes. Nothing to do."
+                )
                 return 0
 
-            print(f"{len(broken)} published pin(s) cannot render:")
-            for post_id, caption in broken:
-                shown = caption[:60] + ("…" if len(caption) > 60 else "")
-                print(f"  {post_id}  {shown!r}")
+            if broken:
+                print(f"{len(broken)} published pin(s) cannot render:")
+                for post_id, caption in broken:
+                    shown = caption[:60] + ("…" if len(caption) > 60 else "")
+                    print(f"  {post_id}  {shown!r}")
+
+            if offtopic:
+                counts: dict[str, int] = {}
+                for _post_id, subject in offtopic:
+                    counts[subject] = counts.get(subject, 0) + 1
+                summary = ", ".join(
+                    f"{n} {subject}" for subject, n in sorted(counts.items())
+                )
+                print(
+                    f"{len(offtopic)} published pin(s) are not fashion: {summary}"
+                )
 
             if not args.fix:
                 print("\nRe-run with --fix to take them down.")
@@ -97,10 +142,14 @@ async def main() -> int:
                     "update posts set deleted_at = :now, updated_at = :now "
                     "where id in :ids"
                 ).bindparams(sa.bindparam("ids", expanding=True)),
-                {"now": datetime.now(UTC), "ids": [b[0] for b in broken]},
+                {
+                    "now": datetime.now(UTC),
+                    "ids": [b[0] for b in broken] + [o[0] for o in offtopic],
+                },
             )
             await session.commit()
-            print(f"\nTook down {len(broken)} pin(s). The board is whole.")
+            total = len(broken) + len(offtopic)
+            print(f"\nTook down {total} pin(s). The board is whole.")
             return 0
     finally:
         await engine.dispose()
