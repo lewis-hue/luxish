@@ -221,9 +221,15 @@ async def board(
         entries = await domain.discovered(
             db, user_id=ctx.user_id, seen_store=seen_store(), notes=notes
         )
-        # More unless the corpus wrapped. An empty page is also the
-        # end: there is nothing to put under it.
-        more = bool(entries) and not notes.get("exhausted", False)
+        # **There is always more, as long as this page had anything.**
+        #
+        # The board does not end. Walking past the last unseen pin
+        # starts a fresh lap in a new order rather than stopping, so
+        # the only thing that can stop the scroll is a page with
+        # nothing in it - an empty corpus, or a reader who can see
+        # none of it. `notes["exhausted"]` still says when a lap
+        # turned over; it is a diagnostic, not a stop condition.
+        more = bool(entries)
 
     return FeedOut(
         group=group or "all",

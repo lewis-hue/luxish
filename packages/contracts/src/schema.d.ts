@@ -176,7 +176,7 @@ export interface paths {
         };
         /**
          * Read Avatar
-         * @description The avatar, and what it was drawn from.
+         * @description The avatar, what it was drawn from, and which figure is in use.
          */
         get: operations["read_avatar_v1_avatar_get"];
         put?: never;
@@ -193,6 +193,33 @@ export interface paths {
          *     than paying for a second picture nobody will look at.
          */
         post: operations["create_avatar_v1_avatar_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/avatar/vehicle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Vehicle
+         * @description Choose between the mannequin and a photorealistic likeness.
+         *
+         *     **The mannequin is the default and this is the only way off it.**
+         *     Generating a likeness used to be the switch by implication, which
+         *     meant somebody who made one to see what it looked like was moved
+         *     onto it permanently with nothing to move them back. Saying so
+         *     explicitly separates "draw me one" from "use it everywhere", and
+         *     makes returning to the mannequin a single call.
+         */
+        put: operations["set_vehicle_v1_avatar_vehicle_put"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2954,6 +2981,18 @@ export interface components {
             question: string;
             /** Post Id */
             post_id?: string | null;
+            /** History */
+            history?: components["schemas"]["AskTurn"][];
+        };
+        /**
+         * AskTurn
+         * @description One thing already said, by one side.
+         */
+        AskTurn: {
+            /** Who */
+            who: string;
+            /** Text */
+            text: string;
         };
         /**
          * AssistantOut
@@ -2998,6 +3037,11 @@ export interface components {
             /** Asset Id */
             asset_id?: string | null;
             appearance: components["schemas"]["AppearanceOut"];
+            /**
+             * On My Avatar
+             * @default false
+             */
+            on_my_avatar: boolean;
         };
         /** BlockedListOut */
         BlockedListOut: {
@@ -3500,6 +3544,11 @@ export interface components {
             group: string;
             /** Items */
             items?: components["schemas"]["FeedItemOut"][];
+            /**
+             * More
+             * @default false
+             */
+            more: boolean;
         };
         /** FeedbackCreate */
         FeedbackCreate: {
@@ -5445,12 +5494,28 @@ export interface components {
             /**
              * Occasions
              * @default [
+             *       "everyday",
              *       "office",
              *       "evening",
              *       "date-night",
+             *       "weekend",
              *       "wedding-guest",
+             *       "party",
              *       "festival",
-             *       "travel"
+             *       "travel",
+             *       "holiday",
+             *       "brunch",
+             *       "dinner",
+             *       "interview",
+             *       "graduation",
+             *       "funeral",
+             *       "place-of-worship",
+             *       "gym",
+             *       "outdoors",
+             *       "beach",
+             *       "rainy-day",
+             *       "cold-weather",
+             *       "loungewear"
              *     ]
              */
             occasions: string[];
@@ -5719,6 +5784,14 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /**
+         * VehicleIn
+         * @description Which figure to use. False means the mannequin.
+         */
+        VehicleIn: {
+            /** On My Avatar */
+            on_my_avatar: boolean;
         };
         /** VisualSearchIn */
         VisualSearchIn: {
@@ -6040,6 +6113,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RenderOut"];
+                };
+            };
+        };
+    };
+    set_vehicle_v1_avatar_vehicle_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VehicleIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AvatarOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

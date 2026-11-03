@@ -453,9 +453,21 @@ async def discover(
             extra={"user": str(user_id), "permitted": allowed_count},
         )
         already = set()
-        # The corpus has wrapped. Everything from here is a repeat, so
-        # a reader scrolling forward should be told the board ends
-        # rather than shown the same pins again under more of it.
+        # **The lap is over, so start another one rather than stop.**
+        #
+        # A board that ends is a board somebody has finished, and
+        # nothing about 633 pins should feel finished after one
+        # scroll. Clearing the window is what makes the next lap walk
+        # forward properly: left in place, every later page finds the
+        # filter exhausted, relaxes it again, and re-picks from the
+        # same top-ranked handful - the scroll would keep going and
+        # keep showing the same pins, which is worse than ending.
+        #
+        # `exhausted` is still reported, because callers that want to
+        # know - a dry run, a test, a diagnostic - should be able to.
+        # The board does not stop on it.
+        if seen_store is not None:
+            await seen_store.forget(user_id)
         if notes is not None:
             notes["exhausted"] = True
 

@@ -34,6 +34,7 @@ from app.schemas.avatar import (
     AppearanceIn,
     AppearanceOut,
     AvatarOut,
+    VehicleIn,
     LikenessIn,
     LikenessPhotoOut,
     LikenessPhotosOut,
@@ -59,11 +60,42 @@ def _out(appearance: Appearance) -> AppearanceOut:
 
 @router.get("", response_model=AvatarOut)
 async def read_avatar(db: SessionDep, ctx: AuthDep) -> AvatarOut:
-    """The avatar, and what it was drawn from."""
+    """The avatar, what it was drawn from, and which figure is in use."""
+    from app.domain.mannequin import dresses_their_avatar
+
     asset = await domain.current_avatar(db, user_id=ctx.user_id)
     appearance = await domain.read_appearance(db, user_id=ctx.user_id)
     return AvatarOut(
-        asset_id=str(asset.id) if asset else None, appearance=_out(appearance)
+        asset_id=str(asset.id) if asset else None,
+        appearance=_out(appearance),
+        on_my_avatar=await dresses_their_avatar(db, user_id=ctx.user_id),
+    )
+
+
+@router.put("/vehicle", response_model=AvatarOut)
+async def set_vehicle(
+    payload: VehicleIn, db: SessionDep, ctx: AuthDep
+) -> AvatarOut:
+    """Choose between the mannequin and a photorealistic likeness.
+
+    **The mannequin is the default and this is the only way off it.**
+    Generating a likeness used to be the switch by implication, which
+    meant somebody who made one to see what it looked like was moved
+    onto it permanently with nothing to move them back. Saying so
+    explicitly separates "draw me one" from "use it everywhere", and
+    makes returning to the mannequin a single call.
+    """
+    from app.domain.mannequin import choose_vehicle, dresses_their_avatar
+
+    await choose_vehicle(
+        db, user_id=ctx.user_id, on_my_avatar=payload.on_my_avatar
+    )
+    asset = await domain.current_avatar(db, user_id=ctx.user_id)
+    appearance = await domain.read_appearance(db, user_id=ctx.user_id)
+    return AvatarOut(
+        asset_id=str(asset.id) if asset else None,
+        appearance=_out(appearance),
+        on_my_avatar=await dresses_their_avatar(db, user_id=ctx.user_id),
     )
 
 

@@ -308,7 +308,6 @@ export function StylistPanel({
     onTurns(chat.turns);
   }, [chat.turns, onTurns]);
   /** Whether the "what can I ask?" suggestions are open. Closed. */
-  const [showingPrompts, setShowingPrompts] = useState(false);
 
   /**
    * Any avatar a turn is waiting on.
@@ -861,84 +860,19 @@ export function StylistPanel({
           </View>
         </View>
 
-        {/* Things to say, on an empty field.
+        {/* The suggestion chips stood here.
 
-            Not a capability menu: these are sentences, and each is an
-            example of asking rather than a button that performs. They
-            fill the field so it can be edited, and they go the moment
-            somebody starts writing their own. */}
-        {/* **Five chips under the box was most of the clutter.**
+            They were folded behind a "What can I ask?" control after
+            the first complaint about clutter, which helped and did
+            not fix it: the control itself still sat under the box,
+            and opening it pushed a wall of chips between the
+            composer and the bottom of the screen - so the box people
+            type into was never actually the last thing on the page.
 
-            They sat permanently below the composer, pushing the
-            conversation up and leaving a wall of capability names
-            where an assistant should just have a place to type. An
-            assistant screen is a thread and a box; everything else
-            is furniture.
-
-            Folded behind one control, shown only on an empty field,
-            and closed again the moment somebody picks one or starts
-            writing their own. They are still sentences rather than
-            buttons - the point of them was always that asking is
-            how you reach these, not tapping. */}
-        {request.trim() === '' && run.status !== 'running' ? (
-          <View style={{ gap: Spacing.two }}>
-            <MotionPressable
-              accessibilityRole="button"
-              accessibilityLabel={
-                showingPrompts ? 'Hide suggestions' : 'Show what I can ask for'
-              }
-              accessibilityState={{ expanded: showingPrompts }}
-              animateEntrance={false}
-              onPress={() => {
-                void tapFeedback();
-                setShowingPrompts((was) => !was);
-              }}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: Spacing.one,
-                alignSelf: 'flex-start',
-                minHeight: TapTarget,
-              }}>
-              <SymbolView
-                name={{
-                  ios: showingPrompts ? 'xmark' : 'plus',
-                  android: showingPrompts ? 'close' : 'add',
-                  web: showingPrompts ? 'close' : 'add',
-                }}
-                size={16}
-                tintColor={colors.textSecondary}
-              />
-              <ThemedText
-                type="small"
-                themeColor="textSecondary"
-                style={labelType(FontSize.footnote, 400)}>
-                {showingPrompts ? 'Hide' : 'What can I ask?'}
-              </ThemedText>
-            </MotionPressable>
-
-            {showingPrompts ? (
-              <View
-                style={{
-                  flexDirection: 'row',
-                  flexWrap: 'wrap',
-                  gap: Spacing.two,
-                }}>
-                {(attachment ? WITH_A_PICTURE : PROMPTS).map((prompt) => (
-                  <Chip
-                    key={prompt}
-                    label={prompt}
-                    onPress={() => {
-                      void tapFeedback();
-                      setRequest(prompt);
-                      setShowingPrompts(false);
-                    }}
-                  />
-                ))}
-              </View>
-            ) : null}
-          </View>
-        ) : null}
+            Removed. An assistant screen is a thread and a box. What
+            it can do is discovered by asking it, which is the whole
+            premise, and a menu of example sentences is the kind of
+            furniture that premise exists to avoid. */}
       </View>
     </>
   );
@@ -1098,40 +1032,3 @@ function Label({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Chip({
-  label,
-  active,
-  onPress,
-}: {
-  label: string;
-  active?: boolean;
-  onPress: () => void;
-}) {
-  const colors = Colors[useScheme()];
-  return (
-    <MotionPressable
-      accessibilityRole="button"
-      accessibilityState={{ selected: active }}
-      animateEntrance={false}
-      scale={0.97}
-      onPress={onPress}
-      style={{
-        minHeight: 36,
-        justifyContent: 'center',
-        paddingHorizontal: Spacing.three,
-        borderRadius: Radius.full,
-        backgroundColor: active ? colors.text : 'transparent',
-        borderWidth: 1,
-        borderColor: active ? colors.text : colors.borderStrong,
-      }}>
-      <ThemedText
-        type="small"
-        style={{
-          fontSize: FontSize.footnote,
-          color: active ? colors.background : colors.textSecondary,
-        }}>
-        {label}
-      </ThemedText>
-    </MotionPressable>
-  );
-}

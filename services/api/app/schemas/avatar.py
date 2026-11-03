@@ -35,12 +35,27 @@ class AppearanceOut(AppearanceIn):
     pass
 
 
+class VehicleIn(BaseModel):
+    """Which figure to use. False means the mannequin."""
+
+    on_my_avatar: bool
+
+
 class AvatarOut(BaseModel):
     #: Null until one has been generated.
     asset_id: str | None = None
     #: What the avatar was drawn from, so a client can show it and offer to
     #: change it rather than making somebody guess why it looks as it does.
     appearance: AppearanceOut
+    #: Whether this person has asked to be shown on a photorealistic
+    #: likeness instead of the mannequin.
+    #:
+    #: **The mannequin is the default for everybody, new or old.**
+    #: Having generated a likeness once is not the same as choosing to
+    #: see it everywhere, and before this the mere existence of one
+    #: took over the profile - with no way back short of deleting it.
+    #: The client shows the mannequin unless this is true.
+    on_my_avatar: bool = False
 
 
 class PieceOut(BaseModel):

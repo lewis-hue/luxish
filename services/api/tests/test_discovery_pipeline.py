@@ -508,6 +508,77 @@ async def test_the_gate_gives_way_rather_than_leaving_a_blank_shelf(
 # which the refresh test above already proves. What paging adds is a
 # stop condition, and that is what these pin.
 # --------------------------------------------------------------------------- #
+async def test_a_finished_lap_starts_another_rather_than_ending(
+    db: AsyncSession,
+) -> None:
+    """**The board does not end.**
+
+    Nothing about six hundred pins should feel finished after one
+    scroll. Walking past the last unseen pin clears the window and
+    the next lap walks forward again in a new order - left in place,
+    every later page would relax the filter and re-pick the same
+    top-ranked handful, so the scroll would continue and show the
+    same pins, which is worse than stopping.
+    """
+    me = await make_user(db)
+    curator = await make_user(db)
+    everything = [await post_by(db, curator, caption=f"fit {i}") for i in range(12)]
+    await board_with(db, curator, everything)
+    await saves(db, me, everything[0])
+    await db.commit()
+
+    memory = InMemorySeen()
+    pages = 0
+    for _ in range(14):
+        grid = await discover(
+            db, user_id=me, size=4, seen_store=memory, rng=random.Random(3), now=NOW
+        )
+        if not grid:
+            break
+        pages += 1
+
+    assert pages == 14, f"the board ran dry after {pages} pages"
+
+
+async def test_the_window_is_cleared_when_the_lap_turns_over(
+    db: AsyncSession,
+) -> None:
+    """The mechanism behind it, asserted directly."""
+    me = await make_user(db)
+    curator = await make_user(db)
+    everything = [await post_by(db, curator, caption=f"fit {i}") for i in range(6)]
+    await board_with(db, curator, everything)
+    await saves(db, me, everything[0])
+    await db.commit()
+
+    memory = InMemorySeen()
+    grew_to = 0
+    for _ in range(8):
+        notes: dict[str, object] = {}
+        grid = await discover(
+            db,
+            user_id=me,
+            size=5,
+            seen_store=memory,
+            rng=random.Random(3),
+            now=NOW,
+            notes=notes,
+        )
+        window = await memory.seen(me)
+        grew_to = max(grew_to, len(window))
+        if notes.get("exhausted"):
+            # Cleared, then this page recorded on top of nothing - so
+            # the window now holds one page rather than every page
+            # since the start.
+            assert len(window) == len({g.post_id for g in grid}), (
+                f"window holds {len(window)} after a lap of {len(grid)}"
+            )
+            assert len(window) < grew_to or grew_to <= len(grid)
+            break
+    else:
+        raise AssertionError("never wrapped on a corpus this small")
+
+
 async def test_the_caller_is_told_when_the_corpus_has_wrapped(
     db: AsyncSession,
 ) -> None:

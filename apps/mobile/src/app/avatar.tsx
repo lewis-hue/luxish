@@ -11,6 +11,7 @@ import {
   EMPTY_APPEARANCE,
   isWorking,
   useAvatar,
+  useChooseVehicle,
   useCreateAvatar,
   useTryOnFit,
   useRenders,
@@ -141,6 +142,7 @@ export default function AvatarScreen() {
   const renders = useRenders(signedIn);
   const setAppearance = useSetAppearance();
   const create = useCreateAvatar();
+  const chooseVehicle = useChooseVehicle();
   /** A fit carried in from Discover's "Try it on". */
   const { fit: fitParam } = useLocalSearchParams<{ fit?: string }>();
 
@@ -204,7 +206,22 @@ export default function AvatarScreen() {
   const commit = (patch: Partial<Appearance>) =>
     setEdits((prior) => ({ ...prior, ...patch }));
 
-  const showing = worn?.uri ?? newest?.uri ?? avatar.data?.uri ?? null;
+  // **The mannequin unless they asked for a likeness.**
+  //
+  // This read `avatar.data?.uri` whenever one existed, so generating
+  // a photorealistic avatar once - to see what it looked like - moved
+  // the profile onto it permanently, with no way back short of
+  // deleting it. Having made one is not the same as choosing to be
+  // shown as one. The server holds the choice (`on_my_avatar`) and it
+  // defaults to false for everybody, new accounts and old.
+  //
+  // A picture that was explicitly asked for still shows: `worn` is a
+  // try-on somebody just requested and `newest` is a render they just
+  // paid for, and hiding either would be hiding the thing they were
+  // waiting for.
+  const onLikeness = Boolean(avatar.data?.onMyAvatar);
+  const showing =
+    worn?.uri ?? newest?.uri ?? (onLikeness ? (avatar.data?.uri ?? null) : null);
   // Busy means "a picture is being drawn", which outlives the request that
   // asked for it. The mutation settles in half a second; the worker takes
   // fifteen to twenty-seven.
@@ -548,6 +565,11 @@ export default function AvatarScreen() {
               await setAppearance.mutateAsync(draft);
               setWorn(null);
               await create.mutateAsync();
+              // Asking for a likeness is asking to be shown as one.
+              // The switch below is how to go back to the mannequin;
+              // without this the picture they just paid for would be
+              // drawn and then hidden behind the default.
+              await chooseVehicle.mutateAsync(true);
               void successFeedback();
             } catch (caught) {
               setProblem(describe(caught));
@@ -578,6 +600,37 @@ export default function AvatarScreen() {
               style={{ fontSize: FontSize.meta, textAlign: 'center' }}>
               A drawing, not a photograph. Private to your account.
             </ThemedText>
+
+            {/* The way back to the mannequin.
+
+                Only offered once there is a likeness to go back from.
+                Without it, generating one was a one-way door: the
+                profile moved onto it permanently and the only exit
+                was deleting the picture. */}
+            {avatar.data?.assetId ? (
+              <MotionPressable
+                accessibilityRole="switch"
+                accessibilityLabel="Show me on the mannequin instead"
+                accessibilityState={{ checked: !onLikeness }}
+                animateEntrance={false}
+                onPress={() => {
+                  void tapFeedback();
+                  void chooseVehicle.mutateAsync(!onLikeness);
+                }}
+                style={{ minHeight: TapTarget, justifyContent: 'center' }}>
+                <ThemedText
+                  type="small"
+                  style={{
+                    fontSize: FontSize.footnote,
+                    color: colors.accent,
+                    textAlign: 'center',
+                  }}>
+                  {onLikeness
+                    ? 'Show me on the mannequin instead'
+                    : 'Use my avatar everywhere'}
+                </ThemedText>
+              </MotionPressable>
+            ) : null}
             </View>
           </>
         ) : null}

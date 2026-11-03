@@ -149,6 +149,31 @@ async def dresses_their_avatar(
     return held is not None and _as_text(held.value) == ON_MY_AVATAR
 
 
+async def choose_vehicle(
+    session: AsyncSession, *, user_id: uuid.UUID, on_my_avatar: bool
+) -> None:
+    """Record whether to use their likeness or the mannequin.
+
+    Written beside `dresses_their_avatar` so the key, its values and
+    both halves of the decision stay in one file.
+    """
+    from app.models.preference import Preference
+
+    wanted = ON_MY_AVATAR if on_my_avatar else "mannequin"
+    held = await session.scalar(
+        sa.select(Preference).where(
+            Preference.user_id == user_id, Preference.key == VEHICLE_KEY
+        )
+    )
+    if held is None:
+        session.add(
+            Preference(user_id=user_id, key=VEHICLE_KEY, value=wanted)
+        )
+    else:
+        held.value = wanted
+    await session.commit()
+
+
 async def figure_to_dress(
     session: AsyncSession, *, user_id: uuid.UUID, store: object
 ) -> tuple[bytes, str] | None:
@@ -205,6 +230,7 @@ __all__ = [
     "PRESENTATIONS",
     "VEHICLE_KEY",
     "bytes_for",
+    "choose_vehicle",
     "dresses_their_avatar",
     "figure_id",
     "figure_to_dress",

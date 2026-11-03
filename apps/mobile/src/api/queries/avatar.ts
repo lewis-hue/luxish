@@ -84,6 +84,15 @@ export interface Avatar {
   /** Local file URI for the picture, once it has been fetched. */
   uri: string | null;
   appearance: Appearance;
+  /**
+   * Whether this person asked to be shown as a photorealistic
+   * likeness instead of the mannequin.
+   *
+   * False for everybody who has not said otherwise, new or old. The
+   * mannequin is the default everywhere, and having generated a
+   * likeness once does not change that.
+   */
+  onMyAvatar: boolean;
 }
 
 /** True while a render is still being drawn. */
@@ -153,7 +162,31 @@ export function useAvatar(enabled: boolean) {
         assetId,
         uri: assetId ? await fetchAvatarImage(assetId) : null,
         appearance: readAppearance(data?.appearance as Record<string, unknown>),
+        onMyAvatar: Boolean(
+          (data as { on_my_avatar?: boolean } | undefined)?.on_my_avatar,
+        ),
       };
+    },
+  });
+}
+
+/**
+ * Switch between the mannequin and a photorealistic likeness.
+ *
+ * Separate from generating one, deliberately. Drawing a likeness and
+ * choosing to be shown as one are two decisions, and before they were
+ * separated the first silently made the second with no way back.
+ */
+export function useChooseVehicle() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: async (onMyAvatar: boolean) => {
+      await api.PUT('/v1/avatar/vehicle', {
+        body: { on_my_avatar: onMyAvatar } as never,
+      });
+    },
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: avatarKeys.current });
     },
   });
 }

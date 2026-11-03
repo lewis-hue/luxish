@@ -2,11 +2,13 @@ import {
   createContext,
   use,
   useCallback,
+  useEffect,
   useMemo,
   useRef,
   useState,
   type ReactNode,
 } from 'react';
+import { usePathname } from 'expo-router';
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 
 import {
@@ -67,6 +69,22 @@ export function AttentionProvider({ children }: { children: ReactNode }) {
 export function useScrollDirection() {
   const { stoodDown, setStoodDown } = use(Attention);
   const state = useRef<Scrolling>(AT_REST);
+  const pathname = usePathname();
+
+  // **Stand the bar back up on the way out.**
+  //
+  // `stoodDown` is one value for the whole app, so a board left
+  // mid-scroll took its hidden bar with it: scroll down in Discover,
+  // tap through to the wardrobe, and that tab has no bar and nothing
+  // on it that scrolls to bring one back. The screen that hid it is
+  // the screen that un-hides it, on the way out.
+  useEffect(
+    () => () => {
+      state.current = AT_REST;
+      setStoodDown(false);
+    },
+    [pathname, setStoodDown],
+  );
 
   const onScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {

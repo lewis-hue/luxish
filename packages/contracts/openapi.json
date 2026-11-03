@@ -281,7 +281,7 @@
           "avatar"
         ],
         "summary": "Read Avatar",
-        "description": "The avatar, and what it was drawn from.",
+        "description": "The avatar, what it was drawn from, and which figure is in use.",
         "operationId": "read_avatar_v1_avatar_get",
         "responses": {
           "200": {
@@ -310,6 +310,48 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/RenderOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/avatar/vehicle": {
+      "put": {
+        "tags": [
+          "avatar"
+        ],
+        "summary": "Set Vehicle",
+        "description": "Choose between the mannequin and a photorealistic likeness.\n\n**The mannequin is the default and this is the only way off it.**\nGenerating a likeness used to be the switch by implication, which\nmeant somebody who made one to see what it looked like was moved\nonto it permanently with nothing to move them back. Saying so\nexplicitly separates \"draw me one\" from \"use it everywhere\", and\nmakes returning to the mannequin a single call.",
+        "operationId": "set_vehicle_v1_avatar_vehicle_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VehicleIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AvatarOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -5960,6 +6002,14 @@
               }
             ],
             "title": "Post Id"
+          },
+          "history": {
+            "items": {
+              "$ref": "#/components/schemas/AskTurn"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "History"
           }
         },
         "type": "object",
@@ -5968,6 +6018,28 @@
         ],
         "title": "AskCreate",
         "description": "A question about this person's own wardrobe.\n\n`post_id` is the pin they are looking at, when they came from\none. It is what makes \"match the fit above\" answerable: the\nphotograph goes to the model, not just the caption."
+      },
+      "AskTurn": {
+        "properties": {
+          "who": {
+            "type": "string",
+            "pattern": "^(you|stylist)$",
+            "title": "Who"
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "who",
+          "text"
+        ],
+        "title": "AskTurn",
+        "description": "One thing already said, by one side."
       },
       "AssistantOut": {
         "properties": {
@@ -6055,6 +6127,11 @@
           },
           "appearance": {
             "$ref": "#/components/schemas/AppearanceOut"
+          },
+          "on_my_avatar": {
+            "type": "boolean",
+            "title": "On My Avatar",
+            "default": false
           }
         },
         "type": "object",
@@ -7299,6 +7376,11 @@
             },
             "type": "array",
             "title": "Items"
+          },
+          "more": {
+            "type": "boolean",
+            "title": "More",
+            "default": false
           }
         },
         "type": "object",
@@ -12394,12 +12476,28 @@
             "type": "array",
             "title": "Occasions",
             "default": [
+              "everyday",
               "office",
               "evening",
               "date-night",
+              "weekend",
               "wedding-guest",
+              "party",
               "festival",
-              "travel"
+              "travel",
+              "holiday",
+              "brunch",
+              "dinner",
+              "interview",
+              "graduation",
+              "funeral",
+              "place-of-worship",
+              "gym",
+              "outdoors",
+              "beach",
+              "rainy-day",
+              "cold-weather",
+              "loungewear"
             ]
           },
           "dress_codes": {
@@ -12973,6 +13071,20 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "VehicleIn": {
+        "properties": {
+          "on_my_avatar": {
+            "type": "boolean",
+            "title": "On My Avatar"
+          }
+        },
+        "type": "object",
+        "required": [
+          "on_my_avatar"
+        ],
+        "title": "VehicleIn",
+        "description": "Which figure to use. False means the mannequin."
       },
       "VisualSearchIn": {
         "properties": {

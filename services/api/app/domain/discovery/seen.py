@@ -57,6 +57,17 @@ class SeenStore(Protocol):
         self, user_id: uuid.UUID, post_ids: list[uuid.UUID]
     ) -> None: ...
 
+    async def forget(self, user_id: uuid.UUID) -> None:
+        """Start the lap again.
+
+        Called when the board has been walked end to end. Without it
+        every later page finds the filter exhausted, relaxes it, and
+        re-picks from the same top-ranked pins - so the scroll repeats
+        the same handful rather than going round again. Forgetting
+        makes the next lap walk forward properly, in a fresh order.
+        """
+        ...
+
 
 class InMemorySeen:
     """Process-local, for tests and for a single-process dev stack.
@@ -81,6 +92,9 @@ class InMemorySeen:
         kept.extend(p for p in post_ids if p not in known)
         if len(kept) > MOST_REMEMBERED:
             del kept[: len(kept) - MOST_REMEMBERED]
+
+    async def forget(self, user_id: uuid.UUID) -> None:
+        self._by_user.pop(user_id, None)
 
 
 class RedisSeen:
@@ -138,6 +152,15 @@ class RedisSeen:
         except Exception as caught:
             # Not recorded means it may be shown again. Acceptable.
             logger.warning("could not record impressions: %s", caught)
+
+    async def forget(self, user_id: uuid.UUID) -> None:
+        try:
+            await self._redis.delete(self._key(user_id))
+        except Exception as caught:
+            # The lap simply does not reset. The filter relaxes
+            # instead, which repeats pins - worse than a clean lap
+            # and far better than an error on a scroll.
+            logger.warning("could not reset the seen window: %s", caught)
 
 
 def unseen(
