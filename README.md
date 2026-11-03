@@ -1,56 +1,106 @@
-# Welcome to your Expo app 👋
+# LUXish
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A wardrobe and styling app. You photograph the clothes you own, and
+the app builds outfits from them, shows them on a figure, plans what
+you will wear, and puts what other people post on a board you can
+actually browse.
 
-## Get started
+An Expo mobile app, a FastAPI service, four job-queue workers and a
+small amount of infrastructure, in one repository.
 
-1. Install dependencies
+---
 
-   ```bash
-   npm install
-   ```
-
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **src/app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+## Run it
 
 ```bash
-npm run reset-project
+./scripts/review.sh
 ```
 
-This command will move the starter code to the **example** directory and create a blank **src/app** directory where you can start developing.
+That brings up the data stores, the API, every worker, the scheduler
+and Metro, seeds a demo world if the database is empty, and then
+opens the app — in an Android emulator if this machine has one, and
+otherwise as a QR code to scan with Expo Go on a phone.
 
-### Other setup steps
+```bash
+./scripts/review.sh doctor   # check the machine, start nothing
+./scripts/review.sh stop     # shut down everything it started
+```
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+Sign in with `demo.review@luxish.local` / `ReviewMe!2026`.
 
-## Learn more
+**On iOS.** Apple's simulator ships inside Xcode and runs only on
+macOS, so there is no local iOS simulator on Windows or Linux — the
+script says so rather than pretending. Scanning the QR with Expo Go
+on a real iPhone gives you the genuine article, and is a better
+review than any simulator.
 
-To learn more about developing your project with Expo, look at the following resources:
+### What you need first
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+- Docker, running
+- Node 24.3+ or 26 (not an odd-numbered release — Expo SDK 58 excludes them)
+- Python 3.12 with a virtualenv at `services/api/.venv`
+- `npm install` at the repository root
 
-## Join the community
+`./scripts/review.sh doctor` checks all of it and tells you what is
+missing.
 
-Join our community of developers creating universal apps.
+---
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+## What is in here
+
+| Path | Owns |
+|---|---|
+| `apps/mobile` | The Expo app, iOS and Android |
+| `services/api` | FastAPI: auth, wardrobe, stylist, discovery, shopping, social, billing |
+| `services/workers` | Durable jobs: media, AI, moderation, notifications |
+| `packages/contracts` | The OpenAPI document and the generated typed client |
+| `infra` | docker-compose for local work; Terraform for a deployment |
+| `docs` | Architecture decisions, roadmap, integration matrix, runbooks |
+
+### The parts worth looking at
+
+**Discovery** (`services/api/app/domain/discovery/`) is a staged
+recommender rather than one ranked query: a random walk over the
+graph of which pins people have put on which boards, tag affinity,
+trending measured as acceleration rather than volume, and a slice
+reserved for pins nobody has seen yet — blended to a target mix and
+filtered against what you have already been shown. Its README
+records what is implemented and what is deliberately not.
+
+**The stylist** (`app/domain/stylist_ask.py`) answers in words before
+it makes anything. It streams a reply, decides from the same model
+call whether you own something that works, and only then acts: your
+own clothes on a figure, or the gaps and where to buy them.
+
+**Reading pictures** (`app/domain/discovery/subject.py`) is how the
+app avoids trusting a caption. A hashtag is a claim typed once by
+one person; what the vision model sees in the photograph is not.
+
+---
+
+## Tests
+
+```bash
+cd services/api && python -m pytest tests/ -q     # ~1500 tests
+cd apps/mobile  && npx jest                        # ~745 tests
+cd apps/mobile  && npx tsc --noEmit && npx expo lint
+```
+
+---
+
+## Notes for a reviewer
+
+**Credentials.** Nothing real is committed. `.env.example` files show
+the shape; the app runs locally without an AI provider key, with the
+model-backed features reporting that they are unavailable rather than
+failing quietly.
+
+**Seed imagery.** `assets/seed-photos/` holds reference photographs
+used to make the demo feel real. They are for demonstration and are
+not licensed for production use.
+
+**What is not finished** is listed honestly in `docs/ROADMAP.md`,
+which marks every capability as implemented, planned or blocked, and
+says what each blocked one is waiting on. A few features are gated on
+third-party credentials this project does not have; the UI says so
+rather than showing an empty screen.
