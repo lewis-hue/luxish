@@ -31,7 +31,7 @@ The algorithm is the same shape and the asymptotics are the same; the
 scale is four orders of magnitude apart, and pretending otherwise
 would be the kind of claim this repository does not make about
 itself. See `app/domain/discovery/README.md` for which pieces of
-the published literature this matches and which it does not.
+Pixie (Eksombatchai et al. 2018) this matches and which it does not.
 """
 
 from __future__ import annotations

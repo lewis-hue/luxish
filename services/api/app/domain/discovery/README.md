@@ -1,6 +1,15 @@
 # Discovery
 
-A staged recommender a staged retrieval and ranking design.
+A staged retrieval-and-ranking recommender, modelled on the design
+Pinterest published for its own home feed: a random walk over the
+pin/board graph (Pixie, Eksombatchai et al. 2018) for candidates, a
+learned visual-similarity retriever (PinSage, Ying et al. 2018) beside
+it, then blending, de-duplication and a visibility gate.
+
+What follows is a table of which parts of that design are actually here
+and which are not. The honest summary: the retrieval shapes match, the
+scale does not, and the embedding retriever is a vocabulary vector
+rather than a graph neural network.
 
 ```
 [ everything published ]
@@ -26,7 +35,7 @@ A staged recommender a staged retrieval and ranking design.
 
 ## What is actually implemented
 
-| The published design | Here | Where |
+| The published design (Pixie / PinSage) | Here | Where |
 |---|---|---|
 | Bipartite pin↔board graph | Yes. `moodboard_pins` is the edge table. | `graph.py` |
 | random walk from a user's pins | Yes. Weighted starts, 2 hops, early stopping. | `graph.walk` |
@@ -40,7 +49,7 @@ A staged recommender a staged retrieval and ranking design.
 | Diversity / de-duplication | Yes. Author runs and tag runs. | `blend.fits` |
 | Why-am-I-seeing-this provenance | Yes. Every pin carries its source. | `pipeline.Explained` |
 | Content signal independent of the uploader | Yes, via vision rather than embeddings. | `subject.py`, `workers/post_vision.py` |
-| Visual-similarity retrieval (the embedding retriever slot) | Partly. Cosine over vocabulary vectors, not dense embeddings. | `pipeline._looks_like` |
+| Visual-similarity retrieval (PinSage's slot) | Partly. Cosine over vocabulary vectors, not dense embeddings. | `pipeline._looks_like` |
 | Topics derived from boards, not captions | Yes. Contradicted tags are discounted. | `annotate.py` |
 
 ## What is deliberately not implemented
