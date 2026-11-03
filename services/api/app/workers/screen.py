@@ -82,7 +82,7 @@ _SCHEMA: dict[str, Any] = {
     },
 }
 
-def _text_rules() -> str:
+def _text_rules(surface: str = "post") -> str:
     """What the screen is told, built from the guidelines themselves.
 
     The rules used to be a sentence written here, which meant the screen
@@ -97,7 +97,7 @@ def _text_rules() -> str:
         "and adults. Decide whether the text below may be shown to "
         "strangers.\n\n"
         "The community guidelines, each with an id:\n"
-        f"{for_prompt()}\n\n"
+        f"{for_prompt(surface=surface)}\n\n"
         "Allow anything that is a plain remark about clothes, styling, fit, "
         "colour or where something is from. Hold anything that breaks a "
         "guideline above, and answer with that guideline's id.\n\n"
@@ -122,6 +122,10 @@ def _text_rules() -> str:
 #: Kept as a name for the tests and callers that referenced it.
 _TEXT_RULES = _text_rules()
 
+#: The same screen, minus the rule that has no business judging a
+#: self-description. See `Guideline.on_a_bio`.
+_BIO_RULES = _text_rules("bio")
+
 _IMAGE_RULES = (
     "You are the publication screen for a fashion app. Decide whether this "
     "photograph may be shown to strangers. It should show clothing, outfits "
@@ -138,7 +142,7 @@ class ScreenDidNotAnswer(Exception):
 
 class PostScreener(Protocol):
     async def screen_text(
-        self, text: str, *, user_id: uuid.UUID
+        self, text: str, *, user_id: uuid.UUID, surface: str = "post"
     ) -> tuple[bool, str]: ...
 
     async def screen_image(
@@ -177,11 +181,13 @@ class MetaPostScreener:
             return False, rule.held_note
         return allowed, str(verdict.get("reason") or "")[:200]
 
-    async def screen_text(self, text: str, *, user_id: uuid.UUID) -> tuple[bool, str]:
+    async def screen_text(
+        self, text: str, *, user_id: uuid.UUID, surface: str = "post"
+    ) -> tuple[bool, str]:
         block = render_untrusted([Untrusted.of("caption", text)])
         result = await self.provider.complete(
             AIRequest(
-                system=_TEXT_RULES,
+                system=_BIO_RULES if surface == "bio" else _TEXT_RULES,
                 prompt=block.body,
                 prompt_version=PROMPT_VERSION,
                 purpose="post_screen_text",
@@ -376,7 +382,9 @@ async def screen_bio(
         return {"outcome": "held", "mode": "unavailable"}
 
     try:
-        allowed, reason = await screener.screen_text(text, user_id=user_id)
+        allowed, reason = await screener.screen_text(
+            text, user_id=user_id, surface="bio"
+        )
     except ScreenDidNotAnswer:
         # A model that answered with nothing is not a model that said
         # yes, which is the whole reason this exception exists.

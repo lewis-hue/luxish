@@ -185,7 +185,12 @@ class _Screener:
         self.ok = ok
         self.seen: list[str] = []
 
-    async def screen_text(self, text: str, *, user_id) -> tuple[bool, str]:
+    async def screen_text(
+        self, text: str, *, user_id, surface: str = "post"
+    ) -> tuple[bool, str]:
+        # Recorded so a test can assert a bio is screened as a bio
+        # rather than as a caption.
+        self.surface = surface
         self.seen.append(text)
         return self.ok, "" if self.ok else "Contains contact details."
 

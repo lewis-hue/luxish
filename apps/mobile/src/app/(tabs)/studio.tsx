@@ -472,8 +472,9 @@ export default function StudioScreen() {
               so it is asked for rather than assumed. */}
           <CheckRow
             label="A separate picture for each item"
-            hint="Off, everything in the photograph is shot together"
-            note="Off, everything is shot together"
+            hint="When on, every item in the photograph is shot on its own"
+            whenOff="Off, everything is shot together"
+            whenOn="On, one picture per item"
             checked={eachItem}
             onToggle={() => setEachItem((was) => !was)}
           />
@@ -490,8 +491,9 @@ export default function StudioScreen() {
           {flatLay ? (
             <CheckRow
               label="A wide picture"
-              hint="Off, the picture comes back upright like everything else in the app"
-              note="Off, upright like the rest of the app"
+              hint="When on, the picture comes back wide instead of upright"
+              whenOff="Off, upright like the rest of the app"
+              whenOn="On, wide"
               checked={landscape}
               onToggle={() => setLandscape((was) => !was)}
             />
@@ -826,15 +828,25 @@ function closeThen(close: () => void, run: () => void): void {
 function CheckRow({
   label,
   hint,
-  note,
+  whenOff,
+  whenOn,
   checked,
   onToggle,
 }: {
   label: string;
   /** Spoken, for somebody who cannot see the box. */
   hint: string;
-  /** Written under the label: what the unchecked state means. */
-  note: string;
+  /**
+   * What the row says about itself, in each state.
+   *
+   * It was one fixed string describing the *off* state, so ticking the
+   * box turned it maroon and left "Off, everything is shot together"
+   * sitting under it. The control worked; its own caption contradicted
+   * it, which is indistinguishable from the control being broken and
+   * is how it was reported.
+   */
+  whenOff: string;
+  whenOn: string;
   checked: boolean;
   onToggle: () => void;
 }) {
@@ -883,7 +895,7 @@ function CheckRow({
         <ThemedText
           themeColor="textSecondary"
           style={labelType(FontSize.footnote, 400)}>
-          {note}
+          {checked ? whenOn : whenOff}
         </ThemedText>
       </View>
     </MotionPressable>

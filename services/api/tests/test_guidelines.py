@@ -295,3 +295,32 @@ def test_every_rule_the_screen_can_answer_with_is_one_it_was_given() -> None:
     offered = for_prompt()
     for rule in GUIDELINES:
         assert (rule.id in offered) is rule.screened, rule.id
+
+
+def test_a_bio_is_not_judged_on_whether_it_is_about_clothes() -> None:
+    """**A self-description is not a caption.**
+
+    "Fashion head" was held with "This did not read as being about the
+    clothes" - a refusal nobody can appeal, for a bio that is entirely
+    ordinary. `about_clothes` is written for captions and comments; a
+    bio is somebody saying who they are.
+
+    The rule is dropped from the prompt rather than ignored in the
+    verdict, because a screen cannot hold something for a rule it was
+    never shown.
+    """
+    from app.domain.guidelines import for_prompt
+
+    assert "about_clothes" in for_prompt()
+    assert "about_clothes" not in for_prompt(surface="bio")
+
+
+def test_a_bio_is_still_held_for_everything_that_protects_people() -> None:
+    """Only the topicality rule goes. The rest is untouched."""
+    from app.domain.guidelines import GUIDELINES, for_prompt
+
+    on_a_bio = for_prompt(surface="bio")
+    for rule in GUIDELINES:
+        if not rule.screened or rule.id == "about_clothes":
+            continue
+        assert rule.id in on_a_bio, f"{rule.id} stopped applying to a bio"

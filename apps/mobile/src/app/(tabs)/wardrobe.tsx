@@ -17,6 +17,7 @@ import { StylistPanel } from '@/features/stylist/panel';
 import { useGarmentCapture } from '@/features/wardrobe/capture';
 import { useWardrobe } from '@/features/wardrobe/store';
 import { usePullToRefresh } from '@/components/ui/pull-to-refresh';
+import { useKeyboardInset } from '@/hooks/use-keyboard-inset';
 import { useScheme } from '@/hooks/use-theme';
 
 /**
@@ -42,6 +43,11 @@ export default function WardrobeScreen() {
   const favourites = useFavouriteGarments();
   const wardrobe = useWardrobe(favourites.values);
   const capture = useGarmentCapture();
+  // What the keyboard is covering, so the composer sits above it.
+  // Without this the box somebody is typing into is behind the
+  // keyboard and they cannot see their own words - the screen is a
+  // plain ScrollView, so nothing was getting out of the way.
+  const keyboard = useKeyboardInset();
 
   const owned = wardrobe.entries.filter((entry) => !entry.isSample);
 
@@ -81,7 +87,12 @@ export default function WardrobeScreen() {
       contentContainerStyle={{
         paddingTop: insets.top + Spacing.three,
         paddingHorizontal: Spacing.three,
-        paddingBottom: BottomTabInset + insets.bottom + Spacing.five,
+        // The tab bar drops out of the way when the keyboard is up, so
+        // its inset is not owed on top of the keyboard's - counting
+        // both leaves a tall empty band under the composer.
+        paddingBottom:
+          (keyboard > 0 ? keyboard : BottomTabInset + insets.bottom) +
+          Spacing.five,
         gap: Spacing.three,
       }}>
       {/* The title and the way to the clothes, on one line.

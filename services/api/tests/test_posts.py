@@ -34,7 +34,9 @@ class _Screener:
         self.texts: list[str] = []
         self.images = 0
 
-    async def screen_text(self, text: str, *, user_id: uuid.UUID) -> tuple[bool, str]:
+    async def screen_text(
+        self, text: str, *, user_id: uuid.UUID, surface: str = "post"
+    ) -> tuple[bool, str]:
         self.texts.append(text)
         return self.text_ok, "" if self.text_ok else "Contains contact details."
 

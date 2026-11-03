@@ -286,10 +286,20 @@ export function StylistPanel({
     // as one. Taken before the new turn is added, because the new
     // question is sent separately from the history.
     const earlier = chatHistory(chat);
-    setChat((was) => chatAsked(was, question));
+    // The picture goes into the turn, then off the composer.
+    //
+    // Both halves matter. In the transcript it shows that the pin and
+    // the words were sent together, which is what somebody reading
+    // back needs to know. Off the composer, because the model has the
+    // conversation from here on: a card left pinned above the box
+    // implied every later question was still about that one pin, and
+    // it was the single biggest piece of furniture on the screen.
+    const sentWith = attachment?.uri ?? undefined;
+    setChat((was) => chatAsked(was, question, sentWith));
     // Emptied now rather than at the end: the question is on its
     // way, and a field still holding it invites a second send.
     setRequest('');
+    setAttachment(null);
 
     await askStylist(
       { question, postId: fitParam ?? null, history: earlier },

@@ -54,6 +54,18 @@ export interface Turn {
      them, so there is one answer to "is it drawn yet" rather than a
      copy that can fall behind. */
   failed?: boolean;
+  /**
+   * The picture that was sent up with this question.
+   *
+   * On the turn, not on the composer. The thing being asked about is
+   * part of what was asked, so it belongs in the transcript beside
+   * the words - and once it is recorded there, the composer can drop
+   * it the moment the question is sent. Leaving the card pinned above
+   * the box made it look as though every later question was still
+   * about that pin, when the model has the whole conversation and
+   * does not need it re-sent.
+   */
+  shownWith?: string;
 }
 
 export interface Conversation {
@@ -69,14 +81,19 @@ export function begin(): Conversation {
 }
 
 /** What the person just said, plus the empty reply it is waiting for. */
-export function asked(state: Conversation, text: string): Conversation {
+export function asked(
+  state: Conversation,
+  text: string,
+  /** A thumbnail of whatever went up with it, if anything did. */
+  shownWith?: string,
+): Conversation {
   const said = text.trim();
   if (!said) return state;
   return {
     next: state.next + 2,
     turns: [
       ...state.turns,
-      { id: `t${state.next}`, who: 'you', text: said },
+      { id: `t${state.next}`, who: 'you', text: said, shownWith },
       { id: `t${state.next + 1}`, who: 'stylist', text: '', streaming: true },
     ],
   };

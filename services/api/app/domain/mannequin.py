@@ -124,25 +124,61 @@ async def stated_figure(
     return figure_id(held.get("avatar_presentation"), held.get("avatar_build"))
 
 
+#: The preference that moves try-on off the mannequin.
+#:
+#: Absent means the mannequin, which is the point: a default has to be
+#: what happens when nobody has said anything.
+VEHICLE_KEY = "tryon_vehicle"
+
+#: The only value that opts out of the mannequin.
+ON_MY_AVATAR = "avatar"
+
+
+async def dresses_their_avatar(
+    session: AsyncSession, *, user_id: uuid.UUID
+) -> bool:
+    """Whether this person asked for try-ons on their own avatar."""
+    from app.models.preference import Preference
+
+    held = await session.scalar(
+        sa.select(Preference).where(
+            Preference.user_id == user_id,
+            Preference.key == VEHICLE_KEY,
+        )
+    )
+    return held is not None and _as_text(held.value) == ON_MY_AVATAR
+
+
 async def figure_to_dress(
     session: AsyncSession, *, user_id: uuid.UUID, store: object
 ) -> tuple[bytes, str] | None:
     """What to draw the clothes on: `(pixels, content type)`.
 
-    Their own avatar when they have made one - it is a better answer
-    than any mannequin, and the whole point of having made it.
-    Otherwise the shared figure they chose.
+    **The mannequin, unless they have asked for otherwise.** This used
+    to prefer somebody's avatar whenever one existed, on the reasoning
+    that an avatar they had built was a better answer than a shared
+    figure. That is a defensible argument and it was the wrong default:
+    making an avatar once, to see what it looked like, silently
+    redirected every try-on thereafter onto a photorealistic likeness,
+    and there was no way back to the mannequin short of deleting it.
+    Reported as "the mannequin appears but the clothes are worn on the
+    photorealistic avatar, which is wrong".
+
+    So the mannequin is what a try-on uses, and the avatar is a setting
+    somebody turns on (`VEHICLE_KEY`). Having built an avatar is no
+    longer the same as having chosen to wear everything on it.
     """
     from app.domain.avatar import current_avatar
 
-    mine = await current_avatar(session, user_id=user_id)
-    if mine is not None and mine.storage_key:
-        try:
-            return await store.read(mine), (mine.content_type or "image/png")
-        except Exception as caught:  # noqa: BLE001
-            # Their avatar exists and its bytes do not. A mannequin is
-            # a better answer than a failure.
-            logger.warning("avatar unreadable, using a mannequin: %s", caught)
+    if await dresses_their_avatar(session, user_id=user_id):
+        mine = await current_avatar(session, user_id=user_id)
+        if mine is not None and mine.storage_key:
+            try:
+                return await store.read(mine), (mine.content_type or "image/png")
+            except Exception as caught:  # noqa: BLE001
+                # Their avatar exists and its bytes do not. A mannequin is
+                # a better answer than a failure.
+                logger.warning("avatar unreadable, using a mannequin: %s", caught)
 
     figure = await stated_figure(session, user_id=user_id)
     pixels = bytes_for(figure)
@@ -165,8 +201,11 @@ __all__ = [
     "DEFAULT_FIGURE",
     "MANNEQUIN_CONTENT_TYPE",
     "MANNEQUIN_DIR",
+    "ON_MY_AVATAR",
     "PRESENTATIONS",
+    "VEHICLE_KEY",
     "bytes_for",
+    "dresses_their_avatar",
     "figure_id",
     "figure_to_dress",
     "file_for",

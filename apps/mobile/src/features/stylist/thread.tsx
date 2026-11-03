@@ -1,10 +1,15 @@
 import { Image } from 'expo-image';
 import { SymbolView } from 'expo-symbols';
+import { MotiView } from 'moti';
 import { ActivityIndicator, View } from 'react-native';
 
 import { howFar } from '@/api/queries/shops';
 import { ThemedText } from '@/components/themed-text';
-import { MotionPressable, tapFeedback } from '@/components/ui/motion';
+import {
+  MotionPressable,
+  tapFeedback,
+  useMotiTiming,
+} from '@/components/ui/motion';
 import {
   Colors,
   FontSize,
@@ -159,6 +164,30 @@ function Bubble({
           borderCurve: 'continuous',
           backgroundColor: colors.accent,
         }}>
+        {/* What went up with the question, inside the question.
+
+            It used to sit as a card above the composer and stay
+            there, so a thread four questions long still showed one
+            pin pinned to the box - which read as "everything you
+            ask is about this", when the model has the conversation
+            and needs nothing re-sent. Here it is part of the turn it
+            belonged to, and the composer is free. */}
+        {turn.shownWith ? (
+          <Image
+            source={{ uri: turn.shownWith }}
+            style={{
+              width: '100%',
+              aspectRatio: 3 / 4,
+              maxHeight: 180,
+              borderRadius: Radius.md,
+              borderCurve: 'continuous',
+              marginBottom: Spacing.two,
+            }}
+            contentFit="cover"
+            transition={120}
+            accessibilityLabel="The picture you asked about"
+          />
+        ) : null}
         <ThemedText
           selectable
           type="small"
@@ -184,20 +213,23 @@ function Bubble({
         style={{ width: 15, height: 15 }}
       />
 
-      <ThemedText
-        selectable
-        type="small"
-        style={{
-          fontSize: FontSize.subhead,
-          // Prose, so it gets prose leading. At the default this was
-          // set solid and read as a block of grey rather than as
-          // sentences.
-          lineHeight: Math.round(FontSize.subhead * 1.45),
-          color: colors.text,
-        }}>
-        {turn.text}
-        {turn.streaming && !turn.text ? 'Thinking' : ''}
-      </ThemedText>
+      {turn.streaming && !turn.text ? (
+        <Thinking />
+      ) : (
+        <ThemedText
+          selectable
+          type="small"
+          style={{
+            fontSize: FontSize.subhead,
+            // Prose, so it gets prose leading. At the default this was
+            // set solid and read as a block of grey rather than as
+            // sentences.
+            lineHeight: Math.round(FontSize.subhead * 1.45),
+            color: colors.text,
+          }}>
+          {turn.text}
+        </ThemedText>
+      )}
 
       {/* What they would need to buy, named before any shop is
           searched: "you have no cream trousers" is useful on its own
@@ -237,7 +269,24 @@ function Bubble({
             />
           ) : null}
 
-          {shops.looking ? <Line>Looking for shops near you</Line> : null}
+          {/* The tap has to show immediately that it landed.
+
+              A lookup runs through a permission prompt and then a
+              directory that can take forty-five seconds, so without
+              this the button sat there looking ignored - which is
+              exactly how it was reported: "I click it and nothing
+              happens". A spinner beside the words says the opposite. */}
+          {shops.looking ? (
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: Spacing.two,
+              }}>
+              <ActivityIndicator size="small" color={colors.accent} />
+              <Line>Looking for shops near you</Line>
+            </View>
+          ) : null}
 
           {shops.items?.length ? (
             <Listing title="Shops near you">
@@ -252,7 +301,24 @@ function Bubble({
             </Listing>
           ) : null}
 
-          {shops.note ? <Line>{shops.note}</Line> : null}
+          {/* A note on its own is a dead end: "allow location and I
+              can show shops near you" with no way to try again means
+              granting it in Settings and then hunting for this button.
+              The note and the retry travel together. */}
+          {shops.note ? (
+            <View style={{ gap: Spacing.one }}>
+              <Line>{shops.note}</Line>
+              {!shops.looking ? (
+                <Action
+                  label="Try again"
+                  onPress={() => {
+                    void tapFeedback();
+                    shops.find();
+                  }}
+                />
+              ) : null}
+            </View>
+          ) : null}
         </View>
       ) : null}
 
@@ -271,6 +337,64 @@ function Bubble({
           }}
         />
       ) : null}
+    </View>
+  );
+}
+
+/**
+ * The pause before the first word.
+ *
+ * It used to be the literal string "Thinking", which is a word sitting
+ * still - and a reply can take several seconds to start, so a static
+ * word is indistinguishable from a screen that has stopped. Three dots
+ * rising in sequence say the same thing and say it continuously.
+ *
+ * **It loops, and that is allowed here.** WCAG 2.2.2 wants a control
+ * for motion that runs past five seconds *beside other content*; a
+ * busy indicator showing that a specific operation is still going is
+ * the exception, and this one exists only while the request is open
+ * and is replaced by the first token that arrives. It is also tiny and
+ * carries no text, so there is nothing for it to compete with.
+ */
+function Thinking() {
+  const colors = Colors[useScheme()];
+  // The house helper, not a raw transition object: it collapses the
+  // loop to nothing under Reduce Motion, which is what that setting
+  // asks for - repetitive animation removed, not merely slowed.
+  const timing = useMotiTiming();
+  return (
+    <View
+      accessibilityRole="progressbar"
+      accessibilityLabel="Thinking"
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Spacing.one,
+        // Room for the 6pt dot plus the 3pt it travels, so the row
+        // does not resize as they rise.
+        height: Spacing.three,
+      }}>
+      {[0, 1, 2].map((at) => (
+        <MotiView
+          key={at}
+          from={{ opacity: 0.25, translateY: 0 }}
+          animate={{ opacity: 1, translateY: -3 }}
+          transition={timing({
+            duration: 420,
+            // Each dot a beat behind the last, so the group reads as
+            // one travelling wave rather than three things blinking.
+            delay: at * 140,
+            loop: true,
+            repeatReverse: true,
+          })}
+          style={{
+            width: 6,
+            height: 6,
+            borderRadius: 3,
+            backgroundColor: colors.accent,
+          }}
+        />
+      ))}
     </View>
   );
 }

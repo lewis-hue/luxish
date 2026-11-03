@@ -114,13 +114,9 @@ async def test_somebody_with_no_avatar_still_gets_a_figure(
     assert content_type == "image/webp"
 
 
-async def test_their_own_avatar_wins_over_a_mannequin(
-    db: AsyncSession,
-) -> None:
-    """It is a better answer, and the reason they made one."""
+async def _give_them_an_avatar(db: AsyncSession, me: uuid.UUID) -> None:
     from app.models.media_asset import MediaAsset
 
-    me = await make_user(db)
     db.add(
         MediaAsset(
             user_id=me,
@@ -135,31 +131,79 @@ async def test_their_own_avatar_wins_over_a_mannequin(
     )
     await db.commit()
 
+
+async def _ask_for(db: AsyncSession, me: uuid.UUID, vehicle: str) -> None:
+    from app.domain.mannequin import VEHICLE_KEY
+    from app.models.preference import Preference
+
+    db.add(Preference(user_id=me, key=VEHICLE_KEY, value=vehicle))
+    await db.commit()
+
+
+async def test_having_an_avatar_does_not_redirect_every_try_on_to_it(
+    db: AsyncSession,
+) -> None:
+    """**The default is the mannequin, avatar or no avatar.**
+
+    This asserted the opposite until 2026-11-03. Preferring an avatar
+    whenever one existed meant that making one once, to see what it
+    looked like, silently moved every later try-on onto a
+    photorealistic likeness with no way back short of deleting it.
+    """
+    me = await make_user(db)
+    await _give_them_an_avatar(db, me)
+
+    found = await figure_to_dress(db, user_id=me, store=Store(b"their avatar"))
+    assert found is not None
+    pixels, content_type = found
+    assert content_type == "image/webp", "a mannequin, not their avatar"
+    assert pixels != b"their avatar"
+
+
+async def test_the_avatar_is_used_when_they_have_asked_for_it(
+    db: AsyncSession,
+) -> None:
+    """Opting in is what moves it, and nothing else."""
+    from app.domain.mannequin import ON_MY_AVATAR
+
+    me = await make_user(db)
+    await _give_them_an_avatar(db, me)
+    await _ask_for(db, me, ON_MY_AVATAR)
+
     found = await figure_to_dress(db, user_id=me, store=Store(b"their avatar"))
     assert found == (b"their avatar", "image/png")
+
+
+async def test_asking_for_the_avatar_without_having_one_still_works(
+    db: AsyncSession,
+) -> None:
+    """The preference is a wish, not a promise that a row exists."""
+    from app.domain.mannequin import ON_MY_AVATAR
+
+    me = await make_user(db)
+    await _ask_for(db, me, ON_MY_AVATAR)
+
+    found = await figure_to_dress(db, user_id=me, store=Store())
+    assert found is not None
+    assert found[1] == "image/webp"
 
 
 async def test_an_unreadable_avatar_falls_back_rather_than_failing(
     db: AsyncSession,
 ) -> None:
     """The row says it exists and the bytes have gone. A mannequin is
-    a better answer than an error."""
-    from app.models.media_asset import MediaAsset
+    a better answer than an error.
+
+    The preference is set deliberately. Without it the avatar branch
+    is never entered at all, so this would pass while testing
+    nothing - the mannequin would be returned because the mannequin is
+    the default, not because the fallback worked.
+    """
+    from app.domain.mannequin import ON_MY_AVATAR
 
     me = await make_user(db)
-    db.add(
-        MediaAsset(
-            user_id=me,
-            kind="avatar",
-            status="ready",
-            content_type="image/png",
-            max_bytes=1,
-            byte_size=1,
-            storage_key=f"avatars/{uuid.uuid4().hex}",
-            version=1,
-        )
-    )
-    await db.commit()
+    await _give_them_an_avatar(db, me)
+    await _ask_for(db, me, ON_MY_AVATAR)
 
     found = await figure_to_dress(db, user_id=me, store=Store(None))
     assert found is not None

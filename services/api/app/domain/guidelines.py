@@ -49,6 +49,17 @@ class Guideline:
     #: is still explicable; it simply is not offered as an answer any
     #: more.
     screened: bool = True
+    #: Whether this rule is offered when judging somebody's bio.
+    #:
+    #: False for `about_clothes`, and only that one. A bio is a person
+    #: describing themselves, not a remark about a garment, so a
+    #: topicality rule written for captions and comments refuses
+    #: ordinary self-descriptions - "Fashion head" was held with
+    #: "This did not read as being about the clothes", which is both
+    #: wrong and unappealable. Every rule that protects other people -
+    #: harassment, hate, contact details, the rest - still applies to a
+    #: bio; only the stay-on-topic one does not.
+    on_a_bio: bool = True
     #: A deterministic test for the unambiguous case, or nothing.
     detect: re.Pattern[str] | None = None
 
@@ -91,6 +102,7 @@ GUIDELINES: tuple[Guideline, ...] = (
         ),
         held_note="This did not read as being about the clothes.",
         reportable=False,
+        on_a_bio=False,
     ),
     Guideline(
         id="no_harassment",
@@ -269,17 +281,21 @@ def obvious_violation(text: str) -> Guideline | None:
     return None
 
 
-def for_prompt() -> str:
-    """The rules as the screen is given them.
+def for_prompt(*, surface: str = "post") -> str:
+    """The rules as the screen is given them, for one surface.
 
     Numbered by id rather than by position, so the model answers with a
     stable identifier and a reordering of this list does not silently
     change what a stored verdict meant.
+
+    `surface="bio"` drops the rules marked `on_a_bio=False`. The screen
+    cannot hold something for a rule it was never shown, so dropping it
+    here is the enforcement rather than a hint.
     """
     lines = [
         f"- {rule.id}: {rule.title}. {rule.body}"
         for rule in GUIDELINES
-        if rule.screened
+        if rule.screened and (surface != "bio" or rule.on_a_bio)
     ]
     return "\n".join(lines)
 

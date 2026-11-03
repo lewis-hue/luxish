@@ -86,9 +86,35 @@ export function MicButton({
       // why that matters more than it sounds.
       await stream.startFileRecordingAsync({ format: 'wav' });
       writing.current = true;
-    } catch {
+    } catch (caught) {
       setRecording(false);
-      Alert.alert('Could not start recording', 'Try again, or type it.');
+      // **Say what actually went wrong.**
+      //
+      // This was a bare `catch {}` behind the words "Try again, or
+      // type it", so every cause - a missing native module, a
+      // busy audio session, a simulator with no input device -
+      // produced one dialog that named none of them, and the advice
+      // it gave ("try again") was wrong for all of them. Recording
+      // was reported broken across the whole app and there was
+      // nothing on the screen or in the log to say why.
+      //
+      // `startFileRecordingAsync` is iOS/Android only and is part of
+      // expo-audio's native stream, so the one failure worth
+      // recognising by name is the client not having it: in a
+      // JS-only runtime there is nothing to fall back to and
+      // retrying cannot help.
+      const why = caught instanceof Error ? caught.message : String(caught);
+      console.warn('[mic] could not start recording:', why);
+      const missing =
+        /not .*(available|implemented|found)|undefined is not|NativeModule|doesn't exist/i.test(
+          why,
+        );
+      Alert.alert(
+        missing ? 'Talking is not available here' : 'Could not start recording',
+        missing
+          ? 'This build does not include the microphone module. Typing works as normal.'
+          : `${why} You can type it instead.`,
+      );
     }
   };
 
