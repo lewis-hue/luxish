@@ -912,6 +912,100 @@ async def related_tags(
     return [row[0] for row in (await db.execute(query)).all()]
 
 
+#: How much each kind of engagement counts toward "you like this".
+#:
+#: A save is the strongest thing somebody does to a pin: it is a
+#: deliberate act of keeping, and nobody saves by accident. A comment
+#: costs effort and is next. A reaction is one tap, which is real but
+#: cheap - and a tap is also the signal most easily produced by
+#: scrolling, which is why it does not outweigh the other two.
+MINE_WEIGHT: dict[str, float] = {"save": 3.0, "comment": 2.0, "reaction": 1.0}
+
+#: The same signals, from the people somebody follows.
+#:
+#: Worth less than their own, and deliberately not worth nothing. Who
+#: you follow is itself a statement of taste, and it is the only signal
+#: a new account has that is better than a global popularity count.
+#: Kept well below the reader's own so a prolific friend cannot
+#: colonise the row.
+THEIRS_WEIGHT = 0.4
+
+#: How many tags of engagement to consider. Past this the tail is noise.
+ENOUGH_AFFINITY = 24
+
+
+async def tags_you_engage_with(
+    db: AsyncSession, *, user_id: uuid.UUID, limit: int = ENOUGH_AFFINITY
+) -> list[tuple[str, float]]:
+    """Tags this reader actually acts on, heaviest first.
+
+    **Behaviour, not a questionnaire.** `explore` used to build its
+    first row purely from stated taste, on the argument that a stated
+    preference is a statement and a click is an accident. That argument
+    is sound about a single click and wrong in aggregate: somebody who
+    has saved eleven tailoring pins has stated a preference far more
+    convincingly than they did by ticking a box at sign-up, and a row
+    that ignores all of it feels like the app is not paying attention.
+    Changed on the product owner's instruction (2026-11-03).
+
+    Three sources, weighted: what they saved, what they commented on,
+    what they reacted to - plus the same from the people they follow,
+    at a discount. Every one of them is counted only over pins this
+    reader may actually see, the same rule `popular_tags` obeys, so a
+    blocked author cannot steer somebody's own shelf.
+    """
+    from app.models.comment import PostComment
+    from app.models.follow import Follow
+
+    hidden = await hidden_either_way(db, user_id=user_id)
+
+    def visible(query):
+        query = query.join(Post, Post.id == PostTag.post_id).join(
+            User, User.id == Post.user_id
+        )
+        return query.where(
+            shown_to_strangers(),
+            User.deleted_at.is_(None),
+            visible_author(user_id),
+            # `hidden_either_way` returns *user* ids, not post ids -
+            # the same clause every other cross-user read uses.
+            Post.user_id.not_in(hidden) if hidden else sa.true(),
+        )
+
+    #: (table, the column holding the actor, the weight key)
+    sources = (
+        (PostSave, PostSave.user_id, PostSave.post_id, "save"),
+        (PostComment, PostComment.user_id, PostComment.post_id, "comment"),
+        (PostReaction, PostReaction.user_id, PostReaction.post_id, "reaction"),
+    )
+
+    #: Who this reader follows, as the second ring of the signal.
+    followed = sa.select(Follow.followee_id).where(Follow.follower_id == user_id)
+
+    scored: dict[str, float] = {}
+    for model, actor, post_col, kind in sources:
+        weight = MINE_WEIGHT[kind]
+        rows = (
+            await db.execute(
+                visible(
+                    sa.select(
+                        PostTag.tag,
+                        sa.func.sum(
+                            sa.case((actor == user_id, weight), else_=THEIRS_WEIGHT * weight)
+                        ).label("score"),
+                    ).join(model, post_col == PostTag.post_id)
+                )
+                .where(sa.or_(actor == user_id, actor.in_(followed)))
+                .group_by(PostTag.tag)
+            )
+        ).all()
+        for tag, score in rows:
+            scored[tag] = scored.get(tag, 0.0) + float(score or 0.0)
+
+    ordered = sorted(scored.items(), key=lambda pair: (-pair[1], pair[0]))
+    return ordered[:limit]
+
+
 async def popular_tags(
     db: AsyncSession,
     *,
@@ -1060,13 +1154,23 @@ async def explore(
 ) -> tuple[list[Door], list[Door]]:
     """Two rows of doors: what suits this reader, and what is busy.
 
-    **For you comes from what they said, not from what they clicked.**
-    Stated taste is a statement; a click is an accident as often as it
-    is a preference, and a grid built from accidents narrows until it
-    shows one thing.
+    **For you comes from what they do, then from what they said.**
+    This used to be stated taste alone, on the argument that a
+    preference ticked at sign-up is a statement while a click is an
+    accident. True of one click; false of a hundred. Somebody who has
+    saved eleven tailoring pins and commented on four has said more
+    about their taste than the sign-up form ever collected, and a row
+    that ignored all of it was the app visibly not paying attention.
+    Reversed on the product owner's instruction (2026-11-03).
 
-    **Popular is counted over what this reader can see.** A tag kept
-    alive by somebody they blocked is not popular for them.
+    The order is deliberate. Engagement leads because it is current and
+    specific; stated taste follows because it is what a new account has
+    and because somebody who said "tailoring" and has not yet saved
+    anything should still see tailoring.
+
+    **Everything is counted over what this reader can see.** A tag kept
+    alive by somebody they blocked is not popular for them, and a pin
+    they cannot see cannot teach the app what they like.
     """
     moment = now or datetime.now(timezone.utc)
     liked = liked_groups or set()
@@ -1074,9 +1178,16 @@ async def explore(
     counted = await popular_tags(db, user_id=user_id, limit=60)
     ranked = [tag for tag, _ in counted]
 
-    # Their own groups first, expanded into the tags that feed them, so
-    # a tile is a real hashtag page rather than an abstraction.
     wanted: list[str] = []
+
+    # What they actually act on, and what the people they follow act
+    # on, heaviest first.
+    for tag, _score in await tags_you_engage_with(db, user_id=user_id):
+        if tag not in wanted:
+            wanted.append(tag)
+
+    # Then their stated groups, expanded into the tags that feed them,
+    # so a tile is a real hashtag page rather than an abstraction.
     for group in sorted(liked):
         for tag in GROUP_TAGS.get(group, ()):
             if tag in ranked and tag not in wanted:
@@ -1105,13 +1216,12 @@ async def ideas(
 ) -> list[Door]:
     """Tags this person keeps reaching for, as doors into them.
 
-    **Built from what they did, not from what they said.** `explore`
-    deliberately ranks its first row by stated taste, on the argument
-    that a tap is an accident as often as it is a preference. This is
-    the other half of that argument and is allowed to disagree: a shelf
-    offered part-way down the board is a suggestion, not the board
-    itself, and the fits somebody keeps are the best evidence there is
-    of what they would keep next.
+    **Built from what they did.** The fits somebody keeps are the best
+    evidence there is of what they would keep next - joined now by the
+    pins they comment on and react to, and by what the people they
+    follow are doing the same to. `explore` leads with the same signal;
+    the two rows differ in what they fall back to, not in what they
+    believe.
 
     Weighted and decayed by `profile.reaches_for`, so a fortnight of
     saving one thing outranks a single tap on another, and last
@@ -1125,7 +1235,19 @@ async def ideas(
     from app.domain.profile import reaches_for
 
     moment = now or datetime.now(timezone.utc)
-    scored = await reaches_for(db, user_id=user_id, now=moment)
+    scored = dict(await reaches_for(db, user_id=user_id, now=moment))
+
+    # Comments, reactions, and the same from the people they follow.
+    #
+    # `reaches_for` counts what they kept, decayed over time, which is
+    # the strongest single signal and was the only one here. It misses
+    # two things somebody would expect the shelf to notice: the pins
+    # they argue with rather than keep, and what the people they chose
+    # to follow are keeping. Added on the product owner's instruction
+    # (2026-11-03); the decayed save score still leads, because this
+    # second signal has no decay and would otherwise slowly swamp it.
+    for tag, score in await tags_you_engage_with(db, user_id=user_id):
+        scored[tag] = scored.get(tag, 0.0) + score * 0.25
 
     # Their own, strongest first. Ties broken by name so the shelf does
     # not reshuffle between two requests that saw the same scores.

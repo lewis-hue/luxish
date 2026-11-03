@@ -138,3 +138,97 @@ async def test_the_route_returns_tiles_with_covers(
     assert linen["cover_asset_id"] == str(asset.id)
     assert linen["label"] == "Linen"
     assert linen["posts"] >= 1
+
+
+# --------------------------------------------------------------------------- #
+# What the first row is built from
+#
+# It was stated taste alone until 2026-11-03. These pin the reversal:
+# behaviour leads, the follow graph is a real but discounted second
+# ring, and a reader's own shelf still cannot be steered by somebody
+# they cannot see.
+# --------------------------------------------------------------------------- #
+async def test_what_you_save_outranks_what_you_only_tapped(
+    db: AsyncSession,
+) -> None:
+    """A save is a deliberate act of keeping; a reaction is one tap."""
+    from app.models.posts import PostSave
+    from app.models.profile import PostReaction
+
+    me = await make_user(db)
+    author = await make_user(db)
+    kept, _ = await _with_photo(db, user_id=author, tags=["tailoring"])
+    tapped, _ = await _with_photo(db, user_id=author, tags=["neon"])
+
+    db.add(PostSave(user_id=me, post_id=kept.id))
+    db.add(PostReaction(user_id=me, post_id=tapped.id, kind="love"))
+    await db.commit()
+
+    scored = dict(await domain.tags_you_engage_with(db, user_id=me))
+    assert scored["tailoring"] > scored["neon"]
+
+
+async def test_the_people_you_follow_count_for_less_than_you(
+    db: AsyncSession,
+) -> None:
+    """**Who you follow is taste, not a vote.**
+
+    It has to count for something - it is the only signal a new account
+    has that beats a global popularity count - and it must not let one
+    prolific friend colonise somebody's row.
+    """
+    from app.models.follow import Follow
+    from app.models.posts import PostSave
+
+    me = await make_user(db)
+    friend = await make_user(db)
+    author = await make_user(db)
+    mine, _ = await _with_photo(db, user_id=author, tags=["tailoring"])
+    theirs, _ = await _with_photo(db, user_id=author, tags=["workwear"])
+
+    db.add(Follow(follower_id=me, followee_id=friend))
+    db.add(PostSave(user_id=me, post_id=mine.id))
+    db.add(PostSave(user_id=friend, post_id=theirs.id))
+    await db.commit()
+
+    scored = dict(await domain.tags_you_engage_with(db, user_id=me))
+    assert scored["workwear"] > 0, "a followed person's saves must count"
+    assert scored["tailoring"] > scored["workwear"]
+
+
+async def test_somebody_you_blocked_cannot_steer_your_shelf(
+    db: AsyncSession,
+) -> None:
+    """The visibility rule the rest of the feed obeys, obeyed here.
+
+    Engagement is counted over pins this reader may see. Without that,
+    a blocked author's tags could be fed back into the reader's own
+    first row through anybody who reacted to them.
+    """
+    from app.domain.moderation import block
+    from app.models.posts import PostSave
+
+    me = await make_user(db)
+    nuisance = await make_user(db)
+    post, _ = await _with_photo(db, user_id=nuisance, tags=["loud"])
+
+    db.add(PostSave(user_id=me, post_id=post.id))
+    await db.commit()
+    await block(db, blocker_id=me, blocked_id=nuisance)
+    await db.commit()
+
+    scored = dict(await domain.tags_you_engage_with(db, user_id=me))
+    assert "loud" not in scored
+
+
+async def test_a_new_account_still_gets_a_full_first_row(
+    db: AsyncSession,
+) -> None:
+    """Nothing engaged with, nothing stated. An empty row reads as
+    broken, so the busiest visible tags stand in."""
+    me = await make_user(db)
+    author = await make_user(db)
+    await _with_photo(db, user_id=author, tags=["linen"])
+
+    for_you, _popular = await domain.explore(db, user_id=me)
+    assert for_you, "a new account must not see an empty first row"

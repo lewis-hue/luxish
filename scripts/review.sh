@@ -158,6 +158,20 @@ PYEOF
       --photos "$REPO/assets/seed-photos" >"$LOGS/seed.log" 2>&1 ) \
     && ok "seeded" \
     || { bad "seeding failed - see .devlogs/seed.log"; return 1; }
+
+  repair_pins
+}
+
+# A published pin with no photograph is a permanently blank tile in
+# the middle of Discover, and it reads as the app being broken rather
+# than as one bad row. The API cannot create one; seeding that writes
+# rows directly can, so the board is checked after it runs.
+repair_pins() {
+  if ( cd "$API_DIR" && "$PY" scripts/repair_pins.py --fix >"$LOGS/repair.log" 2>&1 ); then
+    ok "every pin has a photograph"
+  else
+    note "pin check could not run - see .devlogs/repair.log"
+  fi
 }
 
 start_metro() {
