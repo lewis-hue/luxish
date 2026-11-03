@@ -1731,6 +1731,64 @@
         }
       }
     },
+    "/v1/feed/{post_id}/more": {
+      "get": {
+        "tags": [
+          "feed"
+        ],
+        "summary": "More Under A Pin",
+        "description": "The next slice of \"More to explore\" under one pin.\n\n**The shelf does not end, and neither does the next one.** Opening\na pin from this shelf opens a page with its own shelf, which pages\nthe same way, so a reader can go pin to pin to pin without ever\nreaching a bottom. That is the whole behaviour the board has and\nthis page did not: `more` was a fixed twelve computed once with\nthe detail.\n\n**Related first, then anything.** `more_like` ranks by what people\nfile this pin with, then by tags, then by group - genuinely about\n*this* pin, and finite. When it runs out the shelf tops up from\nthe ordinary recommender rather than stopping, because a reader\nwho has scrolled that far is browsing, and more pins is a better\nanswer than a wall.\n\nThe reader sends back what they have already been shown. It lives\non the client because the shelf is per-pin and per-visit: a\nserver-side window spanning the session would make opening the\nsame pin twice show two different shelves, and the second would be\nworse.",
+        "operationId": "more_under_a_pin_v1_feed__post_id__more_get",
+        "parameters": [
+          {
+            "name": "post_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Post Id"
+            }
+          },
+          {
+            "name": "exclude",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "default": [],
+              "title": "Exclude"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/feed/groups": {
       "get": {
         "tags": [

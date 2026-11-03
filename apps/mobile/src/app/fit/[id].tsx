@@ -2,8 +2,13 @@ import { Image } from 'expo-image';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { SymbolView, type SymbolViewProps } from 'expo-symbols';
 import { useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
-import { ScrollView, View, useWindowDimensions } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  ActivityIndicator,
+  ScrollView,
+  View,
+  useWindowDimensions,
+} from 'react-native';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -13,6 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
   useFitDetail,
+  useMoreUnder,
   useReact,
   useReactionKinds,
   useHideFit,
@@ -140,6 +146,11 @@ export default function FitDetailScreen() {
   const signedIn = auth.status === 'signedIn';
 
   const detail = useFitDetail(id ?? '', signedIn);
+  // The shelf under the pin: what came with the detail, then as
+  // many pages after it as somebody keeps scrolling for.
+  const seeded = useMemo(() => detail.data?.more ?? [], [detail.data?.more]);
+  const more = useMoreUnder(id ?? '', signedIn, seeded);
+  const shelf = useMemo(() => [...seeded, ...more.extra], [seeded, more.extra]);
   const react = useReact();
   const save = useSaveFit();
   const kinds = useReactionKinds(signedIn);
@@ -401,7 +412,27 @@ export default function FitDetailScreen() {
         // is how you leave. 16ms so the hand-off happens with the
         // finger rather than a frame behind it.
         scrollEventThrottle={16}
-        onScroll={onScroll}
+        onScroll={(event) => {
+          onScroll(event);
+          // **The shelf fetches its next slice before the bottom.**
+          //
+          // A ScrollView has no `onEndReached`, so the end is worked
+          // out here. Two screens of warning rather than at the very
+          // bottom: the next slice is a round trip plus a ranking
+          // pass, and arriving at the end before it lands is exactly
+          // what reads as the page running out.
+          const { contentOffset, contentSize, layoutMeasurement } =
+            event.nativeEvent;
+          const fromBottom =
+            contentSize.height - contentOffset.y - layoutMeasurement.height;
+          if (
+            fromBottom < layoutMeasurement.height * 2 &&
+            more.hasNextPage &&
+            !more.isFetchingNextPage
+          ) {
+            void more.fetchNextPage();
+          }
+        }}
         // A dragged picture and a scrolling page are the same
         // vertical gesture. Without this the page scrolls out from
         // under the finger that is panning the photograph.
@@ -851,7 +882,7 @@ export default function FitDetailScreen() {
           </View>
         ) : null}
 
-        {(detail.data?.more ?? []).length > 0 ? (
+        {shelf.length > 0 ? (
           <View style={{ paddingTop: Spacing.five, gap: Spacing.two }}>
             <ThemedText
               accessibilityRole="header"
@@ -879,7 +910,7 @@ export default function FitDetailScreen() {
                 gap: Spacing.two,
                 paddingHorizontal: Spacing.three,
               }}>
-              {intoColumns(detail.data?.more ?? []).map((lane, at) => (
+              {intoColumns(shelf).map((lane, at) => (
                 <View key={at} style={{ flex: 1, gap: Spacing.two }}>
                   {lane.map((other) => (
                     <FitCard
@@ -896,6 +927,25 @@ export default function FitDetailScreen() {
                 </View>
               ))}
             </View>
+
+            {/* **The shelf does not end.**
+
+                `more` used to be a fixed twelve computed once with
+                the detail, so scrolling down here stopped - and
+                opening one of those twelve opened a page that
+                stopped too. It pages now, and so does the next one,
+                so a reader can go pin to pin to pin without ever
+                reaching a bottom.
+
+                Related pins come first and the recommender tops it
+                up once they run out: somebody who has scrolled this
+                far is browsing, and more pins is a better answer
+                than a wall. */}
+            {more.isFetchingNextPage ? (
+              <View style={{ paddingVertical: Spacing.four }}>
+                <ActivityIndicator color={colors.accent} />
+              </View>
+            ) : null}
           </View>
         ) : null}
         </Animated.View>

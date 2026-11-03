@@ -956,6 +956,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/feed/{post_id}/more": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * More Under A Pin
+         * @description The next slice of "More to explore" under one pin.
+         *
+         *     **The shelf does not end, and neither does the next one.** Opening
+         *     a pin from this shelf opens a page with its own shelf, which pages
+         *     the same way, so a reader can go pin to pin to pin without ever
+         *     reaching a bottom. That is the whole behaviour the board has and
+         *     this page did not: `more` was a fixed twelve computed once with
+         *     the detail.
+         *
+         *     **Related first, then anything.** `more_like` ranks by what people
+         *     file this pin with, then by tags, then by group - genuinely about
+         *     *this* pin, and finite. When it runs out the shelf tops up from
+         *     the ordinary recommender rather than stopping, because a reader
+         *     who has scrolled that far is browsing, and more pins is a better
+         *     answer than a wall.
+         *
+         *     The reader sends back what they have already been shown. It lives
+         *     on the client because the shelf is per-pin and per-visit: a
+         *     server-side window spanning the session would make opening the
+         *     same pin twice show two different shelves, and the second would be
+         *     worse.
+         */
+        get: operations["more_under_a_pin_v1_feed__post_id__more_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/feed/groups": {
         parameters: {
             query?: never;
@@ -7190,6 +7230,39 @@ export interface operations {
             };
             header?: never;
             path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeedOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    more_under_a_pin_v1_feed__post_id__more_get: {
+        parameters: {
+            query?: {
+                exclude?: string[];
+            };
+            header?: never;
+            path: {
+                post_id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;

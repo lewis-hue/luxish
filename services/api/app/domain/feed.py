@@ -617,8 +617,17 @@ async def more_like(
     user_id: uuid.UUID,
     post_id: uuid.UUID,
     limit: int = 12,
+    exclude: set[uuid.UUID] | None = None,
 ) -> list[FeedPost]:
     """Fits that look like this one.
+
+    `exclude` is what the reader has already been shown under this
+    pin, so the shelf can be paged: ask again with everything so far
+    and the next batch continues rather than repeating. It is passed
+    in rather than remembered here because the shelf is per-pin and
+    per-visit - a seen-filter spanning the whole session would make
+    opening a pin twice show two different shelves, and the second
+    would be worse.
 
     **What people file it with, then hashtags, then the group.**
 
@@ -650,7 +659,10 @@ async def more_like(
     """
     seed = await one(db, user_id=user_id, post_id=post_id)
     everything = await board(db, user_id=user_id)
-    pool = [entry for entry in everything if entry.post.id != post_id]
+    # Never the pin itself, and never what this shelf has already
+    # shown - the second is what lets the caller ask for more.
+    skip = {post_id} | (exclude or set())
+    pool = [entry for entry in everything if entry.post.id not in skip]
     if seed is None:
         return pool[:limit]
 

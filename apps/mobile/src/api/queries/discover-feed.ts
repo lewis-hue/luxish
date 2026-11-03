@@ -14,7 +14,7 @@
  * for the server and takes its count from the answer.
  */
 
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 import {
   useMutation,
   useInfiniteQuery,
@@ -444,6 +444,69 @@ export function prefetchFitDetail(queries: QueryClient, id: string): void {
       staleTime: 30_000,
     })
     .catch(() => {});
+}
+
+/**
+ * "More to explore" under a pin, paged.
+ *
+ * **The shelf does not end, and neither does the next one.** Opening
+ * a pin from this shelf opens a page with its own shelf, which pages
+ * the same way - so somebody can go pin to pin to pin without ever
+ * reaching a bottom. Before this, `more` was a fixed twelve computed
+ * once with the detail, and the page simply stopped.
+ *
+ * What has already been shown is sent back with each request, held
+ * in a ref rather than read back out of the query. Reading the
+ * query's own pages inside its `queryFn` is a circular reference
+ * that TypeScript rejects and that would be wrong anyway: the ref is
+ * written as pages arrive, so the next request always sees the
+ * current total rather than whatever React had rendered.
+ *
+ * It lives on the client because the shelf is per-pin and per-visit:
+ * a server-side window spanning the session would make opening the
+ * same pin twice show two different shelves, and the second would be
+ * worse.
+ */
+export function useMoreUnder(id: string, enabled: boolean, seed: FeedFit[]) {
+  // Only what this hook has fetched. The seed is folded in at
+  // request time instead of being written here: a ref must not be
+  // touched during render, and doing so would also mean the set
+  // depended on how many times React happened to re-render.
+  const fetched = useRef<Set<string>>(new Set());
+
+  const query = useInfiniteQuery<BoardPage>({
+    queryKey: ['feed', 'more', id],
+    enabled: enabled && Boolean(id),
+    initialPageParam: 0,
+    getNextPageParam: (last: BoardPage, pages: BoardPage[]) =>
+      last.more ? pages.length : undefined,
+    queryFn: async (): Promise<BoardPage> => {
+      const exclude = [
+        ...new Set([...seed.map((fit) => fit.id), ...fetched.current]),
+      ];
+      const { data } = await api.GET('/v1/feed/{post_id}/more', {
+        params: { path: { post_id: id }, query: { exclude } },
+      });
+      const fits = ((data?.items ?? []) as unknown[]).map((item) =>
+        toFeedFit(item as never),
+      );
+      // Written here, inside the fetch, which is an event rather
+      // than a render.
+      for (const fit of fits) fetched.current.add(fit.id);
+      return {
+        fits,
+        more: Boolean((data as { more?: boolean } | undefined)?.more),
+      };
+    },
+    staleTime: Infinity,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+  });
+
+  return {
+    ...query,
+    extra: query.data?.pages.flatMap((page: BoardPage) => page.fits) ?? [],
+  };
 }
 
 export function useFitDetail(id: string, enabled: boolean) {

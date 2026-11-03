@@ -20,7 +20,9 @@ from __future__ import annotations
 import sqlalchemy as sa
 import uuid
 
-from fastapi import APIRouter, Response, status
+from typing import Annotated
+
+from fastapi import APIRouter, Query, Response, status
 
 from app.deps import AuthDep, SessionDep
 from app.domain import comments as comments_domain
@@ -235,6 +237,73 @@ async def board(
         group=group or "all",
         items=await _render(db, entries, viewer_id=ctx.user_id),
         more=more,
+    )
+
+
+#: How many ids a client may send back as "already shown".
+#:
+#: Each is 36 characters, so this is about 4KB of query string - well
+#: inside every limit and far more history than the shelf needs. Past
+#: it the oldest are dropped, which at worst repeats something from
+#: several screens ago.
+MOST_EXCLUDED = 120
+
+
+@router.get("/{post_id}/more", response_model=FeedOut)
+async def more_under_a_pin(
+    post_id: uuid.UUID,
+    db: SessionDep,
+    ctx: AuthDep,
+    exclude: Annotated[list[uuid.UUID], Query()] = [],  # noqa: B006
+) -> FeedOut:
+    """The next slice of "More to explore" under one pin.
+
+    **The shelf does not end, and neither does the next one.** Opening
+    a pin from this shelf opens a page with its own shelf, which pages
+    the same way, so a reader can go pin to pin to pin without ever
+    reaching a bottom. That is the whole behaviour the board has and
+    this page did not: `more` was a fixed twelve computed once with
+    the detail.
+
+    **Related first, then anything.** `more_like` ranks by what people
+    file this pin with, then by tags, then by group - genuinely about
+    *this* pin, and finite. When it runs out the shelf tops up from
+    the ordinary recommender rather than stopping, because a reader
+    who has scrolled that far is browsing, and more pins is a better
+    answer than a wall.
+
+    The reader sends back what they have already been shown. It lives
+    on the client because the shelf is per-pin and per-visit: a
+    server-side window spanning the session would make opening the
+    same pin twice show two different shelves, and the second would be
+    worse.
+    """
+    seen = set(exclude[-MOST_EXCLUDED:])
+    entries = await domain.more_like(
+        db, user_id=ctx.user_id, post_id=post_id, exclude=seen
+    )
+
+    if len(entries) < 6:
+        from app.domain.discovery.wiring import seen_store
+
+        topped = await domain.discovered(
+            db,
+            user_id=ctx.user_id,
+            seen_store=seen_store(),
+            # Not recorded: this is a shelf under a pin, and letting
+            # it eat the Discover board's novelty would mean opening
+            # two pins left the board with nothing new in it.
+            record=False,
+        )
+        already = seen | {e.post.id for e in entries} | {post_id}
+        entries = entries + [e for e in topped if e.post.id not in already]
+
+    return FeedOut(
+        group="more",
+        items=await _render(db, entries, viewer_id=ctx.user_id),
+        # Only an empty slice ends it, which on a board of hundreds
+        # means the reader can see almost none of it.
+        more=bool(entries),
     )
 
 
