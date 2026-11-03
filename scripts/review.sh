@@ -159,7 +159,20 @@ PYEOF
     && ok "seeded" \
     || { bad "seeding failed - see .devlogs/seed.log"; return 1; }
 
+  post_generated_pins
   repair_pins
+}
+
+# The 300 generated pins ship in the repository; this is what turns
+# them into accounts, fits and hashtags the app can actually serve.
+# Idempotent - matched on the picture's checksum, so a second run adds
+# nothing.
+post_generated_pins() {
+  if ( cd "$API_DIR" && "$PY" scripts/import_generated_pins.py >"$LOGS/pins.log" 2>&1 ); then
+    ok "the generated board is posted"
+  else
+    note "could not post the generated board - see .devlogs/pins.log"
+  fi
 }
 
 # A published pin with no photograph is a permanently blank tile in
