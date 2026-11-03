@@ -151,7 +151,16 @@ export function FitMenu({
             icon={{ ios: 'figure.stand', android: 'person', web: 'person' }}
             onPress={() =>
               act(() =>
-                router.push({ pathname: '/fit/[id]', params: { id: fit.id } }),
+                // **Straight to the figure, not to the fit's page.**
+                //
+                // This opened `/fit/[id]`, which is the pin again with
+                // the try-on one tap further in - so "Try it on" did
+                // not try anything on. The avatar screen already reads
+                // `?fit=`, cuts that fit's garments out of the
+                // photograph and dresses the figure with them, which
+                // is both the fast path and the real clothes rather
+                // than a model's impression of them.
+                router.push({ pathname: '/avatar', params: { fit: fit.id } }),
               )
             }
           />

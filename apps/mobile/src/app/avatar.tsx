@@ -43,8 +43,8 @@ import {
 } from '@/constants/theme';
 import { useAuth } from '@/features/auth/session';
 import { webSearchUrlForDescription } from '@/features/discover/visual-search';
-import { keepToPhotos } from '@/features/avatar/keep';
 import { useFavouriteGarments } from '@/features/discover/saved';
+import { PictureActions } from '@/features/avatar/picture-actions';
 import { useWardrobe, type WardrobeEntry } from '@/features/wardrobe/store';
 import {
   OutfitFigure,
@@ -193,8 +193,6 @@ export default function AvatarScreen() {
   // rejection surfaces as a red box over the whole app; this turns it into a
   // line on the screen that says what happened.
   const [problem, setProblem] = useState<string | null>(null);
-  const [keeping, setKeeping] = useState(false);
-  const [kept, setKept] = useState(false);
   // Open by default only when there is nothing drawn yet: on a fresh account
   // the questions *are* the screen, and on a returning one the picture is.
   const [editingLooks, setEditingLooks] = useState(false);
@@ -223,22 +221,6 @@ export default function AvatarScreen() {
     () => matchingGarments(wardrobe.entries, shown?.pieces ?? []),
     [wardrobe.entries, shown],
   );
-
-  const keep = async () => {
-    if (!showing || keeping) return;
-    void tapFeedback();
-    setProblem(null);
-    setKeeping(true);
-    try {
-      await keepToPhotos(showing);
-      setKept(true);
-      void successFeedback();
-    } catch (caught) {
-      setProblem(describe(caught));
-    } finally {
-      setKeeping(false);
-    }
-  };
 
   if (!signedIn) {
     return (
@@ -349,48 +331,19 @@ export default function AvatarScreen() {
         </ThemedText>
       ) : null}
 
-      {/* Keep it.
+      {/* What to do with it, once there is an it.
 
-          Without this the only way a picture leaves the app is a
-          screenshot, which carries the status bar and the tab chrome and
-          none of the resolution. Shown only when there is something
-          finished to save: a button over a placeholder is a button that
-          fails. */}
-      {showing && !busy ? (
-        <MotionPressable
-          accessibilityRole="button"
-          accessibilityLabel="Save this picture to your photos"
-          accessibilityState={{ busy: keeping, disabled: keeping }}
-          disabled={keeping}
-          animateEntrance={false}
-          scale={0.98}
-          onPress={() => void keep()}
-          style={{
-            minHeight: TapTarget,
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: Spacing.two,
-            borderRadius: Radius.md,
-            borderCurve: 'continuous',
-            borderWidth: 1,
-            borderColor: colors.border,
-            opacity: keeping ? 0.6 : 1,
-          }}>
-          <SymbolView
-            name={{
-              ios: 'square.and.arrow.down',
-              android: 'download',
-              web: 'download',
-            }}
-            size={18}
-            tintColor={colors.text}
-          />
-          <ThemedText type="smallBold">
-            {keeping ? 'Saving' : kept ? 'Saved to your photos' : 'Save this picture'}
-          </ThemedText>
-        </MotionPressable>
-      ) : null}
+          Save, Share and Post, the same row the studio offers under a
+          packshot - the picture is the same kind of thing and the
+          choices should not depend on which screen drew it. It
+          replaced a lone "Save this picture", which meant a try-on
+          could be kept and could not be shown to anybody, and a
+          reviewer comparing the two screens found one of them
+          missing two thirds of its actions.
+
+          Shown only when there is something finished: a button over a
+          placeholder is a button that fails. */}
+      {showing && !busy ? <PictureActions uri={showing} /> : null}
 
       {/* A failure the worker recorded, which outlives the request that
           asked for it: a screen reopened after a failed draw has to find

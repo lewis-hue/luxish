@@ -150,15 +150,18 @@ PYEOF
   fi
   if [ "$count" -gt 0 ] 2>/dev/null; then
     ok "database already has $count pins"
-    return 0
+  else
+    say "  seeding a demo world (this takes a minute) ..."
+    ( cd "$API_DIR" && "$PY" scripts/seed_demo_world.py \
+        --photos "$REPO/assets/seed-photos" >"$LOGS/seed.log" 2>&1 ) \
+      && ok "seeded" \
+      || { bad "seeding failed - see .devlogs/seed.log"; return 1; }
   fi
 
-  say "  seeding a demo world (this takes a minute) ..."
-  ( cd "$API_DIR" && "$PY" scripts/seed_demo_world.py \
-      --photos "$REPO/assets/seed-photos" >"$LOGS/seed.log" 2>&1 ) \
-    && ok "seeded" \
-    || { bad "seeding failed - see .devlogs/seed.log"; return 1; }
-
+  # Both of these run whether or not the database was empty, and both
+  # are idempotent. Hanging them off the empty branch meant a reviewer
+  # who had already seeded - or who pulled after these were added -
+  # never got the generated board and never got the broken pins swept.
   post_generated_pins
   repair_pins
 }

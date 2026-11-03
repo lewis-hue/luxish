@@ -23,7 +23,6 @@ import { ThemedText } from '@/components/themed-text';
 import { InboxButton } from '@/components/ui/inbox-button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { MotionPressable, tapFeedback } from '@/components/ui/motion';
-import { useTryOnFit } from '@/api/queries/avatar';
 import { useIdeas, type Door } from '@/api/queries/explore';
 import { FitCard } from '@/features/feed/fit-card';
 import { IdeasShelf } from '@/features/feed/ideas-shelf';
@@ -96,7 +95,6 @@ export default function DiscoverScreen() {
   const [shared, setShared] = useState<FeedFit | null>(null);
   const [creating, setCreating] = useState(false);
   const [acting, setActing] = useState<PinSubject | null>(null);
-  const tryOn = useTryOnFit();
 
   const auth = useAuth();
   const signedIn = auth.status === 'signedIn';
@@ -428,9 +426,19 @@ export default function DiscoverScreen() {
         }}
         onTryOn={() => {
           if (!shared) return;
-          tryOn.mutate(shared.id);
+          // **The figure first, and no bill for it.**
+          //
+          // This fired a paid render the moment the row was tapped,
+          // before anybody had seen anything - so "try it on" cost
+          // money and thirty seconds whether or not the result was
+          // wanted. Carrying the fit instead lets the avatar screen
+          // cut that fit's garments out of the photograph and dress
+          // the mannequin with them, which is instant, free and the
+          // actual clothes. The photorealistic render is a button
+          // there, for somebody who asks for it.
+          const id = shared.id;
           setShared(null);
-          router.push('/avatar');
+          router.push({ pathname: '/avatar', params: { fit: id } });
         }}
       />
     </View>
