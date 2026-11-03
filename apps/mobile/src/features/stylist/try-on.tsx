@@ -262,3 +262,41 @@ export function AvatarLook({
     </View>
   );
 }
+
+/**
+ * The pieces a verdict named, as the figure can wear them.
+ *
+ * **Free, and the reason the stylist stopped billing for this.** The
+ * verdict already names garment ids out of this person's own
+ * wardrobe, and every one of those garments has a cut-out on the
+ * device. Drawing them on the figure is a composite, not a
+ * generation: it costs nothing, it appears at once, and the clothes
+ * in the picture are the actual clothes rather than a model's
+ * impression of a description of them.
+ *
+ * What it replaced was a round trip through the language model to
+ * produce a prompt, then a billed image call and twenty to thirty
+ * seconds of waiting, to show somebody garments that were already
+ * sitting in their pocket.
+ *
+ * A garment with no cut-out yet, or whose category maps to no slot,
+ * is left out rather than guessed at - a jumper drawn where the shoes
+ * go is worse than a figure wearing one thing less.
+ */
+export function wearOwned(
+  ids: readonly string[],
+  wardrobe: readonly WardrobeEntry[],
+): WornPiece[] {
+  const byId = new Map(
+    wardrobe
+      .filter((entry) => entry.serverId)
+      .map((entry) => [entry.serverId as string, entry]),
+  );
+  return ids.flatMap((id) => {
+    const entry = byId.get(id);
+    if (!entry?.uri) return [];
+    const slot = entry.categoryId ? slotFor(entry.categoryId) : undefined;
+    if (!slot) return [];
+    return [{ id, slot: slot as FigureSlot, uri: entry.uri }];
+  });
+}

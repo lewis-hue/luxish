@@ -349,7 +349,16 @@ async def _shop_for(
 async def _draw(
     db: Any, *, user_id: uuid.UUID, plan: Any, post_id: uuid.UUID | None
 ) -> uuid.UUID | None:
-    """Queue the avatar, whichever branch we are on.
+    """Queue a picture, but only when there is something to wear.
+
+    **`plan.renders` is the gate, and it was not consulted.** The
+    plan had already worked out that a verdict owning nothing should
+    not be drawn, and this function went ahead and drew it anyway as
+    long as the sentence named any garment at all - so somebody told
+    "you have none of this" still waited half a minute for a billed
+    picture of clothes they would have to go and buy. Reported twice,
+    and both times the decision was already made correctly one layer
+    up and then ignored here.
 
     Returns None rather than raising when there is no avatar to dress
     yet: being told "you own this" is useful on its own, and a person
@@ -358,6 +367,9 @@ async def _draw(
     """
     from app.domain import avatar_renders
     from app.domain.avatar_renders import TRY_ON_JOB_KIND  # noqa: F401
+
+    if not plan.renders:
+        return None
 
     outfit = _outfit_words(plan)
     if not outfit:

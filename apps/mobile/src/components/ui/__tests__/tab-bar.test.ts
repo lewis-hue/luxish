@@ -287,3 +287,60 @@ describe('account screens belong to the profile tab', () => {
     expect(currentHref('/closet', '/wardrobe')).toBe('/wardrobe');
   });
 });
+
+// --------------------------------------------------------------------------
+// Scrolling the bar away
+//
+// Unlike immersion, this applies on a tab root too: a scroll-away bar
+// is one upward flick from returning, which is the same gesture
+// somebody already makes when they go looking for it.
+// --------------------------------------------------------------------------
+describe('the bar stands down while you scroll forward', () => {
+  it('goes on a tab root, where immersion deliberately does not', () => {
+    expect(
+      tabBarShowing({ pathname: '/', keyboardUp: false, immersed: true }),
+    ).toBe(true);
+    expect(
+      tabBarShowing({ pathname: '/', keyboardUp: false, stoodDown: true }),
+    ).toBe(false);
+  });
+
+  it('goes on a pushed screen too', () => {
+    expect(
+      tabBarShowing({
+        pathname: '/fit/abc',
+        keyboardUp: false,
+        stoodDown: true,
+      }),
+    ).toBe(false);
+  });
+
+  it('comes back when the scroll says so', () => {
+    expect(
+      tabBarShowing({ pathname: '/', keyboardUp: false, stoodDown: false }),
+    ).toBe(true);
+  });
+
+  it('does not undo the tab-root exemption for the keyboard', () => {
+    // A tab root keeps its bar under the keyboard because it has no
+    // chevron and hiding it leaves no way off the page. Scrolling
+    // away is different and safe - one flick brings it back - so the
+    // two rules must not be collapsed into each other.
+    expect(
+      tabBarShowing({ pathname: '/', keyboardUp: true, stoodDown: false }),
+    ).toBe(true);
+    expect(
+      tabBarShowing({ pathname: '/fit/abc', keyboardUp: true }),
+    ).toBe(false);
+  });
+
+  it('stays off a screen that never shows it', () => {
+    expect(
+      tabBarShowing({
+        pathname: '/sign-in',
+        keyboardUp: false,
+        stoodDown: false,
+      }),
+    ).toBe(false);
+  });
+});

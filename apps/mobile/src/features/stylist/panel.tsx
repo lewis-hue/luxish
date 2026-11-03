@@ -197,6 +197,7 @@ export function StylistPanel({
    * conversation, the caller owns whether conversations are kept.
    */
   onTurns,
+  refreshControl,
   /**
    * Remounts the thread when it changes. The history screen hands back
    * a session id; this is what makes switching to it actually swap the
@@ -209,6 +210,14 @@ export function StylistPanel({
   restored?: readonly Turn[] | null;
   onTurns?: (turns: readonly Turn[]) => void;
   sessionKey?: string;
+  /**
+   * The page's pull-to-refresh, for the scroll view this owns.
+   *
+   * The page used to own the scroll and therefore the gesture.
+   * Now that the thread scrolls here, the control has to come
+   * with it or pulling down on the wardrobe does nothing.
+   */
+  refreshControl?: React.ReactElement;
 } = {}) {
   const scroller = useRef<ScrollViewInstance | null>(null);
   const [attachment, setAttachment] = useState<StylistAttachment | null>(null);
@@ -543,6 +552,7 @@ export function StylistPanel({
       <Thread
         turns={chat.turns}
         renders={renders.data ?? []}
+        wardrobe={wardrobe.entries}
         onEdit={(turn) => {
           // The words come back to the composer and the thread is
           // wound back to before them, so asking again replaces the
@@ -948,6 +958,7 @@ export function StylistPanel({
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="interactive"
+          refreshControl={refreshControl}
           contentContainerStyle={{
             paddingBottom: Spacing.three,
             gap: Spacing.three,

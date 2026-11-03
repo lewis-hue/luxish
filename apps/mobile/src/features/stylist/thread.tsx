@@ -1,6 +1,6 @@
 import { Image } from 'expo-image';
 import { MotiView } from 'moti';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Linking,
@@ -24,7 +24,10 @@ import {
 } from '@/constants/theme';
 import { BRAND } from '@/branding';
 import { PictureActions } from '@/features/avatar/picture-actions';
-import { canTryOn, type Turn } from '@/features/stylist/conversation';
+import { OutfitFigure } from '@/features/avatar/figure';
+import { type Turn } from '@/features/stylist/conversation';
+import { wearOwned } from '@/features/stylist/try-on';
+import type { WardrobeEntry } from '@/features/wardrobe/store';
 import { useScheme } from '@/hooks/use-theme';
 
 /**
@@ -86,6 +89,7 @@ export function Thread({
   turns,
   onTryOn,
   renders = [],
+  wardrobe = [],
   onEdit,
   onForget,
 }: {
@@ -94,6 +98,14 @@ export function Thread({
   onTryOn: (turn: Turn) => void;
   /** Every figure in flight or finished, polled elsewhere. */
   renders?: readonly RenderLike[];
+  /**
+   * Their clothes, so a look can be drawn here for nothing.
+   *
+   * See `wearOwned`: the verdict names garment ids this person
+   * owns and every one has a cut-out already on the device, so
+   * the figure is a composite rather than a generation.
+   */
+  wardrobe?: readonly WardrobeEntry[];
   /** Take a question back into the composer to ask it differently. */
   onEdit?: (turn: Turn) => void;
   /** Remove a question and the answer it produced. */
@@ -117,6 +129,7 @@ export function Thread({
               ? renders.find((r) => r.id === turn.renderId)
               : undefined
           }
+          wardrobe={wardrobe}
           onEdit={onEdit}
           onForget={onForget}
         />
@@ -129,17 +142,28 @@ function Bubble({
   turn,
   onTryOn,
   render,
+  wardrobe = [],
   onEdit,
   onForget,
 }: {
   turn: Turn;
   onTryOn: (turn: Turn) => void;
   render?: RenderLike;
+  wardrobe?: readonly WardrobeEntry[];
   onEdit?: (turn: Turn) => void;
   onForget?: (turn: Turn) => void;
 }) {
   const colors = Colors[useScheme()];
   const mine = turn.who === 'you';
+  const [showActions, setShowActions] = useState(false);
+  const [worn, setWorn] = useState(false);
+  // Built from the verdict's own ids against their wardrobe. Empty
+  // when the answer named nothing of theirs, which is exactly when
+  // there is nothing to draw.
+  const wearing = useMemo(
+    () => wearOwned(turn.verdict?.using ?? [], wardrobe),
+    [turn.verdict?.using, wardrobe],
+  );
 
   // **What somebody typed, in a capsule on the right.**
   //
@@ -150,7 +174,21 @@ function Bubble({
     return (
       <View style={{ alignSelf: 'flex-end', maxWidth: '86%', gap: Spacing.one }}>
         <Byline who="You" at={turn.at} align="right" />
-        <View
+        <MotionPressable
+          accessibilityRole="button"
+          accessibilityLabel={turn.text}
+          accessibilityHint={
+            onEdit || onForget
+              ? 'Long press for edit and delete'
+              : undefined
+          }
+          animateEntrance={false}
+          scale={0.99}
+          onLongPress={() => {
+            if (!onEdit && !onForget) return;
+            void tapFeedback();
+            setShowActions((was) => !was);
+          }}
           style={{
             alignSelf: 'flex-end',
             paddingHorizontal: Spacing.three,
@@ -189,15 +227,22 @@ function Bubble({
             style={{ fontSize: FontSize.subhead, color: colors.accentText }}>
             {turn.text}
           </ThemedText>
-        </View>
+        </MotionPressable>
 
         {/* Take it back, or say it differently.
+
+            **Behind a long press, not under every message.** Two
+            links beneath each question is a row of furniture down
+            the whole thread, repeated for something people do
+            rarely. A long press is the platform's own gesture for
+            "what can I do with this", and it costs nothing until it
+            is used.
 
             Both act on the question *and* what it produced: a reply
             left under a deleted question answers nothing, and an
             edited question whose old answer still sits below it reads
             as the stylist replying to something nobody asked. */}
-        {onEdit || onForget ? (
+        {showActions ? (
           <View
             style={{
               flexDirection: 'row',
@@ -205,11 +250,25 @@ function Bubble({
               gap: Spacing.three,
             }}>
             {onEdit ? (
-              <Quiet label="Edit" onPress={() => onEdit(turn)} />
+              <Quiet
+                label="Edit"
+                onPress={() => {
+                  setShowActions(false);
+                  onEdit(turn);
+                }}
+              />
             ) : null}
             {onForget ? (
-              <Quiet label="Delete" onPress={() => onForget(turn)} danger />
+              <Quiet
+                label="Delete"
+                danger
+                onPress={() => {
+                  setShowActions(false);
+                  onForget(turn);
+                }}
+              />
             ) : null}
+            <Quiet label="Cancel" onPress={() => setShowActions(false)} />
           </View>
         ) : null}
       </View>
@@ -280,17 +339,30 @@ function Bubble({
       {/* The picture, in the thread. */}
       {turn.renderId ? <Rendered render={render} /> : null}
 
-      {/* Offered rather than done automatically: drawing a figure is
-          a paid call and twenty seconds, and not every answer is one
-          somebody wants to see worn. */}
-      {canTryOn(turn) ? (
-        <Action
-          label="See this on the figure"
-          onPress={() => {
-            void tapFeedback();
-            onTryOn(turn);
-          }}
-        />
+      {/* **The look on a figure, drawn here, for nothing.**
+
+          This used to send another question to the language model,
+          which produced a prompt, which paid for an image, which
+          took twenty to thirty seconds - to show somebody garments
+          already sitting on their phone. The verdict names the
+          garment ids and every one of them has a cut-out locally, so
+          the figure is a composite: instant, free, and wearing the
+          actual clothes rather than a model's impression of a
+          description of them.
+
+          `onTryOn` remains for the photorealistic version, which is
+          a different question and is asked on the avatar screen. */}
+      {wearing.length > 0 ? (
+        worn ? (
+          <View style={{ alignSelf: 'center', width: 240 }}>
+            <OutfitFigure
+              pieces={wearing}
+              label="These of yours, on a figure"
+            />
+          </View>
+        ) : (
+          <Action label="See these on a figure" onPress={() => setWorn(true)} />
+        )
       ) : null}
     </View>
   );

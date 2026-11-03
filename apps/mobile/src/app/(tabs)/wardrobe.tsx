@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { SymbolView, type SymbolViewProps } from 'expo-symbols';
-import { Alert, ScrollView, View } from 'react-native';
+import { Alert, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
@@ -115,20 +115,26 @@ export default function WardrobeScreen() {
   };
 
   return (
-    <ScrollView
-      style={{ backgroundColor: colors.background }}
-      showsVerticalScrollIndicator={false}
-      keyboardShouldPersistTaps="handled"
-      refreshControl={refresh.control}
-      contentContainerStyle={{
+    // **A column, not a scroll view.**
+    //
+    // The panel pins its composer by taking `flex: 1` and giving the
+    // thread the space left over. Inside a ScrollView that is
+    // meaningless - a flex child of scrolling content has no bounded
+    // height - so the composer went back to being just the last thing
+    // on a long page and the keyboard covered it again. The page owns
+    // the header; the panel owns everything below it and does its own
+    // scrolling.
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: colors.background,
         paddingTop: insets.top + Spacing.three,
         paddingHorizontal: Spacing.three,
-        // The tab bar drops out of the way when the keyboard is up, so
-        // its inset is not owed on top of the keyboard's - counting
-        // both leaves a tall empty band under the composer.
+        // Only one of these is ever owed: the tab bar stands down
+        // when the keyboard is up, so counting both leaves a tall
+        // empty band under the composer.
         paddingBottom:
-          (keyboard > 0 ? keyboard : BottomTabInset + insets.bottom) +
-          Spacing.five,
+          keyboard > 0 ? keyboard : BottomTabInset + insets.bottom,
         gap: Spacing.three,
       }}>
       {/* The header: the name of the page, the way back into an
@@ -234,6 +240,7 @@ export default function WardrobeScreen() {
       <StylistPanel
         embedded
         onAddGarment={add}
+        refreshControl={refresh.control}
         sessionKey={history.sessionId}
         restored={history.restored}
         onTurns={(turns) => {
@@ -255,7 +262,7 @@ export default function WardrobeScreen() {
           setSaidAnything(false);
         }}
       />
-    </ScrollView>
+    </View>
   );
 }
 

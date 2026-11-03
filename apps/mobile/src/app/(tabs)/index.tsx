@@ -44,6 +44,7 @@ import { BRAND } from '@/branding';
 import { useAuth } from '@/features/auth/session';
 import {
 } from '@/features/discover/collections';
+import { useScrollDirection } from '@/features/navigation/attention-context';
 import { usePullToRefresh } from '@/components/ui/pull-to-refresh';
 import { useReturnedToApp } from '@/hooks/use-returned-to-app';
 import { useScheme } from '@/hooks/use-theme';
@@ -105,6 +106,8 @@ export default function DiscoverScreen() {
   const refresh = usePullToRefresh(undefined, {
     primary: () => board.refetch(),
   });
+  // The tab bar follows which way this board is being scrolled.
+  const barFollows = useScrollDirection();
   // **A new grid when you come back to the app, and not before.**
   //
   // The board deliberately does not refetch on mount, so returning
@@ -311,6 +314,11 @@ export default function DiscoverScreen() {
           paddingBottom: BottomTabInset + insets.bottom + Spacing.five,
         }}
         showsVerticalScrollIndicator={false}
+        // The bar stands down while this is scrolled forward and
+        // comes back on the first flick upward - see
+        // `features/navigation/attention.scrolled`.
+        onScroll={barFollows.onScroll}
+        scrollEventThrottle={32}
         // The shared control, not a second one written here.
         //
         // This board had its own, with `tintColor` only - which is

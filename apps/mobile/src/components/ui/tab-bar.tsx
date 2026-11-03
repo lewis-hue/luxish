@@ -151,8 +151,27 @@ export function tabBarShowing(input: {
    * turn - see `features/navigation/attention`.
    */
   immersed?: boolean;
+  /**
+   * Whether a downward scroll has sent the bar away.
+   *
+   * Unlike `immersed`, this applies on a tab root too. The reason
+   * the two differ: immersion hides the bar while somebody looks at
+   * one photograph, and on a tab root that would strand them with no
+   * navigation at all. A scroll-away bar is not a trap - it is one
+   * upward flick from returning, which is the same gesture somebody
+   * is already making when they go looking for it.
+   */
+  stoodDown?: boolean;
 }): boolean {
   if (!showsTabBar(input.pathname)) return false;
+
+  // **Before the tab-root exemption, and deliberately.** That
+  // exemption exists because the keyboard rule could strand somebody
+  // on a page with no way off - a tab root has no back chevron. This
+  // rule cannot strand anybody: the bar is one upward flick from
+  // returning, and that is the same gesture somebody already makes
+  // when they go looking for it.
+  if (input.stoodDown) return false;
 
   // **A tab root keeps its bar whatever else is happening.**
   //
@@ -341,7 +360,7 @@ export function FloatingTabBar() {
     };
   }, []);
 
-  const { immersed } = useAttention();
+  const { immersed, stoodDown } = useAttention();
 
   /** 0 is up and in place, 1 is dropped clear of the bottom edge. */
   const down = useSharedValue(0);
@@ -378,7 +397,8 @@ export function FloatingTabBar() {
   // and the chips sat on it; scroll past the picture and the same
   // page is a grid of other fits, where the chips are how you
   // leave. The screen reports which of the two it currently is.
-  if (!tabBarShowing({ pathname, keyboardUp, immersed })) return null;
+  if (!tabBarShowing({ pathname, keyboardUp, immersed, stoodDown }))
+    return null;
   const selected = currentHref(pathname, tabFromState(navigationState));
 
   return (
