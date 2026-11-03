@@ -33,7 +33,6 @@ import {
   useSetConsent,
 } from '@/api/queries/consents';
 import { useAuth } from '@/features/auth/session';
-import { shopsNote, useNearbyShops } from '@/api/queries/shops';
 import { useFavouriteGarments } from '@/features/discover/saved';
 import { DRESS_CODES } from '@/features/taxonomy';
 import { useRenders } from '@/api/queries/avatar';
@@ -261,11 +260,6 @@ export function StylistPanel({
   const auth = useAuth();
   const signedIn = auth.status === 'signedIn';
   const consents = useConsents(signedIn);
-  // Shops near them, asked for only when they tap. Upstream takes
-  // between two and forty-five seconds on a cold lookup, so it is
-  // never part of the answer's own stream - the reply arrives in
-  // six seconds and this hangs off the end of it.
-  const shops = useNearbyShops();
 
   /**
    * The conversation, rather than one result at a time.
@@ -549,13 +543,6 @@ export function StylistPanel({
       <Thread
         turns={chat.turns}
         renders={renders.data ?? []}
-        shops={{
-          items: shops.data?.items ?? null,
-          attribution: shops.data?.attribution ?? null,
-          note: shopsNote(shops.error?.reason ?? null, shops.data ?? null),
-          looking: shops.isPending,
-          find: () => shops.mutate({}),
-        }}
         onEdit={(turn) => {
           // The words come back to the composer and the thread is
           // wound back to before them, so asking again replaces the

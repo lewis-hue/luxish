@@ -1,7 +1,7 @@
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { AnimatePresence, MotiView } from 'moti';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import * as Linking from 'expo-linking';
 import { SymbolView } from 'expo-symbols';
 import { Pressable, ScrollView, View } from 'react-native';
@@ -661,20 +661,7 @@ function Figure({
         </View>
       ) : null}
 
-      {/* While a billed call is running. A slow pulse on the whole surface
-          rather than a spinner: the thing being waited for is a picture, and
-          a spinner in the middle of one reads as a failure to load it. */}
-      {busy ? (
-        <MotiView
-          from={{ opacity: 0.08 }}
-          animate={{ opacity: 0.22 }}
-          transition={timing({ duration: 900, loop: true, repeatReverse: true })}
-          accessible
-          accessibilityLabel="Drawing"
-          accessibilityState={{ busy: true }}
-          style={{ position: 'absolute', inset: 0, backgroundColor: colors.text }}
-        />
-      ) : null}
+      {busy ? <Drawing /> : null}
 
       {label && !busy ? (
         <MotiView
@@ -697,6 +684,116 @@ function Figure({
           </ThemedText>
         </MotiView>
       ) : null}
+    </View>
+  );
+}
+
+/**
+ * The wait, made worth looking at.
+ *
+ * **Half a minute is a long time in front of a grey rectangle.** The
+ * old state was a slow opacity pulse over the whole surface and no
+ * words: nothing to read, nothing that changed, and no way to tell a
+ * render in progress from a screen that had stopped. Somebody
+ * arriving here from "Try it on" on a pin has asked for one thing and
+ * is now waiting on it, which is the moment an app most needs to look
+ * alive.
+ *
+ * Two things move. A band of light sweeps down the frame, the way a
+ * scanner passes over something being made - it is the one motion
+ * that reads as *work happening to this surface* rather than as a
+ * page loading. And the line underneath names the stage.
+ *
+ * **The stages are real, in order, and honestly timed.** They come
+ * from what the worker actually does and roughly how long each takes,
+ * so the line is a report rather than a progress bar that lies. The
+ * last one has no successor: when the work overruns, it sits on
+ * "Almost there" instead of claiming a step that has not happened.
+ *
+ * It loops while the request is open and is replaced the moment the
+ * picture lands, which is the busy-indicator exception to WCAG 2.2.2
+ * rather than decoration beside text.
+ */
+const STAGES: readonly string[] = [
+  'Reading the fit',
+  'Picking the pieces',
+  'Dressing the figure',
+  'Setting the light',
+  'Almost there',
+];
+
+/** How long each stage is shown. The render takes 15-30s. */
+const PER_STAGE_MS = 5200;
+
+function Drawing() {
+  const colors = Colors[useScheme()];
+  const timing = useMotiTiming();
+  const [stage, setStage] = useState(0);
+
+  useEffect(() => {
+    // Stops on the last one rather than wrapping: going back to
+    // "Reading the fit" after half a minute says the work restarted.
+    if (stage >= STAGES.length - 1) return;
+    const id = setTimeout(() => setStage((n) => n + 1), PER_STAGE_MS);
+    return () => clearTimeout(id);
+  }, [stage]);
+
+  return (
+    <View
+      accessible
+      accessibilityRole="progressbar"
+      accessibilityLabel={STAGES[stage]}
+      accessibilityState={{ busy: true }}
+      style={{
+        position: 'absolute',
+        inset: 0,
+        overflow: 'hidden',
+        alignItems: 'center',
+        justifyContent: 'flex-end',
+      }}>
+      {/* The ground, so the sweep has something to pass over. */}
+      <View
+        style={{
+          position: 'absolute',
+          inset: 0,
+          backgroundColor: colors.text,
+          opacity: 0.06,
+        }}
+      />
+
+      {/* The sweep. A tall soft band travelling top to bottom. */}
+      <MotiView
+        from={{ translateY: -260 }}
+        animate={{ translateY: 420 }}
+        transition={timing({ duration: 1900, loop: true })}
+        style={{
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          height: 180,
+          backgroundColor: colors.accent,
+          opacity: 0.1,
+        }}
+      />
+
+      <MotiView
+        // Keyed on the stage so each line fades in as its own element
+        // rather than the text swapping underneath a static label.
+        key={stage}
+        from={{ opacity: 0, translateY: 6 }}
+        animate={{ opacity: 1, translateY: 0 }}
+        transition={timing({ duration: Motion.base })}
+        style={{
+          marginBottom: Spacing.four,
+          paddingHorizontal: Spacing.three,
+          paddingVertical: Spacing.two,
+          borderRadius: Radius.full,
+          backgroundColor: colors.background,
+        }}>
+        <ThemedText type="smallBold" style={{ fontSize: FontSize.footnote }}>
+          {STAGES[stage]}
+        </ThemedText>
+      </MotiView>
     </View>
   );
 }

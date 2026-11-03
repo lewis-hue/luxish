@@ -246,7 +246,14 @@ async def stream_answer(
     yield "verdict", out
 
     if plan.look_for:
-        out.buy = await _shop_for(db, user_id=user_id, wants=plan.look_for)
+        out.buy = await _shop_for(
+            db,
+            user_id=user_id,
+            wants=plan.look_for,
+            # The look narrows the search from 'every cream
+            # trouser' to the right cut and weight.
+            look=verdict.answer,
+        )
         yield "shopping", out.buy
 
     render_id = await _draw(db, user_id=user_id, plan=plan, post_id=post_id)
@@ -257,31 +264,85 @@ async def stream_answer(
     yield "done", out
 
 
-async def _shop_for(
-    db: Any, *, user_id: uuid.UUID, wants: tuple[str, ...]
-) -> list[Any]:
-    """Things to buy for each gap, best match first.
+@dataclass(frozen=True)
+class _WebOffer:
+    """A web result, shaped the way `routers.stylist._offer` reads one.
 
-    One search per gap rather than one for all of them: "cream
-    trousers" and "a tan tote" are two different shelves, and merging
-    them returns whichever had more stock.
+    Duck-typed rather than converted, because that serialiser already
+    accepts anything with these names and inventing a second shape
+    would mean two things to keep in step.
+    """
+
+    product_id: str
+    title: str
+    retailer: str
+    url: str
+    match_label: str | None = None
+
+
+async def _shop_for(
+    db: Any, *, user_id: uuid.UUID, wants: tuple[str, ...], look: str | None = None
+) -> list[Any]:
+    """Where to buy each missing piece.
+
+    **The catalogue first, then the open web.** The internal
+    catalogue is a seeded table: when it has the thing it is the
+    better answer, because it carries a real price and stock. Most of
+    the time it does not have it, and before this that meant "where
+    to get them" came back empty under a list of things to get - the
+    question asked and visibly unanswered, which is how it was
+    reported.
+
+    The web lookup takes the gap *and the look*, which is what makes
+    it worth doing: "cream trousers" alone returns every cream
+    trouser made, and the look narrows it to the right cut.
+
+    One search per gap, never one merged search: "cream trousers" and
+    "a tan tote" are two different shelves and merging them returns
+    whichever had more stock.
     """
     from app.domain import shopping
+    from app.domain.web_shopping import where_to_buy
 
     found: list[Any] = []
     seen: set[Any] = set()
+    unmet: list[str] = []
+
     for want in wants:
+        matches: list[Any] = []
         try:
             matches = await shopping.search(db, colour=None, aesthetics=(want,))
         except Exception as caught:  # noqa: BLE001
-            logger.warning("shopping search failed for %r: %s", want, caught)
-            continue
+            logger.warning("catalogue search failed for %r: %s", want, caught)
+        kept = 0
         for match in matches[:3]:
             key = getattr(match, "product_id", None) or id(match)
             if key in seen:
                 continue
             seen.add(key)
             found.append(match)
+            kept += 1
+        if kept == 0:
+            unmet.append(want)
+
+    if unmet:
+        # Never raises and never blocks the reply: the answer has
+        # already streamed, and this is an extra underneath it.
+        for result in await where_to_buy(unmet, look=look):
+            for shop in result.shops:
+                if shop.url in seen:
+                    continue
+                seen.add(shop.url)
+                found.append(
+                    _WebOffer(
+                        product_id=shop.url,
+                        title=shop.title,
+                        retailer=shop.seller,
+                        url=shop.url,
+                        match_label=result.gap,
+                    )
+                )
+
     return found
 
 

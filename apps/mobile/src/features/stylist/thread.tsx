@@ -1,9 +1,14 @@
 import { Image } from 'expo-image';
 import { MotiView } from 'moti';
 import { useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Linking,
+  Modal,
+  Pressable,
+  View,
+} from 'react-native';
 
-import { howFar } from '@/api/queries/shops';
 import { ThemedText } from '@/components/themed-text';
 import {
   MotionPressable,
@@ -69,15 +74,6 @@ import { useScheme } from '@/hooks/use-theme';
  */
 const STAND_IN = require('../../../assets/images/mannequins/androgynous-average.webp');
 
-export interface ShopsState {
-  /** Null until somebody asks. */
-  items: { name: string; distanceM: number | null }[] | null;
-  attribution: string | null;
-  note: string | null;
-  looking: boolean;
-  find: () => void;
-}
-
 /** Just enough of a render for the thread to draw it. */
 export interface RenderLike {
   id: string;
@@ -89,7 +85,6 @@ export interface RenderLike {
 export function Thread({
   turns,
   onTryOn,
-  shops,
   renders = [],
   onEdit,
   onForget,
@@ -97,8 +92,6 @@ export function Thread({
   turns: readonly Turn[];
   /** Ask for this turn's outfit on the figure. */
   onTryOn: (turn: Turn) => void;
-  /** Offered under the last reply that found nothing they own. */
-  shops?: ShopsState;
   /** Every figure in flight or finished, polled elsewhere. */
   renders?: readonly RenderLike[];
   /** Take a question back into the composer to ask it differently. */
@@ -107,7 +100,6 @@ export function Thread({
   onForget?: (turn: Turn) => void;
 }) {
   if (turns.length === 0) return null;
-  const lastGap = lastWithoutAMatch(turns);
   return (
     // `stretch`, so every child has a definite width to lay out against.
     // This is what the reply's wrapping depends on.
@@ -120,7 +112,6 @@ export function Thread({
           // Only under the most recent "you own nothing for this".
           // Repeating it under every past one would be three
           // identical buttons answering the same question.
-          shops={turn.id === lastGap ? shops : undefined}
           render={
             turn.renderId
               ? renders.find((r) => r.id === turn.renderId)
@@ -134,26 +125,15 @@ export function Thread({
   );
 }
 
-function lastWithoutAMatch(turns: readonly Turn[]): string | null {
-  for (let at = turns.length - 1; at >= 0; at -= 1) {
-    const turn = turns[at];
-    if (turn.who !== 'stylist' || turn.streaming || !turn.verdict) continue;
-    return turn.verdict.hasMatch ? null : turn.id;
-  }
-  return null;
-}
-
 function Bubble({
   turn,
   onTryOn,
-  shops,
   render,
   onEdit,
   onForget,
 }: {
   turn: Turn;
   onTryOn: (turn: Turn) => void;
-  shops?: ShopsState;
   render?: RenderLike;
   onEdit?: (turn: Turn) => void;
   onForget?: (turn: Turn) => void;
@@ -278,82 +258,24 @@ function Bubble({
       {turn.shopping?.length ? (
         <Listing title="Where to get them">
           {turn.shopping.map((item) => (
-            <Line key={item.product_id}>
-              {item.title ?? 'A match'}
-              {item.retailer ? ` - ${item.retailer}` : ''}
-            </Line>
+            <Shoplink key={item.product_id} item={item} />
           ))}
         </Listing>
       ) : null}
 
-      {/* **Somewhere to actually go**, when they own nothing that
-          works. A lookup upstream takes between two and forty-five
-          seconds, so it is never part of the reply's own stream -
-          it is a button under the answer that already arrived. */}
-      {shops ? (
-        <View style={{ gap: Spacing.one }}>
-          {!shops.items && !shops.looking ? (
-            <Action
-              label="Find shops near me"
-              onPress={() => {
-                void tapFeedback();
-                shops.find();
-              }}
-            />
-          ) : null}
+      {/* The nearby-shops button stood here.
 
-          {/* The tap has to show immediately that it landed.
+          It asked a map which shops within a radius sell clothes,
+          which is not the question: somebody wants *this jacket*,
+          not *a jacket shop*, and three boutiques that do not stock
+          it is a wrong answer delivered confidently. It was also a
+          button that had to be found and pressed before it answered
+          anything.
 
-              A lookup runs through a permission prompt and then a
-              directory that can take forty-five seconds, so without
-              this the button sat there looking ignored - which is
-              exactly how it was reported: "I click it and nothing
-              happens". A spinner beside the words says the opposite. */}
-          {shops.looking ? (
-            <View
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: Spacing.two,
-              }}>
-              <ActivityIndicator size="small" color={colors.accent} />
-              <Line>Looking for shops near you</Line>
-            </View>
-          ) : null}
-
-          {shops.items?.length ? (
-            <Listing title="Shops near you">
-              {shops.items.slice(0, 6).map((shop) => (
-                <Line key={shop.name}>
-                  {shop.name}
-                  {shop.distanceM !== null ? ` - ${howFar(shop.distanceM)}` : ''}
-                </Line>
-              ))}
-              {/* Required wherever this data is shown. */}
-              {shops.attribution ? <Line>{shops.attribution}</Line> : null}
-            </Listing>
-          ) : null}
-
-          {/* A note on its own is a dead end: "allow location and I
-              can show shops near you" with no way to try again means
-              granting it in Settings and then hunting for this button.
-              The note and the retry travel together. */}
-          {shops.note ? (
-            <View style={{ gap: Spacing.one }}>
-              <Line>{shops.note}</Line>
-              {!shops.looking ? (
-                <Action
-                  label="Try again"
-                  onPress={() => {
-                    void tapFeedback();
-                    shops.find();
-                  }}
-                />
-              ) : null}
-            </View>
-          ) : null}
-        </View>
-      ) : null}
+          Each gap now arrives with real places that sell it, looked
+          up on the open web with the look as context - so there is
+          nothing to press and nothing to wait for. See
+          `domain/web_shopping`. */}
 
       {/* The picture, in the thread. */}
       {turn.renderId ? <Rendered render={render} /> : null}
@@ -538,6 +460,55 @@ export function clockOf(at: number): string {
   } catch {
     return '';
   }
+}
+
+/**
+ * One place that sells a missing piece.
+ *
+ * The shop's own domain carries the trust - somebody knows what
+ * `nordstrom.com` is and has never heard of a product id - so it is
+ * the bold half, with the listing's title under it. Opening in the
+ * system browser rather than a WebView: this is somebody's shopping,
+ * and it belongs where their logins and payment details already are.
+ */
+function Shoplink({
+  item,
+}: {
+  item: { title: string | null; retailer: string | null; url: string | null };
+}) {
+  const url = item.url;
+  const label = item.title ?? 'A match';
+  return (
+    <MotionPressable
+      accessibilityRole="link"
+      accessibilityLabel={`${label}${item.retailer ? ` at ${item.retailer}` : ''}`}
+      accessibilityHint={url ? 'Opens the shop in your browser' : undefined}
+      accessibilityState={{ disabled: !url }}
+      disabled={!url}
+      animateEntrance={false}
+      onPress={() => {
+        if (!url) return;
+        void tapFeedback();
+        void Linking.openURL(url).catch(() => {
+          // A link the phone cannot open is not worth an alert over
+          // a suggestion. The row stays, and nothing happens.
+        });
+      }}
+      style={{ paddingVertical: Spacing.half, gap: Spacing.half }}>
+      {item.retailer ? (
+        <ThemedText type="smallBold" style={{ fontSize: FontSize.subhead }}>
+          {item.retailer}
+        </ThemedText>
+      ) : null}
+      <ThemedText
+        numberOfLines={2}
+        type="small"
+        themeColor="textSecondary"
+        style={{ fontSize: FontSize.footnote }}>
+        {label}
+      </ThemedText>
+    </MotionPressable>
+  );
 }
 
 /** A plain text action. Used for Edit and Delete under a question. */
