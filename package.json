@@ -27,6 +27,7 @@
     "dev:down": "docker compose -f infra/docker-compose.yml down"
   },
   "devDependencies": {
-    "eas-cli": "^26.0.0"
+    "eas-cli": "^26.0.0",
+    "qrcode-terminal": "^0.12.0"
   }
 }

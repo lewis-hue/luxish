@@ -1,24 +1,26 @@
 #!/usr/bin/env bash
 #
-# One command to put the whole app in front of a reviewer.
+# One command to put the whole app on a reviewer's phone.
 #
-#   ./scripts/review.sh          bring everything up and open the app
-#   ./scripts/review.sh stop     shut down everything this started
-#   ./scripts/review.sh doctor   check the machine without starting anything
+#   ./scripts/review.sh              bring everything up and print a QR code
+#   ./scripts/review.sh up --android also boot an Android emulator
+#   ./scripts/review.sh stop         shut down everything this started
+#   ./scripts/review.sh doctor       check the machine without starting anything
 #
 # It brings up the data stores, the API, all four job workers, the
-# scheduler and Metro, seeds the database if it is empty, and then
-# opens the app however this machine can:
+# scheduler and Metro, seeds the database if it is empty, and prints
+# a QR code to scan with Expo Go.
 #
-#   1. an Android emulator, if the Android SDK and an AVD are here;
-#   2. otherwise a QR code to scan with Expo Go on a real phone.
+# **The QR is the point.** Scanning it on a real phone is a better
+# review than any simulator: it is the device the app is for, on the
+# network it will really use. An Android emulator is available behind
+# `--android` for anybody who prefers one.
 #
 # **There is no iOS simulator leg, and that is a platform fact rather
 # than an omission.** Apple's simulator ships only inside Xcode and
 # runs only on macOS. On Windows or Linux no amount of scripting
-# produces one; the honest options are an Android emulator, a real
-# iPhone running Expo Go, or a hosted mac. The script says which of
-# those it is using rather than pretending.
+# produces one; the honest options are a real iPhone running Expo Go,
+# an Android emulator, or a hosted mac.
 #
 # Everything is checked before anything is started, because a stack
 # that comes up half-way is harder to diagnose than one that refuses.
@@ -29,6 +31,13 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MOBILE="$REPO/apps/mobile"
 API_DIR="$REPO/services/api"
 LOGS="$REPO/.devlogs"
+#: The account a reviewer signs in with.
+#:
+#: Created by the realm import in `infra/keycloak/import`, so it
+#: exists on a clean clone before anybody runs anything. Verified
+#: against a throwaway Keycloak with an empty database.
+REVIEWER="me@luxish.local"
+
 PY="$API_DIR/.venv/Scripts/python.exe"
 [ -x "$PY" ] || PY="$API_DIR/.venv/bin/python"
 
@@ -128,9 +137,18 @@ list_avds() {
 # --------------------------------------------------------------------------- #
 seed_if_empty() {
   local count
-  count="$("$PY" - <<'PYEOF' 2>/dev/null || echo "?"
+  # **From `$API_DIR`, and the error is kept.**
+  #
+  # This ran from the repository root, where `get_settings()` cannot
+  # find the API's `.env` - so it raised on a missing
+  # `keycloak_issuer`, `2>/dev/null` threw the reason away, and the
+  # script printed "could not count posts; skipping the seed check"
+  # and carried on. The consequence was the worst one available
+  # here: a reviewer scanned the QR and got an empty app, with
+  # nothing on screen saying why.
+  count="$( cd "$API_DIR" && "$PY" - <<'PYEOF' 2>>"$LOGS/seed.log"
 import asyncio, os, sys
-sys.path.insert(0, "services/api")
+sys.path.insert(0, ".")
 os.environ.setdefault("LUXISH_ENVIRONMENT", "local")
 async def go():
     import sqlalchemy as sa
@@ -143,10 +161,12 @@ async def go():
     print(n or 0)
 asyncio.run(go())
 PYEOF
-)"
+)" || count="?"
+  [ -n "$count" ] || count="?"
   if [ "$count" = "?" ]; then
-    note "could not count posts; skipping the seed check"
-    return 0
+    bad "could not read the database - see .devlogs/seed.log"
+    note "The app will come up empty. Fix this before reviewing."
+    return 1
   fi
   if [ "$count" -gt 0 ] 2>/dev/null; then
     ok "database already has $count pins"
@@ -164,6 +184,33 @@ PYEOF
   # never got the generated board and never got the broken pins swept.
   post_generated_pins
   repair_pins
+  join_reviewer
+}
+
+# Give the reviewer a populated Community tab.
+#
+# **Only works after they have signed in once, and that is not a
+# bug.** The API keys an account on `(provider, subject)` from the
+# token and deliberately refuses to adopt an existing row by email -
+# an email collision raises `identity_link_required` rather than
+# silently merging two people. So a row pre-created here would not
+# become their account; it would block their first sign-in with a
+# 409.
+#
+# Instead this runs every time and does nothing until the row
+# exists. Discover, Search and the wardrobe are full from the first
+# launch regardless; this is the follow graph, which needs a person
+# to hang off.
+join_reviewer() {
+  if ( cd "$API_DIR" && "$PY" scripts/seed_demo_world.py --join "$REVIEWER"         >"$LOGS/join.log" 2>&1 ); then
+    if grep -q "no account for" "$LOGS/join.log" 2>/dev/null; then
+      note "sign in once, then run this again to fill the Community tab"
+    else
+      ok "$REVIEWER follows a spread of the demo world"
+    fi
+  else
+    note "could not wire up the reviewer account - see .devlogs/join.log"
+  fi
 }
 
 # The 300 generated pins ship in the repository; this is what turns
@@ -212,9 +259,33 @@ start_metro() {
 
 open_app() {
   head2 "Opening the app"
+
+  # **The QR is the product, not the fallback.**
+  #
+  # This used to prefer an Android emulator whenever the SDK and an
+  # AVD happened to be installed, and only drew a QR when they were
+  # not. That is backwards for the thing this script exists to do:
+  # hand somebody a code to scan so they can hold the app in their
+  # hand. A reviewer with Android Studio on their laptop still wants
+  # their phone.
+  #
+  # The emulator is still one flag away, for whoever prefers it.
+  show_qr
+
+  if [ "${WANT_EMULATOR:-0}" -eq 1 ]; then
+    boot_emulator
+  elif emulator_binary >/dev/null && [ -n "$(list_avds)" ]; then
+    say ""
+    note "An Android emulator is available. ./scripts/review.sh up --android"
+  fi
+}
+
+# Boot an Android emulator and launch the app in it. Opt-in.
+boot_emulator() {
   local bin avd
+  say ""
   # A device already attached is reused. Without this check a second
-  # `up` boots a duplicate emulator against the same AVD, which fails
+  # run boots a duplicate emulator against the same AVD, which fails
   # to lock the disk image and leaves two half-working devices.
   if adb_ready; then
     ok "a device is already attached"
@@ -227,19 +298,22 @@ open_app() {
     ( nohup "$bin" -avd "$avd" -no-snapshot-save >"$LOGS/emulator.log" 2>&1 & )
     printf '       waiting for the device '
     for _ in $(seq 1 90); do
-      if adb_ready; then printf '\n'; ok "emulator is up"; break; fi
+      if adb_ready; then printf '
+'; ok "emulator is up"; break; fi
       printf '.'; sleep 2
     done
-    printf '\n'
+    printf '
+'
     if adb_ready; then
       ( cd "$MOBILE" && npx expo start --android --non-interactive >>"$LOGS/metro.log" 2>&1 & )
       ok "app launching in the emulator"
       note "Expo Go is installed into it on first run; give it a moment."
       return 0
     fi
-    bad "the emulator did not finish booting - falling back to the QR code"
+    bad "the emulator did not finish booting - the QR above still works"
+  else
+    bad "no Android SDK or no virtual device - the QR above still works"
   fi
-  show_qr
 }
 
 adb_ready() {
@@ -269,16 +343,27 @@ show_qr() {
   host="$(lan_address)"
   say "  Scan this with Expo Go on your phone:"
   say ""
-  # Through the library's API rather than its CLI: the command-line
-  # form prints nothing here, and a silent QR is worse than none
-  # because the URL below then looks like the only option.
+  # **Through the library's API, and the failure is reported.**
+  #
+  # The CLI form prints nothing on this platform, and the first
+  # version swallowed every error - so a missing dependency looked
+  # identical to a QR that simply had not rendered, and the URL
+  # underneath read as the only option rather than as the fallback.
+  # `qrcode-terminal` is a declared devDependency now for the same
+  # reason: it resolved only as a transitive Expo dependency, which
+  # is a QR that disappears on an unrelated upgrade.
+  local drawn=0
   if command -v node >/dev/null 2>&1; then
-    ( cd "$MOBILE" && node -e "
-      try {
-        require('qrcode-terminal').generate(process.argv[1], {small: true},
-          (code) => console.log(code));
-      } catch (e) { /* printed as a URL below regardless */ }
-    " "exp://$host:8081" 2>/dev/null ) || true
+    if ( cd "$REPO" && node -e "
+      require('qrcode-terminal').generate(process.argv[1], {small: true},
+        (code) => console.log(code));
+    " "exp://$host:8081" ); then
+      drawn=1
+    fi
+  fi
+  if [ "$drawn" -eq 0 ]; then
+    bad "could not draw the QR code"
+    note "Run 'npm install' at the repo root, or type the URL below into Expo Go."
   fi
   say ""
   say "    exp://$host:8081"
@@ -310,7 +395,7 @@ up() {
   say "  Keycloak   http://$host:55080"
   say "  Metro      http://$host:8081"
   say ""
-  say "  Sign in with  demo.review@luxish.local  /  ReviewMe!2026"
+  say "  Sign in with   me@luxish.local   /   admin123"
   say ""
   note "Logs in .devlogs/   Stop everything with ./scripts/review.sh stop"
 }
@@ -322,9 +407,18 @@ down() {
   say "stopped"
 }
 
+# `--android` additionally boots an emulator. The QR is drawn either
+# way, because the phone is the point.
+WANT_EMULATOR=0
+for arg in "$@"; do
+  case "$arg" in
+    --android|--emulator) WANT_EMULATOR=1 ;;
+  esac
+done
+
 case "${1:-up}" in
   up|start) up ;;
   stop|down) down ;;
   doctor) doctor ;;
-  *) say "usage: $0 [up|stop|doctor]"; exit 2 ;;
+  *) say "usage: $0 [up|stop|doctor] [--android]"; exit 2 ;;
 esac

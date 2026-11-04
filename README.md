@@ -10,39 +10,102 @@ small amount of infrastructure, in one repository.
 
 ---
 
-## Run it
+## Run it on your phone
+
+Three commands, then scan a QR code. The whole stack runs on your
+machine; the app runs on your handset.
 
 ```bash
+git clone https://github.com/lewis-hue/luxish.git
+cd luxish
+npm install
 ./scripts/review.sh
 ```
 
-That brings up the data stores, the API, every worker, the scheduler
-and Metro, seeds a demo world if the database is empty, and then
-opens the app — in an Android emulator if this machine has one, and
-otherwise as a QR code to scan with Expo Go on a phone.
+The script brings up Postgres, Redis, Keycloak, the API, four
+workers, the scheduler and Metro, seeds a demo world if the database
+is empty, and then prints a QR code.
 
-```bash
-./scripts/review.sh doctor   # check the machine, start nothing
-./scripts/review.sh stop     # shut down everything it started
+**On your phone**, install Expo Go:
+
+- iPhone — [apps.apple.com/app/expo-go](https://apps.apple.com/app/expo-go)
+- Android — [play.google.com/store/apps/details?id=host.exp.exponent](https://play.google.com/store/apps/details?id=host.exp.exponent)
+
+Open it and scan the QR code from your terminal. On iPhone you can
+also scan with the Camera app. The bundle takes a few seconds to
+build the first time.
+
+**Sign in with:**
+
+```
+me@luxish.local
+admin123
 ```
 
-Sign in with `demo.review@luxish.local` / `ReviewMe!2026`.
+That account is created by the Keycloak realm import, so it exists
+on a fresh clone before you run anything.
 
-**On iOS.** Apple's simulator ships inside Xcode and runs only on
-macOS, so there is no local iOS simulator on Windows or Linux — the
-script says so rather than pretending. Scanning the QR with Expo Go
-on a real iPhone gives you the genuine article, and is a better
-review than any simulator.
+> **Your phone and your computer must be on the same Wi-Fi.** The QR
+> points at your machine's LAN address. A corporate or guest network
+> that isolates clients will block it; a phone hotspot that the
+> laptop joins works fine.
 
-### What you need first
+When you are done:
 
-- Docker, running
-- Node 24.3+ or 26 (not an odd-numbered release — Expo SDK 58 excludes them)
-- Python 3.12 with a virtualenv at `services/api/.venv`
-- `npm install` at the repository root
+```bash
+./scripts/review.sh stop
+```
 
-`./scripts/review.sh doctor` checks all of it and tells you what is
-missing.
+### What you need installed first
+
+| | Why |
+|---|---|
+| **Docker Desktop**, running | Postgres, Redis and Keycloak are containers |
+| **Node 20+** | The Expo app and the typed API client |
+| **Python 3.12** | The API and the workers |
+
+Check the machine without starting anything:
+
+```bash
+./scripts/review.sh doctor
+```
+
+It reports what is missing and how to fix it, and refuses to start a
+half-working stack rather than leaving you to diagnose one.
+
+**First run needs a Python virtualenv** for the API. The doctor says
+so if it is absent:
+
+```bash
+python -m venv services/api/.venv
+services/api/.venv/bin/pip install -r services/api/requirements.txt   # Windows: services/api/.venv/Scripts/pip
+```
+
+### If you would rather use an emulator
+
+```bash
+./scripts/review.sh up --android
+```
+
+Boots an Android emulator alongside the QR, if the Android SDK and a
+virtual device are installed.
+
+There is **no iOS simulator option, and that is a platform fact
+rather than an omission.** Apple's simulator ships only inside Xcode
+and runs only on macOS. On Windows or Linux the honest choices are a
+real iPhone with Expo Go, an Android emulator, or a hosted Mac.
+
+### When something is wrong
+
+| Symptom | Cause |
+|---|---|
+| QR does not render | `npm install` at the repo root, then run the script again |
+| Expo Go cannot reach the URL | Phone and laptop are on different networks |
+| App opens but is empty | The seed check failed. See `.devlogs/seed.log` |
+| Sign-in page never loads | Keycloak is still starting. Wait, then reload |
+| A fix you just made has not appeared | Workers cache their code: `./scripts/dev-stack.sh restart` |
+
+Every service logs to `.devlogs/`. Start there.
 
 ---
 
@@ -76,31 +139,55 @@ own clothes on a figure, or the gaps and where to buy them.
 app avoids trusting a caption. A hashtag is a claim typed once by
 one person; what the vision model sees in the photograph is not.
 
+**Packshots** (`app/workers/packshot.py`) turn a phone photograph of
+a garment into a catalogue shot. Background removal is segmentation,
+so on a dark garment it returns a silhouette; this re-stages the
+owner's own photograph the way a shop photographs stock, and the
+result is reused by the wardrobe tile, the try-on and the stylist.
+
+**Spending deliberately.** Model work is queued, never run in a
+request handler, and the expensive version is opt-in. The stylist
+composites a look from cut-outs the device already holds — instant
+and free — and only buys a photoreal render when somebody asks to
+see one. Pictures of garments nobody owns are drawn once per phrase
+and shared by every account.
+
 ---
 
 ## Tests
 
 ```bash
-cd services/api && python -m pytest tests/ -q     # 1515 tests
-cd apps/mobile  && npx jest                        # 742 tests
-cd apps/mobile  && npx tsc --noEmit && npx expo lint
+npm test                  # the Expo app  — 778 tests
+npm run api:test          # the API       — 1684 tests
+npm run typecheck
+npm run lint
 ```
+
+Both suites run offline. No test calls a paid model or the open web;
+providers are stubbed at the seam so a suite run costs nothing and
+is deterministic.
 
 ---
 
 ## Notes for a reviewer
 
-**Credentials.** Nothing real is committed. `.env.example` files show
-the shape; the app runs locally without an AI provider key, with the
-model-backed features reporting that they are unavailable rather than
-failing quietly.
+**The demo world is seeded, not faked.** 633 published pins across
+22 accounts, with real photographs, captions, tags and a follow
+graph, posted over three weeks so trending has a baseline to measure
+against. Discover, Search and the boards are populated from the
+first launch.
 
-**Seed imagery.** `assets/seed-photos/` holds reference photographs
-used to make the demo feel real. They are for demonstration and are
-not licensed for production use.
+**The Community tab starts empty until you sign in.** The API keys
+an account on the identity provider's subject and deliberately
+refuses to adopt an existing row by email, so your account cannot be
+created before you first sign in. Run `./scripts/review.sh` again
+afterwards and it will wire you into the follow graph.
 
-**What is not finished** is listed honestly in `docs/ROADMAP.md`,
-which marks every capability as implemented, planned or blocked, and
-says what each blocked one is waiting on. A few features are gated on
-third-party credentials this project does not have; the UI says so
-rather than showing an empty screen.
+**AI features need a key.** `LUXISH_META_API_KEY` in
+`services/api/.env` enables the stylist, try-on, packshots and
+visual search. Without it those features report that they are
+unavailable rather than failing silently — everything else works.
+
+**What is not finished** is listed in `docs/ROADMAP.md`, and the
+capacity model in `docs/performance/capacity.md` says plainly which
+of its numbers are measured and which are arithmetic.

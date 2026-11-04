@@ -134,5 +134,25 @@
     }
   ],
   "loginTheme": "luxish",
-  "accountTheme": "keycloak.v2"
+  "accountTheme": "keycloak.v2",
+  "users": [
+    {
+      "username": "me@luxish.local",
+      "email": "me@luxish.local",
+      "emailVerified": true,
+      "enabled": true,
+      "firstName": "Alex",
+      "lastName": "Rivera",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "admin123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "default-roles-luxish"
+      ]
+    }
+  ]
 }

@@ -86,6 +86,28 @@ lan_ip() {
 #
 # Prints nothing and restarts nothing when the value is already right,
 # so the common case is silent and free.
+# Create the three `.env` files on a clean clone.
+#
+# **They are gitignored, and before this nothing created them.** A
+# reviewer who cloned the repository got no env files at all, so the
+# API raised on a missing `keycloak_issuer` before it could serve a
+# single request - and `pin_host` below skips a file that does not
+# exist, so it could not help either. "Clone and run" was not true.
+#
+# Copied from the committed `.env.example` files, never overwritten:
+# somebody who has put a real model key in theirs must not lose it to
+# a restart.
+seed_env_files() {
+  local pin file
+  for pin in "${HOST_PINS[@]}"; do
+    file="$REPO/${pin%%|*}"
+    if [ ! -f "$file" ] && [ -f "$file.example" ]; then
+      cp "$file.example" "$file"
+      say "created ${pin%%|*} from its example"
+    fi
+  done
+}
+
 pin_host() {
   local origin="$1"
   local changed=0
@@ -209,6 +231,7 @@ keycloak_host() {
 }
 
 start() {
+  seed_env_files
   HOST_ROTATED=0
   if [ ! -x "$PY" ]; then
     say "No virtualenv at $API_DIR/.venv. Create it before running this."
