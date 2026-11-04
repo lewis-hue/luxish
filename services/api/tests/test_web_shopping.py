@@ -268,3 +268,51 @@ def test_a_catalogue_row_still_serialises_the_way_it_did() -> None:
     assert out["retailer"] == "Zara"
     assert out["url"] == "https://zara.com/overcoat"
     assert out["product_id"] == "cat-1"
+
+
+# --------------------------------------------------------------------------- #
+# Articles are not shops
+#
+# `NOT_SHOPS` blocks the magazines by name, and a real search still came
+# back led by "How To Wear Brown Belt Like A Pro", "25 Outfit Ideas On
+# How to Wear a Brown Bag" and "How to Style a Pendant Necklace with a
+# Collared Shirt" - from sites nobody would think to name. Under "where
+# to get them" an article about the garment is a dead end, and the title
+# says what the domain cannot.
+# --------------------------------------------------------------------------- #
+def test_an_article_about_the_garment_is_not_a_shop() -> None:
+    from app.domain.web_shopping import looks_like_a_guide
+
+    assert looks_like_a_guide("How To Wear Brown Belt Like A Pro")
+    assert looks_like_a_guide("25 Outfit Ideas On How to Wear a Brown Bag")
+    assert looks_like_a_guide("How to Style a Pendant Necklace")
+    assert looks_like_a_guide("18K Gold Necklace Styling Ideas")
+
+
+def test_a_shop_listing_is_kept() -> None:
+    """**The filter has to be narrow.**
+
+    A shop's own product page often names the garment the same way an
+    article does, and losing those would leave the section empty.
+    """
+    from app.domain.web_shopping import looks_like_a_guide
+
+    for title in (
+        "Amazon.com: Brown Top Handle Purse",
+        "Brown Top Handle Bag - Etsy",
+        "White Pointy Toe Heels | Memory Foam Insole",
+        "Suede Trucker Jacket - Thursday Boots",
+        "Men's Belts in Kenya | Prices & Deals | Jumia KE",
+    ):
+        assert not looks_like_a_guide(title), title
+
+
+def test_a_guide_does_not_take_a_real_shop_s_place() -> None:
+    """**Why it is dropped rather than ranked down.**
+
+    One entry per seller and a cap of `MOST_LINKS` means a guide in the
+    list costs a shop its slot, not just its position.
+    """
+    page = result("https://stylenotes.com/x", "How to Wear a Necklace")
+    page += result("https://mejuri.com/p", "Gold Pendant Necklace")
+    assert [s.seller for s in read_results(page)] == ["mejuri.com"]

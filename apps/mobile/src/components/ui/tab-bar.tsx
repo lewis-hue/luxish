@@ -17,6 +17,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { ProfileTabGlyph } from '@/components/ui/profile-tab-glyph';
 import { Colors, Radius, Spacing, TapTarget } from '@/constants/theme';
 import { useAttention } from '@/features/navigation/attention-context';
 import { useReducedMotion, useScheme } from '@/hooks/use-theme';
@@ -432,6 +433,8 @@ export function FloatingTabBar() {
           key={destination.name}
           label={destination.label}
           icon={destination.icon}
+          // The one chip that is about a person rather than a place.
+          isYou={destination.name === 'profile'}
           isFocused={selected === destination.href}
           onPress={() => {
             // `navigate` rather than `push`: from a pin, this returns
@@ -467,11 +470,14 @@ function TabChip({
   label,
   icon,
   isFocused,
+  isYou,
   onPress,
 }: {
   label: string;
   icon: SymbolViewProps['name'];
   isFocused: boolean;
+  /** Draw the signed-in person instead of the symbol. */
+  isYou?: boolean;
   onPress: () => void;
 }) {
   const scheme = useScheme();
@@ -516,11 +522,19 @@ function TabChip({
           }}
         />
       ) : null}
-      <SymbolView
-        name={icon}
-        size={isFocused ? 24 : 22}
-        tintColor={isFocused ? colors.accentText : colors.textSecondary}
-      />
+      {isYou ? (
+        <ProfileTabGlyph
+          focused={isFocused}
+          tint={isFocused ? colors.accentText : colors.textSecondary}
+          icon={icon}
+        />
+      ) : (
+        <SymbolView
+          name={icon}
+          size={isFocused ? 24 : 22}
+          tintColor={isFocused ? colors.accentText : colors.textSecondary}
+        />
+      )}
     </Pressable>
   );
 }

@@ -416,3 +416,72 @@ async def test_the_avatar_needs_a_session(client: httpx.AsyncClient) -> None:
     assert (
         await client.put("/v1/avatar/appearance", json={"presentation": "feminine"})
     ).status_code == 401
+
+
+# --------------------------------------------------------------------------- #
+# The outfit sentence an edit can actually follow
+#
+# A pin of toe rings and anklets was read as "Bare feet with silver
+# and gold toe rings... around one ankle", and that went into an image
+# edit which also says "keep the same person, the same body". The
+# vendor refused it: 400, "the response was filtered due to the prompt
+# triggering our content management policy", four times in a row. The
+# reading was accurate about the photograph and useless as an
+# instruction - nobody wears bare feet.
+# --------------------------------------------------------------------------- #
+def test_a_body_part_is_not_something_to_wear() -> None:
+    from app.workers.avatar import wearable_words
+
+    said = wearable_words(
+        "Bare feet with silver toe rings and chain bracelets around one ankle."
+    )
+    assert "bare feet" not in said.lower()
+    assert "toe rings" in said, "the jewellery is the point and must survive"
+
+
+def test_the_refused_prompt_no_longer_contains_the_phrase() -> None:
+    """The whole prompt, as it goes to the vendor."""
+    from app.workers.avatar import try_on_prompt
+
+    sent = try_on_prompt("Bare feet with silver toe rings.")
+    assert "bare feet" not in sent.lower()
+
+
+def test_an_accessory_on_its_own_is_given_something_to_sit_on() -> None:
+    """**A necklace alone is not an outfit.**
+
+    A pin can legitimately be one piece - a scarf, a pair of socks, a
+    single chain. Asking an edit to dress a figure in only that
+    leaves it unchanged or undressed, and the second is the same
+    refusal arriving a different way.
+    """
+    from app.workers.avatar import BASE_OUTFIT, wearable_words
+
+    for only in ("a gold chain necklace", "white sneakers", "a silk scarf"):
+        said = wearable_words(only)
+        assert BASE_OUTFIT in said, f"{only!r} was left with nothing to sit on"
+        assert only.split()[-1] in said, "the piece itself must survive"
+
+
+def test_a_full_outfit_is_left_exactly_as_it_was() -> None:
+    """Nothing is added to something already wearable - a base outfit
+    under a complete look would be two outfits."""
+    from app.workers.avatar import BASE_OUTFIT, wearable_words
+
+    full = "oversized teal t-shirt, black baggy cargo pants, white sneakers"
+    assert wearable_words(full) == full
+    assert BASE_OUTFIT not in wearable_words(full)
+
+
+def test_a_garment_whose_name_contains_a_body_word_survives() -> None:
+    """Matched on the phrase, not the word: a shoulder bag keeps its
+    bag and barefoot sandals keep their sandals."""
+    from app.workers.avatar import wearable_words
+
+    assert "shoulder bag" in wearable_words("a tan shoulder bag")
+
+
+def test_an_empty_description_still_dresses_the_figure() -> None:
+    from app.workers.avatar import BASE_OUTFIT, wearable_words
+
+    assert wearable_words("Bare feet.") == BASE_OUTFIT

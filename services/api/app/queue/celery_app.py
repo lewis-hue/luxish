@@ -67,6 +67,12 @@ QUEUE_BY_PREFIX: dict[str, str] = {
     # seconds, so the same queue. Without this it fell through to `default`
     # and sat behind the sweeper.
     "garment.studio": QUEUE_AI,
+    # The wardrobe's own packshot is the same edit against the same
+    # model, just queued by the intake pipeline instead of asked for
+    # on a screen. Same call, same queue.
+    "garment.packshot": QUEUE_AI,
+    # Drawing a garment from its words is a generation, same model.
+    "garment.piece_packshot": QUEUE_AI,
     "post.screen": QUEUE_AI,
     # Rotating and padding a posted picture: pixels and object
     # storage, no model call, so it belongs with the other media

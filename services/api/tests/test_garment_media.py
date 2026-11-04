@@ -75,6 +75,7 @@ from app.workers.categorise import (
     remove_background,
 )
 from app.workers.outfit import DETECT_OUTFIT_JOB_KIND
+from app.workers.packshot import PACKSHOT_JOB_KIND
 
 
 @pytest.fixture(autouse=True)
@@ -1047,15 +1048,21 @@ async def test_a_bulk_create_queues_the_pipeline_and_never_runs_it_inline(
         # or a worn outfit, and the single-garment jobs run only when it says
         # the former. Ordering is asserted, not just membership, because the
         # two later jobs would overwrite a fan-out's work if they ran first.
+        # The packshot is last for the same reason, one step
+        # further: it is a catalogue shot of whatever this
+        # photograph turns out to hold, so it has to wait for the
+        # two jobs that decide that.
         assert outcome.jobs == (
             DETECT_OUTFIT_JOB_KIND,
             CATEGORISE_JOB_KIND,
             BACKGROUND_REMOVAL_JOB_KIND,
+            PACKSHOT_JOB_KIND,
         )
 
     jobs = (await db.scalars(sa.select(Job))).all()
-    # Three garments, three jobs each: detect, categorise, remove background.
-    assert len(jobs) == 9
+    # Three garments, four jobs each: detect, categorise, remove
+    # background, packshot.
+    assert len(jobs) == 12
     assert {job.state for job in jobs} == {"queued"}
 
 
@@ -1111,7 +1118,7 @@ async def test_re_sending_a_batch_returns_the_same_records_and_no_new_jobs(
     assert second[0].jobs == ()
     # Still one garment's worth of jobs: the idempotency key is derived from
     # the garment, so re-sending the batch queues nothing and spends nothing.
-    assert len((await db.scalars(sa.select(Job))).all()) == 3
+    assert len((await db.scalars(sa.select(Job))).all()) == 4
     assert len((await db.scalars(sa.select(Garment))).all()) == 1
 
 
@@ -1231,6 +1238,7 @@ async def test_bulk_create_over_http_reports_each_item_and_still_returns_200(
         DETECT_OUTFIT_JOB_KIND,
         CATEGORISE_JOB_KIND,
         BACKGROUND_REMOVAL_JOB_KIND,
+        PACKSHOT_JOB_KIND,
     ]
 
 

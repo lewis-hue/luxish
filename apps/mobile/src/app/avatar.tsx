@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import * as Linking from 'expo-linking';
 import { SymbolView } from 'expo-symbols';
 import { Pressable, ScrollView, View } from 'react-native';
+import { Easing } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
@@ -40,7 +41,6 @@ import {
   Radius,
   Spacing,
   TapTarget,
-  labelType,
 } from '@/constants/theme';
 import { useAuth } from '@/features/auth/session';
 import { webSearchUrlForDescription } from '@/features/discover/visual-search';
@@ -134,7 +134,6 @@ const SKIN_TONE = [
 export default function AvatarScreen() {
   const colors = Colors[useScheme()];
   const insets = useSafeAreaInsets();
-  const refresh = usePullToRefresh();
   const auth = useAuth();
   const signedIn = auth.status === 'signedIn';
 
@@ -193,15 +192,37 @@ export default function AvatarScreen() {
   );
   const wearing = useTryOnFit();
 
+  // **Pulling down retries a failure, and does nothing else.**
+  //
+  // Asked for directly: a failed drawing should be recoverable with
+  // the gesture people already try, and a successful one must not be
+  // redrawn by the same gesture - that would be a billed call to be
+  // handed back a picture already on the screen.
+  //
+  // So the decision is made from the newest render's state, which is
+  // the only thing that distinguishes the two cases, and the ordinary
+  // refetch happens either way.
+  const refresh = usePullToRefresh(() => {
+    if (!failed) return;
+    if (fitParam) return wearing.mutateAsync(fitParam).catch(() => {});
+    return create.mutateAsync().catch(() => {});
+  });
+
   // The newest finished picture, and whether anything is still being drawn.
   // Both come from the render list rather than from mutation state: the work
   // happens on a worker, so a screen reopened mid-draw has to find that out
   // from the server rather than from a hook that has forgotten.
   const newest = (renders.data ?? []).find((render) => render.state === 'ready');
   const drawing = (renders.data ?? []).find((render) => isWorking(render.state));
-  const lastFailure = (renders.data ?? []).find(
-    (render) => render.state === 'failed',
-  );
+  // **Only the most recent attempt counts as "it failed".**
+  //
+  // `find(state === 'failed')` matched any failure anywhere in the
+  // list, so one bad draw weeks ago sat under a picture that worked,
+  // for ever. The list is newest-first, so the head is the last thing
+  // this person actually asked for - and that is the only attempt a
+  // retry would be retrying.
+  const latest = (renders.data ?? [])[0];
+  const failed = latest?.state === 'failed';
 
   // Unsaved answers only, laid over whatever the server holds. Copying the
   // server value into state would need an effect to seed it, and that effect
@@ -366,14 +387,6 @@ export default function AvatarScreen() {
         </MotionPressable>
       ) : null}
 
-      {problem ? (
-        <ThemedText
-          selectable
-          style={{ ...labelType(FontSize.subhead, 400), color: colors.danger }}>
-          {problem}
-        </ThemedText>
-      ) : null}
-
       {/* What to do with it, once there is an it.
 
           Save, Share and Post, the same row the studio offers under a
@@ -391,30 +404,32 @@ export default function AvatarScreen() {
       {/* A failure the worker recorded, which outlives the request that
           asked for it: a screen reopened after a failed draw has to find
           that out from the server. */}
-      {!problem && lastFailure?.error ? (
-        <View
-          style={{
-            padding: Spacing.three,
-            gap: Spacing.half,
-            borderRadius: Radius.md,
-            borderCurve: 'continuous',
-            borderWidth: 1,
-            borderColor: colors.danger,
-          }}>
-          <ThemedText type="label" style={{ color: colors.danger }}>
-            Last one did not work
-          </ThemedText>
-          <ThemedText type="small" themeColor="textSecondary">
-            {lastFailure.error}
-          </ThemedText>
-        </View>
-      ) : null}
+      {/* **One notice, and never the vendor's words.**
 
-      {problem ? (
+          This screen used to print the failure exactly as stored:
+          "Error code: 400 - The response was filtered due to the
+          prompt triggering our content management policy", under a
+          picture of a hoodie and jeans. It is not actionable, it is
+          not about them, and it reads as an accusation about what
+          they asked for. The detail still exists - on the row and in
+          the run ledger, which is where it is useful - and the
+          server now sends a sentence this app wrote
+          (`avatar_renders.public_reason`).
+
+          The picture above is untouched by a failure: `showing`
+          falls through to the last one that worked, so a failed
+          attempt costs the attempt and not the avatar.
+
+          And there is something to do about it. Pulling down retries,
+          which is the gesture already on this screen; the button says
+          so and does the same thing, because a notice that names a
+          gesture and offers no control is a notice half the people
+          reading it cannot act on. */}
+      {failed || problem ? (
         <View
           style={{
             padding: Spacing.three,
-            gap: Spacing.half,
+            gap: Spacing.one,
             borderRadius: Radius.md,
             borderCurve: 'continuous',
             borderWidth: 1,
@@ -424,11 +439,29 @@ export default function AvatarScreen() {
               is what WCAG 1.4.1 asks for and what ADR-019 already settled
               for every other state in this app. */}
           <ThemedText type="label" style={{ color: colors.danger }}>
-            Did not work
+            That did not work
           </ThemedText>
           <ThemedText type="small" themeColor="textSecondary">
-            {problem}
+            {problem ?? latest?.error ?? 'Pull down to try again.'}
           </ThemedText>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Try that again"
+            accessibilityState={{ busy: refresh.refreshing }}
+            disabled={refresh.refreshing}
+            onPress={() => {
+              setProblem(null);
+              void refresh.onRefresh();
+            }}
+            style={({ pressed }) => ({
+              alignSelf: 'flex-start',
+              paddingVertical: Spacing.one,
+              opacity: pressed || refresh.refreshing ? 0.6 : 1,
+            })}>
+            <ThemedText type="smallBold" style={{ color: colors.accent }}>
+              {refresh.refreshing ? 'Trying again' : 'Try again'}
+            </ThemedText>
+          </Pressable>
         </View>
       ) : null}
 
@@ -850,7 +883,15 @@ function Drawing() {
           sits on the subject.
 
           Three sides of a ring rather than a full circle, because a
-          complete ring turning looks identical at every angle. */}
+          complete ring turning looks identical at every angle.
+
+          **It has to actually turn, one way, without stopping.** It
+          did neither. Moti defaults `repeatReverse` to true, so the
+          ring wound to 360 and then unwound back to 0 - rocking
+          rather than spinning - and the default in-out easing put a
+          stall at both ends of every lap. Clockwise and linear is
+          the whole point of a spinner: constant speed is what reads
+          as "still working" rather than as something stuck. */}
       <View
         // The centring wrapper. `position: absolute` with no offsets
         // pins to a corner, and this container aligns its children
@@ -866,7 +907,15 @@ function Drawing() {
         <MotiView
           from={{ rotate: '0deg' }}
           animate={{ rotate: '360deg' }}
-          transition={timing({ duration: 1100, loop: true, repeat: -1 })}
+          transition={timing({
+            duration: 1100,
+            loop: true,
+            repeat: -1,
+            // See the note above: without these two it rocks, and
+            // hitches once a lap.
+            repeatReverse: false,
+            easing: Easing.linear,
+          })}
           style={{
             width: 44,
             height: 44,

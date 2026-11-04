@@ -52,7 +52,11 @@ class Asked:
     missing: tuple[str, ...] = ()
     #: Things to buy, when they own nothing that works.
     buy: list[Any] = field(default_factory=list)
-    #: The queued avatar, if one was started.
+    #: A picture per named gap, so the look can be shown even when
+    #: they own none of it. Drawn once per phrase and shared by
+    #: everybody; see `workers.piece_packshot`.
+    pieces: list[Any] = field(default_factory=list)
+    #: A photorealistic render, when one was explicitly asked for.
     render_id: uuid.UUID | None = None
 
 
@@ -176,7 +180,10 @@ async def stream_answer(
     - `("token", str)` repeatedly, as the sentence is written
     - `("verdict", Asked)` once the structured half has arrived
     - `("shopping", list)` when there is nothing they own that works
-    - `("render", uuid)` when an avatar has been queued
+    - `("pieces", list)` a picture per gap, so a look they own none
+      of can still be shown rather than only described
+    - `("render", uuid)` only when they asked to *see* it, not on
+      every answer that happens to name clothes
     - `("done", Asked)` last, always
 
     A generator rather than a return value because the first token
@@ -189,6 +196,7 @@ async def stream_answer(
         build_request,
         parse,
         plan_from,
+        wants_a_picture,
         wardrobe_lines,
     )
 
@@ -256,10 +264,43 @@ async def stream_answer(
         )
         yield "shopping", out.buy
 
-    render_id = await _draw(db, user_id=user_id, plan=plan, post_id=post_id)
-    if render_id is not None:
-        out.render_id = render_id
-        yield "render", render_id
+        # **And a picture of each one, so the answer can be seen.**
+        #
+        # The reported failure: told they own none of it, linked
+        # three shops, and shown nothing - while every reply around
+        # it carries a figure wearing the look. An answer that only
+        # says no is not an answer somebody can act on.
+        #
+        # These are drawn once per phrase and shared by every
+        # account, so the second person to wonder about white
+        # sneakers waits for a row lookup. That is what makes
+        # showing it affordable; a render per person per question
+        # was not, which is why the one above this was removed.
+        out.pieces = await _picture_gaps(
+            db, user_id=user_id, wants=plan.look_for
+        )
+        if out.pieces:
+            yield "pieces", out.pieces
+
+    # **A photoreal render only when somebody asked to see one.**
+    #
+    # This used to run on every answer that named clothes: a billed
+    # image call of fifteen to thirty seconds, queued beside a
+    # composite that draws the same look instantly and for nothing
+    # and is wearing the *actual* garments rather than a model's
+    # impression of a description of them. Slower, dearer and less
+    # accurate than the thing already on the screen next to it.
+    #
+    # It is not gone, because "generate a mannequin wearing the
+    # outfits above" is a real request and the composite is not an
+    # answer to it. It is gated: `wants_a_picture` reads the question
+    # for somebody asking to be *shown* rather than told, so the
+    # spend follows an intention instead of a side effect.
+    if wants_a_picture(question):
+        render_id = await _draw(db, user_id=user_id, plan=plan, post_id=post_id)
+        if render_id is not None:
+            out.render_id = render_id
+            yield "render", render_id
 
     yield "done", out
 
@@ -346,27 +387,56 @@ async def _shop_for(
     return found
 
 
+async def _picture_gaps(
+    db: Any, *, user_id: uuid.UUID, wants: Any
+) -> list[Any]:
+    """A drawable picture for each gap, as the client composes them.
+
+    Failure-tolerant on purpose. This hangs off an answer that has
+    already arrived and already carries its shops; a drawing service
+    that is down must cost the pictures and nothing else.
+    """
+    from app.workers.piece_packshot import ensure
+
+    try:
+        rows = await ensure(db, phrases=list(wants), user_id=user_id)
+    except Exception as caught:  # noqa: BLE001
+        logger.info("could not picture the gaps: %s", caught)
+        return []
+    return [
+        {
+            "phrase": row.phrase,
+            "slot": row.slot,
+            "state": row.state,
+            "asset_id": str(row.media_asset_id) if row.media_asset_id else None,
+        }
+        for row in rows
+    ]
+
+
 async def _draw(
     db: Any, *, user_id: uuid.UUID, plan: Any, post_id: uuid.UUID | None
 ) -> uuid.UUID | None:
-    """Queue a picture, but only when there is something to wear.
+    """Queue a picture, for somebody who asked to see one.
 
-    **`plan.renders` is the gate, and it was not consulted.** The
-    plan had already worked out that a verdict owning nothing should
-    not be drawn, and this function went ahead and drew it anyway as
-    long as the sentence named any garment at all - so somebody told
-    "you have none of this" still waited half a minute for a billed
-    picture of clothes they would have to go and buy. Reported twice,
-    and both times the decision was already made correctly one layer
-    up and then ignored here.
+    **Two gates, and both were learned the hard way.**
+
+    `wants_a_picture` is upstream: this used to run on every answer
+    that named clothes, so an ordinary "does this go with that" cost
+    a billed render nobody had asked for and nobody waited for.
+
+    `plan.renders` is the one here, and it went unconsulted for two
+    reported releases. The plan had already worked out that a verdict
+    owning nothing should not be drawn, and this function drew it
+    anyway as long as the sentence named any garment - so somebody
+    told "you have none of this" waited half a minute for a picture
+    of clothes they would have to go and buy.
 
     Returns None rather than raising when there is no avatar to dress
     yet: being told "you own this" is useful on its own, and a person
-    who has not made an avatar should not get an error instead of an
-    answer.
+    who has not made an avatar should get an answer, not an error.
     """
     from app.domain import avatar_renders
-    from app.domain.avatar_renders import TRY_ON_JOB_KIND  # noqa: F401
 
     if not plan.renders:
         return None
@@ -401,7 +471,6 @@ def _outfit_words(plan: Any) -> str:
         # second source of truth about what a garment is called.
         return ", ".join(str(g) for g in plan.wear)
     return ", ".join(plan.look_for)
-
 
 __all__ = [
     "MOST_GARMENTS",

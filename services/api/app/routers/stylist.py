@@ -220,6 +220,7 @@ async def ask(payload: AskCreate, db: SessionDep, ctx: AuthDep) -> StreamingResp
         {"event": "token",    "text": "Yes, you "}
         {"event": "verdict",  "has_match": true, "using": [...]}
         {"event": "shopping", "items": [...]}
+        {"event": "pieces",   "items": [{"phrase": ..., "slot": ...}]}
         {"event": "render",   "render_id": "..."}
         {"event": "done"}
 
@@ -261,7 +262,15 @@ async def ask(payload: AskCreate, db: SessionDep, ctx: AuthDep) -> StreamingResp
                         "items": [_offer(m) for m in body],
                     }
                 elif name == "render":
+                    # Only when they asked to be shown it; see
+                    # `stylist_answer.wants_a_picture`.
                     line = {"event": "render", "render_id": str(body)}
+                elif name == "pieces":
+                    # A picture per gap, so the look can be shown even
+                    # when they own none of it. Drawn once per phrase
+                    # and shared by every account, so this is usually
+                    # a row lookup rather than a wait.
+                    line = {"event": "pieces", "items": list(body)}
                 else:
                     line = {"event": "done"}
                 yield f"data: {_json.dumps(line)}\n\n"

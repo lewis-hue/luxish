@@ -137,16 +137,29 @@ def fit_to_shell(
             ):
                 return image
 
-            # A quarter turn first, where one is wanted. Everything
-            # after this works on the turned frame, so a panorama
-            # that is still too tall once upright gets widened as
-            # any tall picture would.
-            if portrait and shell_ratio(width, height) > 1:
-                frame = frame.transpose(Image.Transpose.ROTATE_270)
-                width, height = frame.size
-                if not needs_fitting(width, height, portrait=portrait):
-                    return _encoded(frame, content_type)
-
+            # **No quarter turn. Reversed on the product owner's
+            # report (2026-11-04), having been added on their
+            # instruction two days earlier.**
+            #
+            # The trade was stated plainly when it went in - "the
+            # contents turn with the frame, a flat-lay ends up on
+            # its side" - and seeing it decided it: a wardrobe tile
+            # and a composite figure both showed a sweatshirt lying
+            # diagonally across the frame, which reads as the app
+            # being broken rather than as a framing choice.
+            #
+            # An upright *frame* is worth having; an upright frame
+            # with the garment on its side is not, because the
+            # composite lays that picture onto a figure's torso and
+            # a sideways top is simply wrong there. Padding to
+            # `PORTRAIT_TARGET` below gives both, and 3:4 is why the
+            # rotation was arguable in the first place: it asks for
+            # about half the ground 9:16 would.
+            #
+            # The deeper fix is upstream and already in: the packshot
+            # prompt asks for the garment squared to the camera, so
+            # new pictures arrive upright and never reach this
+            # branch at all.
             ratio = shell_ratio(width, height)
             if ratio < TALLEST:
                 # Too tall. Widen it.

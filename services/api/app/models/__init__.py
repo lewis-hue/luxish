@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from app.models.ai_run import AIRun
 from app.models.account_export import AccountExport
+from app.models.piece_packshot import PiecePackshot
 from app.models.post_vision import PostVisionRow
 from app.models.cohort_inspiration import CohortInspiration
 from app.models.avatar_render import AvatarRender
@@ -57,6 +58,7 @@ from app.models.user_cohort import UserCohort
 __all__ = [
     "AIRun",
     "AccountExport",
+    "PiecePackshot",
     "PostVisionRow",
     "AvatarRender",
     "BrandStory",

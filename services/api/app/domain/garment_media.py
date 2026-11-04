@@ -866,6 +866,33 @@ async def bulk_create_garments(
 CATEGORISE_HANDICAP_SECONDS = 20
 
 
+#: How long the packshot waits before it runs.
+#:
+#: **It must not race the two jobs it depends on.** The shot is taken
+#: from the garment's photograph, and where it lands - and whether it
+#: is wanted at all - depends on what detection and categorisation
+#: decide about that photograph: a worn photo holding four garments is
+#: split into four rows by the detector, each with its own picture,
+#: and shooting the group photo before that happens would hang one
+#: packshot of a whole outfit off whichever row won.
+#:
+#: Longer than the categorisation handicap for the same reason that
+#: one exists: these sit on different queues and are dispatched
+#: together, so the only ordering available is a head start.
+PACKSHOT_HANDICAP_SECONDS = 90
+
+
+def _starts_at(kind: str) -> datetime | None:
+    """When a pipeline job becomes available. `None` is immediately."""
+    from app.workers.packshot import PACKSHOT_JOB_KIND
+
+    if kind == CATEGORISE_JOB_KIND:
+        return _now() + timedelta(seconds=CATEGORISE_HANDICAP_SECONDS)
+    if kind == PACKSHOT_JOB_KIND:
+        return _now() + timedelta(seconds=PACKSHOT_HANDICAP_SECONDS)
+    return None
+
+
 async def enqueue_media_pipeline(
     session: AsyncSession, *, garment: Garment, user_id: uuid.UUID
 ) -> tuple[str, ...]:
@@ -894,12 +921,14 @@ async def enqueue_media_pipeline(
     # photograph that turns out to hold one garment falls through to the
     # single-garment path it would have taken anyway.
     from app.workers.outfit import DETECT_OUTFIT_JOB_KIND
+    from app.workers.packshot import PACKSHOT_JOB_KIND
 
     queued: list[str] = []
     for kind in (
         DETECT_OUTFIT_JOB_KIND,
         CATEGORISE_JOB_KIND,
         BACKGROUND_REMOVAL_JOB_KIND,
+        PACKSHOT_JOB_KIND,
     ):
         await enqueue(
             session,
@@ -920,11 +949,7 @@ async def enqueue_media_pipeline(
             # if detection fails or dead-letters, this runs and does the work,
             # so the cost of the delay falls only on the path where something
             # already went wrong.
-            available_at=(
-                _now() + timedelta(seconds=CATEGORISE_HANDICAP_SECONDS)
-                if kind == CATEGORISE_JOB_KIND
-                else None
-            ),
+            available_at=_starts_at(kind),
         )
         queued.append(kind)
     return tuple(queued)

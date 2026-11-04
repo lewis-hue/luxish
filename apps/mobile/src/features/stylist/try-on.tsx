@@ -21,11 +21,13 @@ import {
   labelType,
 } from '@/constants/theme';
 import {
+  LAYER_ORDER,
   OutfitFigure,
   type FigureSlot,
   type Presentation,
   type WornPiece,
 } from '@/features/avatar/figure';
+import type { GapPicture } from '@/features/stylist/ask';
 import { PictureActions } from '@/features/avatar/picture-actions';
 import { PastLooks } from '@/features/avatar/past-looks';
 import type { OutfitPiece } from '@/features/stylist/run';
@@ -300,3 +302,39 @@ export function wearOwned(
     return [{ id, slot: slot as FigureSlot, uri: entry.uri }];
   });
 }
+
+/**
+ * The pieces they do *not* own, as things the figure can wear.
+ *
+ * **Why this exists beside `wearOwned` rather than inside it.** That
+ * one resolves garment ids against a wardrobe; this one resolves
+ * drawn pictures against a list of phrases. Same destination, two
+ * different lookups, and collapsing them would mean one function
+ * that takes both a wardrobe and an image map and uses one of them.
+ *
+ * A piece with no picture yet is skipped, not stubbed. The server
+ * draws each phrase once and shares it, so a gap is `queued` only
+ * the first time anybody in the product asks for that garment;
+ * until it lands, the figure wears what it has. A grey rectangle
+ * standing in for a sneaker would be worse than a bare foot.
+ */
+export function wearGaps(
+  pieces: readonly GapPicture[],
+  images: Readonly<Record<string, string>>,
+): WornPiece[] {
+  return pieces.flatMap((piece) => {
+    if (!piece.asset_id || piece.state !== 'ready') return [];
+    const uri = images[piece.asset_id];
+    if (!uri) return [];
+    if (!piece.slot || !FIGURE_SLOTS.includes(piece.slot as FigureSlot)) {
+      return [];
+    }
+    // Keyed on the phrase: it is what the row is keyed on server-side,
+    // it is stable across turns, and it cannot collide with a garment
+    // id, which is a uuid.
+    return [{ id: `gap:${piece.phrase}`, slot: piece.slot as FigureSlot, uri }];
+  });
+}
+
+/** The slots a picture may be placed in. Anything else is dropped. */
+const FIGURE_SLOTS: readonly string[] = LAYER_ORDER;

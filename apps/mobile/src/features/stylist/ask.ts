@@ -24,9 +24,26 @@ export type AskEvent =
   | { event: 'token'; text: string }
   | { event: 'verdict'; has_match: boolean; using: string[]; missing: string[] }
   | { event: 'shopping'; items: ShoppableItem[] }
+  | { event: 'pieces'; items: GapPicture[] }
   | { event: 'render'; render_id: string }
   | { event: 'done' }
   | { event: 'error' };
+
+/**
+ * A picture of a garment they do not own, so the look can be shown
+ * rather than only described.
+ *
+ * Drawn once per phrase on the server and shared by every account,
+ * so this is usually a row lookup. `state` is `queued` the first
+ * time anybody asks for a given garment and `ready` thereafter;
+ * the thread polls until it turns.
+ */
+export interface GapPicture {
+  phrase: string;
+  slot: string | null;
+  state: 'queued' | 'ready' | 'failed';
+  asset_id: string | null;
+}
 
 export interface ShoppableItem {
   product_id: string;
@@ -45,6 +62,8 @@ export interface AskHandlers {
     missing: string[];
   }) => void;
   onShopping?: (items: ShoppableItem[]) => void;
+  /** Pictures for the pieces they would need. */
+  onPieces?: (items: GapPicture[]) => void;
   /** An avatar has been queued. Poll for it as usual. */
   onRender?: (renderId: string) => void;
   onError?: () => void;
@@ -162,6 +181,9 @@ function deliver(parsed: AskEvent, handlers: AskHandlers): void {
       break;
     case 'shopping':
       handlers.onShopping?.(parsed.items ?? []);
+      break;
+    case 'pieces':
+      handlers.onPieces?.(parsed.items ?? []);
       break;
     case 'render':
       handlers.onRender?.(parsed.render_id);

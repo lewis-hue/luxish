@@ -138,6 +138,24 @@ ANSWER_SYSTEM = (
     "assistant - say in one sentence that you only help with clothes "
     "and ask what they are dressing for. Do not answer it anyway, "
     "and do not answer it and then add a disclaimer.\n\n"
+    # **A reported false refusal, and an instructive one.** "Can you
+    # generate a mannequin wearing the outfits above?" was turned
+    # away with "I only help with clothes - what are you dressing
+    # for?", which is wrong and faintly insulting: the question is
+    # entirely about clothes. The rail above lists "a general
+    # question they could ask any assistant", and the model read
+    # "generate an image" as exactly that.
+    #
+    # So the carve-out is spelled out. Asking to *see* something is
+    # the most on-topic request this assistant takes - the app is
+    # built around it - and the picture is produced by the app
+    # around the answer rather than by the sentence.
+    "Asking to see a look - draw it, show it, generate it, put it on "
+    "a mannequin or on me, what would it look like - is always about "
+    "clothes and is never off topic. Answer it the way you answer any "
+    "styling question: say what the look is and which pieces make it. "
+    "The picture is produced for you, so never say you cannot make "
+    "images and never refuse one of these.\n\n"
     "Abuse, sexual questions about you or about the person, and "
     "requests to describe anybody's body get one short, unbothered "
     "sentence declining and nothing else. You are not offended, you "
@@ -426,6 +444,50 @@ class Plan:
         return bool(self.wear)
 
 
+#: Ways of asking to be shown the thing rather than told about it.
+#:
+#: **This is a gate on spend, which is why it is a word list and not
+#: a model call.** The ordinary answer draws the look instantly and
+#: free, by laying the pieces' own cut-outs over a flat figure; a
+#: photorealistic render is fifteen to thirty billed seconds. Buying
+#: one on every answer was the old behaviour and it was wrong. Buying
+#: one when somebody has typed "generate a mannequin wearing this" is
+#: the thing they asked for.
+#:
+#: Deliberately narrow. A miss costs the composite, which is already
+#: on screen; a false positive costs a billed render nobody wanted,
+#: so the words here all have asking-to-see as their plain reading.
+_ASKED_TO_SEE = (
+    "generate",
+    "render",
+    "draw ",
+    "draw it",
+    "draw me",
+    "show me",
+    "show it",
+    "picture of",
+    "image of",
+    "photo of",
+    "see it on",
+    "see them on",
+    "put it on",
+    "put them on",
+    "on a mannequin",
+    "on the mannequin",
+    "on my avatar",
+    "what would it look like",
+    "what would they look like",
+    "how would it look",
+    "how would they look",
+)
+
+
+def wants_a_picture(question: str) -> bool:
+    """Whether they asked to be shown it, not merely told about it."""
+    asked = (question or "").lower()
+    return any(phrase in asked for phrase in _ASKED_TO_SEE)
+
+
 def plan_from(verdict: Verdict) -> Plan:
     """Turn a verdict into the two things that follow it.
 
@@ -465,5 +527,6 @@ __all__ = [
     "build_request",
     "parse",
     "plan_from",
+    "wants_a_picture",
     "wardrobe_lines",
 ]

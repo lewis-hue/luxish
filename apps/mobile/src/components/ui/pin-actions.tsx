@@ -195,20 +195,31 @@ export function PinActions({
                   setBoarding(true);
                 }}
               />
-              {/* **"Similar", because this sheet cannot know better.**
-                  It opens over a board tile, and a tile does not
-                  carry what a fit is made of - only the fit's own
-                  page asks for that. The row always read "Shop the
-                  look" and always pushed the generic
-                  recommendations, which promises this fit and
-                  delivers a shelf about nothing in particular. The
-                  destination has not changed; the label now matches
-                  it. Shopping a specific look is offered on the
-                  fit's own page, where the pieces are known. */}
+              {/* **The tile knows the pin, and that is now enough.**
+
+                  This said "Similar" and pushed the generic shelf,
+                  on the reasoning that a board tile does not carry
+                  what a fit is made of - only the fit's own page
+                  asks for that. True then, and the consequence was
+                  that every pin in the app offered the same handful
+                  of things.
+
+                  The identification moved to the server: the
+                  garments in a photograph are read once per pin, by
+                  id, and shared by everybody who opens it. So the
+                  tile does not need to know what is in the picture -
+                  it only needs to say which picture. */}
               <RowAction
-                label="Shop similar pieces"
+                label="Shop this look"
                 icon={{ ios: 'bag', android: 'shopping_bag', web: 'shopping_bag' }}
-                onPress={() => go(() => router.push('/shop'))}
+                onPress={() =>
+                  go(() =>
+                    router.push({
+                      pathname: '/shop',
+                      params: { fit: subject.postId },
+                    }),
+                  )
+                }
               />
               {/* **"Plan a day for it" was removed here.**
 

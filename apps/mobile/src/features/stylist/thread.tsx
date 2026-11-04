@@ -26,9 +26,10 @@ import {
 } from '@/constants/theme';
 import { BRAND } from '@/branding';
 import { PictureActions } from '@/features/avatar/picture-actions';
+import { usePostImages } from '@/api/queries/post-media';
 import { OutfitFigure } from '@/features/avatar/figure';
 import { type Turn } from '@/features/stylist/conversation';
-import { wearOwned } from '@/features/stylist/try-on';
+import { wearGaps, wearOwned } from '@/features/stylist/try-on';
 import type { WardrobeEntry } from '@/features/wardrobe/store';
 import { useScheme } from '@/hooks/use-theme';
 
@@ -162,9 +163,34 @@ function Bubble({
   // Built from the verdict's own ids against their wardrobe. Empty
   // when the answer named nothing of theirs, which is exactly when
   // there is nothing to draw.
-  const wearing = useMemo(
+  const owned = useMemo(
     () => wearOwned(turn.verdict?.using ?? [], wardrobe),
     [turn.verdict?.using, wardrobe],
+  );
+
+  // **And the pieces they do not own, so the look is still shown.**
+  //
+  // The reported failure: asked how baggy skater shorts, a white
+  // tee and white sneakers would look, the reply named all three,
+  // linked all three, and showed nothing - while every answer
+  // around it carried a figure wearing the look. An answer that can
+  // only say no is not one somebody can act on.
+  //
+  // These are drawn server-side once per phrase and shared by every
+  // account, so the second person to ask about white sneakers waits
+  // for a row lookup. A piece still being drawn simply has no
+  // picture yet and is left off the figure until it does.
+  const gapAssets = useMemo(
+    () =>
+      (turn.pieces ?? [])
+        .map((piece) => piece.asset_id)
+        .filter((id): id is string => Boolean(id)),
+    [turn.pieces],
+  );
+  const gapImages = usePostImages(gapAssets);
+  const wearing = useMemo(
+    () => [...owned, ...wearGaps(turn.pieces ?? [], gapImages.data ?? {})],
+    [owned, turn.pieces, gapImages.data],
   );
 
   // Each missing piece with the shops that sell it. Grouped on

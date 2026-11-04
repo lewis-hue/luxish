@@ -16,6 +16,7 @@ from pathlib import Path
 import pytest
 
 from app.workers.shell_fit import (
+    PORTRAIT_TARGET,
     TALLEST,
     WIDEST,
     fit_to_shell,
@@ -189,33 +190,41 @@ def test_a_landscape_packshot_is_stood_upright() -> None:
     assert shape_of(fitted) < 1, "it is upright now"
 
 
-def test_a_landscape_picture_is_turned_rather_than_padded() -> None:
-    """**A quarter turn, on the product owner's instruction.**
+def test_a_landscape_picture_is_padded_and_never_turned() -> None:
+    """**The quarter turn is gone, and this is the test that was it.**
 
-    The first version added ground to the top and bottom instead,
-    on the argument that turning a picture makes its contents lie on
-    their side rather than making it portrait. That trade was put to
-    them and they chose the turn, so the frame rotates and the
-    contents go with it.
+    It went in on the product owner's instruction (2026-11-02) after
+    the trade was put to them: a turn keeps every pixel, and the
+    contents turn with the frame. They saw the consequence two days
+    later - a sweatshirt lying diagonally across its wardrobe tile,
+    and the same picture laid sideways onto a figure's torso by the
+    composite - and called it what it looks like, which is broken.
 
-    The dimensions swap exactly: nothing is added and nothing is
-    cropped, which is the one thing a turn has over padding.
+    So an upright frame is still required and it is reached by
+    adding ground. The garment stays the way up it was photographed,
+    which is the only way up the composite can use.
     """
     width, height = 876, 600
     fitted = fit_to_shell(png(width, height), portrait=True)
-    assert size_of(fitted) == (height, width)
+    out_width, out_height = size_of(fitted)
+
+    assert out_width == width, "no width was taken, and none was turned away"
+    assert out_height > height, "height was added instead"
+    assert shape_of(fitted) < 1, "upright, which was always the requirement"
 
 
-def test_a_panorama_is_turned_and_then_widened() -> None:
-    """Two rules in sequence, not one instead of the other.
+def test_a_panorama_is_padded_to_upright_too() -> None:
+    """The extreme case, where padding is most expensive.
 
-    Turned, a 4:1 panorama is 1:4 - upright, and far taller than the
-    shell allows. The height cap still applies to what the turn
-    produced.
+    A 4:1 panorama needs a great deal of ground to stand up, and
+    gets it: the rule is about the result, not about how much work
+    it is. In practice nothing reaches here - the packshot prompt
+    asks for the garment squared to the camera - and a garment on
+    its side would be wrong at any aspect ratio.
     """
     fitted = fit_to_shell(png(2000, 500), portrait=True)
     assert shape_of(fitted) < 1, "upright"
-    assert shape_of(fitted) == pytest.approx(TALLEST, abs=0.01)
+    assert shape_of(fitted) == pytest.approx(PORTRAIT_TARGET, abs=0.01)
 
 
 def test_a_square_is_padded_because_turning_it_does_nothing() -> None:

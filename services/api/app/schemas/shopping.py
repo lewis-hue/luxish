@@ -51,13 +51,41 @@ class ShoppingSearchOut(BaseModel):
     provider: Literal["curated"] = "curated"
 
 
+class ShopLinkOut(BaseModel):
+    """A place on the open web that appears to sell this piece.
+
+    **Separate from `items`, and deliberately so.** `OfferMatchOut`
+    carries a price, a currency, stock and the date the price was
+    true, because a catalogue row knows all of that. A search result
+    knows none of it, and forcing one into that shape would mean
+    inventing a price - which is the exact failure the recommendation
+    rules in this module exist to prevent. A link is offered as what
+    it is: somewhere to go and look.
+    """
+
+    title: str
+    retailer: str
+    url: str
+
+
 class ShopSectionOut(BaseModel):
     key: str
     title: str
     reason: str
     items: list[OfferMatchOut] = Field(default_factory=list)
+    #: Where to buy this piece on the open web, when the catalogue
+    #: has nothing like it - which, for a catalogue this size, is
+    #: most of the time.
+    links: list[ShopLinkOut] = Field(default_factory=list)
 
 
 class ShopRecommendationsOut(BaseModel):
     sections: list[ShopSectionOut] = Field(default_factory=list)
     provider: Literal["curated"] = "curated"
+    #: True while the fit is still being read.
+    #:
+    #: The sections come from the garments a vision pass names in the
+    #: photograph, and a pin nobody has opened has not been read yet.
+    #: The client polls rather than concluding the fit has nothing
+    #: shoppable in it.
+    working: bool = False

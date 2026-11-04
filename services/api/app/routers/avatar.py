@@ -136,7 +136,11 @@ def _render_out(render: object) -> RenderOut:
             for piece in raw
             if isinstance(piece, dict) and piece.get("name")
         ],
-        error=getattr(render, "error", None),
+        # **Never the vendor's words.** The stored reason stays on
+        # the row and in the run ledger for whoever is debugging;
+        # what crosses the wire is a sentence this app wrote and a
+        # reader can act on. See `avatar_renders.public_reason`.
+        error=renders.public_reason(getattr(render, "error", None)),
     )
 
 

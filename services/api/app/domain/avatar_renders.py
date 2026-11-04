@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import sqlalchemy as sa
@@ -66,10 +67,152 @@ async def get(
     )
 
 
+#: What a reader is told when a drawing fails.
+#:
+#: **The vendor's words are not for them.** A failed render stored
+#: "Error code: 400 - The response was filtered due to the prompt
+#: triggering our content management policy", and the avatar screen
+#: printed it. Three things wrong with that, in order of how much
+#: they matter:
+#:
+#:   * it is not actionable. Nobody reading it knows what to do, and
+#:     the one thing they *should* do - try again - was not offered;
+#:   * it is not theirs. It describes our provider's moderation, our
+#:     prompt and our status code, none of which is a fact about the
+#:     person or about the outfit they tapped;
+#:   * it reads as an accusation. "Content management policy" under a
+#:     picture of a hoodie and jeans suggests they asked for
+#:     something they did not ask for.
+#:
+#: The detail is not thrown away - it stays on the row and in the
+#: run ledger, which is where somebody debugging this looks. What
+#: crosses to the client is a sentence this app wrote.
+UNLUCKY = "That one did not come out. Pull down to try again."
+
+#: Matched against the stored reason, in order. First hit wins.
+#:
+#: Narrow on purpose: a reason only earns its own line when there is
+#: something different for the reader to do about it.
+_PLAINLY: tuple[tuple[tuple[str, ...], str], ...] = (
+    (
+        ("content management", "content_filter", "content policy", "filtered"),
+        # Deliberately not "your request was blocked". The filter
+        # trips on the *garment description* - "bare feet with toe
+        # rings" tripped it - and telling somebody their outfit was
+        # rejected for policy reasons is both alarming and wrong.
+        "This outfit could not be drawn. Pull down to try again.",
+    ),
+    (
+        ("rate limit", "429", "too many requests"),
+        "The studio is busy. Pull down to try again in a moment.",
+    ),
+    (
+        ("timeout", "timed out"),
+        "That took too long. Pull down to try again.",
+    ),
+    (
+        ("quota", "insufficient", "credit", "billing"),
+        "Drawing is unavailable right now. Try again later.",
+    ),
+)
+
+
+def public_reason(error: str | None) -> str | None:
+    """The sentence a reader gets for a stored failure.
+
+    `None` in, `None` out: a render that did not fail has nothing to
+    say. Anything else becomes one of the lines above, and never the
+    stored text itself.
+    """
+    if not error:
+        return None
+    lowered = error.lower()
+    for needles, said in _PLAINLY:
+        if any(needle in lowered for needle in needles):
+            return said
+    return UNLUCKY
+
+
+#: After this long, a render that still says it is being drawn is not.
+#:
+#: **A row that never finished is worse than a row that failed.** A
+#: base render measured at 27 seconds and a try-on at 15 to 21, so
+#: nothing legitimate is still working ten minutes later. What is left
+#: at that point is a job whose worker died, whose broker dropped it,
+#: or that was queued while the stack was down - and the row sits in
+#: `queued` for ever.
+#:
+#: That row does two kinds of damage, both seen on a real account that
+#: had one stranded from four days earlier:
+#:
+#:   * the screen reads "a picture is being drawn" and never stops, so
+#:     the progress card sits over a finished avatar permanently and
+#:     the client polls every three seconds for ever;
+#:   * `in_flight` matches it, so the next request for that kind of
+#:     picture is answered with the dead row instead of drawing - the
+#:     feature appears to do nothing at all.
+#:
+#: Ten minutes rather than one: a worker that is merely slow, or a
+#: queue being drained after a restart, must not have its work
+#: declared dead out from under it.
+ABANDONED_AFTER = timedelta(minutes=10)
+
+
+def abandoned(render: AvatarRender, *, now: datetime | None = None) -> bool:
+    """Whether this row says it is working but plainly is not."""
+    if render.state not in ("queued", "running"):
+        return False
+    made = render.created_at
+    if made is None:
+        return False
+    if made.tzinfo is None:
+        made = made.replace(tzinfo=UTC)
+    return (now or datetime.now(UTC)) - made > ABANDONED_AFTER
+
+
+async def sweep_abandoned(
+    session: AsyncSession, *, user_id: uuid.UUID
+) -> int:
+    """Fail this person's stranded renders. Returns how many.
+
+    **Healing on read, rather than only in a scheduled sweep.** The
+    damage is to a screen somebody is looking at right now, and the
+    account that has the problem is by definition the one asking. A
+    periodic reaper would also work and would not fix the phone in
+    somebody's hand this second.
+
+    Idempotent, and narrow: only rows past the cutoff, only this
+    person's, and the state it writes is `failed`, which every caller
+    already handles.
+    """
+    cutoff = datetime.now(UTC) - ABANDONED_AFTER
+    done = await session.execute(
+        sa.update(AvatarRender)
+        .where(
+            AvatarRender.user_id == user_id,
+            AvatarRender.state.in_(("queued", "running")),
+            AvatarRender.created_at < cutoff,
+        )
+        .values(
+            state="failed",
+            # Said plainly. The client shows this, and "it was never
+            # picked up" is a truer account than a generic failure.
+            error="This one was never finished. Ask for it again.",
+        )
+    )
+    return int(done.rowcount or 0)
+
+
 async def recent(
     session: AsyncSession, *, user_id: uuid.UUID, limit: int = 20
 ) -> Sequence[AvatarRender]:
-    """This person's renders, newest first."""
+    """This person's renders, newest first.
+
+    Stranded rows are failed first, so the list never reports work
+    that is not happening. See `sweep_abandoned`.
+    """
+    if await sweep_abandoned(session, user_id=user_id):
+        await session.commit()
     result = await session.scalars(
         sa.select(AvatarRender)
         .where(AvatarRender.user_id == user_id)
@@ -102,6 +245,10 @@ async def in_flight(
         AvatarRender.user_id == user_id,
         AvatarRender.kind == kind,
         AvatarRender.state.in_(("queued", "running")),
+        # A stranded row is not work in flight. Without this the next
+        # request for this kind of picture is answered with a job that
+        # died days ago, and the button appears to do nothing.
+        AvatarRender.created_at >= datetime.now(UTC) - ABANDONED_AFTER,
     )
     if kind != "base":
         query = query.where(
@@ -205,17 +352,21 @@ async def mark_failed(
 
 
 __all__ = [
+    "ABANDONED_AFTER",
     "AvatarRender",
     "GENERATE_JOB_KIND",
     "MAX_ERROR",
     "MAX_PIECES",
     "TRY_ON_JOB_KIND",
+    "abandoned",
     "get",
     "in_flight",
     "latest",
     "mark_failed",
     "mark_ready",
     "mark_running",
+    "public_reason",
     "recent",
     "request",
+    "sweep_abandoned",
 ]

@@ -9,6 +9,7 @@ import Animated, {
   withSequence,
   withSpring,
   withTiming,
+  type EasingFunction,
   type SharedValue,
 } from 'react-native-reanimated';
 
@@ -275,7 +276,22 @@ export interface MotiTiming {
   /** A continuous pulse. Dropped entirely under Reduce Motion. */
   loop?: boolean;
   repeat?: number;
+  /**
+   * Whether each lap plays backwards. **Moti's default is `true`.**
+   *
+   * Fine for a pulse, wrong for anything that turns: a spinner given
+   * `loop: true` and nothing else rotates to 360 and then unwinds to
+   * 0, so it rocks back and forth instead of spinning. A rotation
+   * must pass `repeatReverse: false`.
+   */
   repeatReverse?: boolean;
+  /**
+   * The curve. Moti's default eases in and out, which puts a stall at
+   * both ends of every lap - invisible on a one-shot settle and very
+   * visible on a loop, where it reads as the animation hitching once
+   * a second. Continuous motion wants `Easing.linear`.
+   */
+  easing?: EasingFunction;
 }
 
 /**

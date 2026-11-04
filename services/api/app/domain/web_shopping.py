@@ -133,6 +133,29 @@ _TITLE = re.compile(r"class='result-link'>(.*?)</a>", re.S)
 _TAGS = re.compile(r"<[^>]+>")
 
 
+#: Titles that announce a guide rather than a shop.
+#:
+#: **A domain list was not enough.** `NOT_SHOPS` catches the big
+#: magazines, and the long tail is endless - "How To Wear Brown Belt
+#: Like A Pro", "25 Outfit Ideas On How to Wear a Brown Bag", "How to
+#: Wear a Necklace With a Collared Shirt" all came back from real
+#: searches on sites nobody would think to block by name. They are
+#: articles about the garment, which is a dead end under "where to
+#: get them", and they are recognisable from the title in a way the
+#: domain cannot express.
+_A_GUIDE = re.compile(
+    r"^\s*(how to|\d+\s+(best|outfit|ways|styles))"
+    r"|outfit ideas|styling (ideas|tips|guide)"
+    r"|style guide|what to wear|how to wear",
+    re.IGNORECASE,
+)
+
+
+def looks_like_a_guide(title: str) -> bool:
+    """Whether a result is an article about the thing, not a shop."""
+    return bool(_A_GUIDE.search(title or ""))
+
+
 def seller_of(url: str) -> str:
     """`https://www.nordstrom.com/x` -> `nordstrom.com`."""
     host = urllib.parse.urlsplit(url).netloc.lower()
@@ -166,8 +189,11 @@ def read_results(html: str, *, limit: int = MOST_LINKS) -> list[Shop]:
         host = seller_of(url)
         if not host or not _is_a_shop(host) or host in seen:
             continue
-        seen.add(host)
         title = titles[at] if at < len(titles) and titles[at] else host
+        # An article about the garment is not somewhere to buy it.
+        if looks_like_a_guide(title):
+            continue
+        seen.add(host)
         out.append(Shop(title=title[:120], url=url, seller=host))
         if len(out) >= limit:
             break
@@ -228,6 +254,7 @@ __all__ = [
     "Shop",
     "query_for",
     "read_results",
+    "looks_like_a_guide",
     "seller_of",
     "where_to_buy",
 ]

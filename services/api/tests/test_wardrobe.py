@@ -450,6 +450,10 @@ async def test_creating_one_garment_queues_the_work_its_photograph_needs(
         "wardrobe.detect_outfit",
         "wardrobe.categorise",
         "wardrobe.remove_background",
+        # The catalogue shot: a phone photograph of a garment on a
+        # bed cuts out as the same garment with the room removed,
+        # and this re-stages it the way a shop photographs stock.
+        "garment.packshot",
     }
 
 

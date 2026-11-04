@@ -67,7 +67,10 @@ class Cuts:
 
 
 async def _described(
-    db: AsyncSession, *, pieces: list[dict[str, Any]]
+    db: AsyncSession,
+    *,
+    pieces: list[dict[str, Any]],
+    describe: bool = True,
 ) -> tuple[Post, Store]:
     owner = await make_user(db)
     store = Store()
@@ -91,11 +94,15 @@ async def _described(
     db.add(post)
     await db.flush()
     db.add(PostMedia(post_id=post.id, media_asset_id=asset.id, position=0))
-    db.add(
-        FitDescriptionRow(
-            post_id=post.id, outfit="an outfit", caption=None, pieces=pieces
+    # `describe=False` is a pin nobody has opened: no vision pass has
+    # run over it, which is a different state from one read and found
+    # to hold nothing.
+    if describe:
+        db.add(
+            FitDescriptionRow(
+                post_id=post.id, outfit="an outfit", caption=None, pieces=pieces
+            )
         )
-    )
     await db.commit()
     await db.refresh(post)
     return post, store
@@ -299,14 +306,43 @@ async def test_a_fit_nobody_has_cut_reports_no_pieces(
 # shopping the pieces
 # --------------------------------------------------------------------------- #
 async def test_shopping_a_fit_is_a_section_per_garment(
-    client: Any, db: AsyncSession, auth: Any
+    client: Any, db: AsyncSession, auth: Any, monkeypatch: Any
 ) -> None:
     """What "shop the look" was always supposed to mean.
 
     The row pushed the generic recommendations screen - a shelf
     built from gaps in your own wardrobe, which has nothing to do
     with the photograph it was tapped from.
+
+    **The catalogue being empty is no longer the end of it.** It is a
+    seeded table with nothing like a real garment in it, so section-
+    per-garment over the catalogue alone rendered an empty screen on
+    every pin. Each piece the vision pass named is searched on the
+    open web, which is what makes the answer belong to this
+    photograph rather than to the app.
     """
+    asked: list[str] = []
+
+    async def web(want: list[str], *, look: str | None = None, **_: Any) -> Any:
+        from app.domain.web_shopping import Found, Shop
+
+        asked.extend(want)
+        return [
+            Found(
+                gap=one,
+                shops=[
+                    Shop(
+                        title=f"{one.title()} - Etsy",
+                        url=f"https://etsy.com/{at}",
+                        seller="etsy.com",
+                    )
+                ],
+            )
+            for at, one in enumerate(want)
+        ]
+
+    monkeypatch.setattr("app.domain.web_shopping.where_to_buy", web)
+
     headers = auth(sub="kc-shop-fit")
     await client.post("/v1/auth/session", headers=headers)
     post, store = await _described(db, pieces=PIECES)
@@ -314,9 +350,39 @@ async def test_shopping_a_fit_is_a_section_per_garment(
 
     r = await client.get(f"/v1/shopping/for-fit/{post.id}", headers=headers)
     assert r.status_code == 200, r.text
-    # The catalogue is empty in this test, so an empty list is the
-    # honest answer - and it is not padded with "popular".
-    assert r.json()["sections"] == []
+    sections = r.json()["sections"]
+
+    # One per garment in the photograph, named after that garment.
+    assert len(sections) == len(PIECES)
+    assert asked == ["lilac tee", "olive cargo trousers"]
+
+    # The catalogue is empty here, so every section is carried by the
+    # web results - and each one carries a tappable link.
+    for section in sections:
+        assert section["items"] == []
+        assert section["links"], section["title"]
+        assert section["links"][0]["url"].startswith("https://")
+
+
+async def test_a_fit_nobody_has_read_yet_queues_the_reading(
+    client: Any, db: AsyncSession, auth: Any
+) -> None:
+    """**Why the row looked identical on every pin.**
+
+    Sections are built from the garments a vision pass named, and a
+    pin nobody had opened had never been read, so the screen fell
+    back to the generic shelf. `working` says the answer is coming
+    rather than that there is none.
+    """
+    headers = auth(sub="kc-shop-unread")
+    await client.post("/v1/auth/session", headers=headers)
+    post, _store = await _described(db, pieces=PIECES, describe=False)
+
+    r = await client.get(f"/v1/shopping/for-fit/{post.id}", headers=headers)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["sections"] == []
+    assert body["working"] is True
 
 
 async def test_shopping_a_fit_nobody_may_see_is_a_404(

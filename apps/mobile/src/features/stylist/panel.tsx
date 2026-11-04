@@ -48,6 +48,7 @@ import {
   rewind as chatRewind,
   settled as chatSettled,
   shopped as chatShopped,
+  pictured as chatPictured,
   streamed as chatStreamed,
   type Turn,
 } from '@/features/stylist/conversation';
@@ -372,6 +373,7 @@ export function StylistPanel({
         onToken: (chunk) => setChat((was) => chatStreamed(was, chunk)),
         onVerdict: (verdict) => setChat((was) => chatDecided(was, verdict)),
         onShopping: (items) => setChat((was) => chatShopped(was, items)),
+        onPieces: (items) => setChat((was) => chatPictured(was, items)),
         onRender: (renderId) => setChat((was) => chatDrawing(was, renderId)),
         onError: () => setChat((was) => chatFailed(was)),
       },

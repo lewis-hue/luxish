@@ -211,41 +211,37 @@ export function FitMenu({
               was never anything else.
               Given pieces it now opens them; given none it says what
               it will really do. Either way the tap is honest. */}
-          {/* **Always the look now, because the server can shop it.**
-              It used to depend on somebody having tagged products
-              onto the fit, which nobody ever had - so the row read
-              "Shop similar pieces" for every fit in the app. The
-              garments are identified when the fit is read, so the
-              catalogue can be searched per piece with no tagging
-              and no model call. */}
-          {shoppable.length > 0 || cutPieces > 0 ? (
-            <Row
-              label="Shop the look"
-              hint={
-                shoppable.length > 0
-                  ? shoppable.length === 1
-                    ? 'The piece in this fit'
-                    : `The ${shoppable.length} pieces in this fit`
-                  : 'Matched to the garments in this picture'
-              }
-              icon={{ ios: 'bag', android: 'shopping_bag', web: 'shopping_bag' }}
-              onPress={() =>
-                act(() =>
-                  router.push({
-                    pathname: '/shop',
-                    params: { fit: fit.id },
-                  }),
-                )
-              }
-            />
-          ) : (
-            <Row
-              label="Shop similar pieces"
-              hint="Matched to your wardrobe and taste"
-              icon={{ ios: 'bag', android: 'shopping_bag', web: 'shopping_bag' }}
-              onPress={() => act(() => router.push('/shop'))}
-            />
-          )}
+          {/* **Always this fit, never the generic shelf.**
+
+              The row only passed the fit when the pin had tagged
+              products or cut-outs, and almost no pin had either - so
+              nearly every pin fell through to `/shop` with no fit at
+              all, which is a shelf built from gaps in your own
+              wardrobe. The same handful of things appeared under
+              every pin in the app, which is exactly how it was
+              reported.
+
+              The fit always travels now. What is behind it is a
+              vision reading of that photograph - the garments it
+              actually contains, named once per pin and shared by
+              everybody who opens it - and the catalogue and the open
+              web are searched per garment from there. */}
+          <Row
+            label="Shop this look"
+            hint={
+              shoppable.length > 0
+                ? shoppable.length === 1
+                  ? 'The piece in this fit'
+                  : `The ${shoppable.length} pieces in this fit`
+                : 'Matched to the garments in this picture'
+            }
+            icon={{ ios: 'bag', android: 'shopping_bag', web: 'shopping_bag' }}
+            onPress={() =>
+              act(() =>
+                router.push({ pathname: '/shop', params: { fit: fit.id } }),
+              )
+            }
+          />
           {/* **"Plan a day for it" was removed here.**
 
                 A plan is made of garments from somebody's own

@@ -51,6 +51,14 @@ MEDIA_KINDS = (
     "profile_banner",
     "garment_render",
     "garment_studio",
+    #: The catalogue shot a wardrobe piece gets when it is added: an
+    #: edit of the owner's own photograph, re-staged the way a shop
+    #: photographs stock. Distinct from `garment_studio`, which is a
+    #: shot somebody asked for on the Studio screen and may delete -
+    #: deleting one of those must not take the wardrobe's picture with
+    #: it - and emphatically not `garment_render`, which means "a
+    #: drawing of a garment like yours" and is the opposite claim.
+    "garment_packshot",
     #: A picture somebody attached to a message. Private to the two
     #: people in that thread, and never read for clothes: a photograph
     #: sent to one person is not evidence of anything they own.

@@ -154,6 +154,8 @@ def wardrobe_media_handlers(
         split_shots,
     )
     from app.workers.account_export import EXPORT_JOB_KIND
+    from app.workers.packshot import PACKSHOT_JOB_KIND
+    from app.workers.piece_packshot import PIECE_PACKSHOT_JOB_KIND
     from app.workers.post_vision import VISION_JOB_KIND
     from app.workers.post_shape import SHAPE_JOB_KIND
     from app.workers.render import MetaGarmentRenderer
@@ -420,11 +422,54 @@ def wardrobe_media_handlers(
         handlers = screen_handlers(screener=screener, store=store)
         return await handlers[SCREEN_JOB_KIND](session, job)
 
+    async def _make_packshot(session: AsyncSession, job: Job) -> dict | None:
+        # One image edit per garment added to a wardrobe, once.
+        #
+        # The same studio the Studio tab uses, running its `packshot`
+        # treatment: a garment photographed on a bed cuts out as the
+        # same crumpled garment with the room removed, and this
+        # re-stages it the way a shop photographs stock. It is an edit
+        # of the owner's own photograph, so it is still their garment.
+        #
+        # Last in the pipeline and failure-tolerant: if it cannot run,
+        # the cut-out stands and the wardrobe is unchanged.
+        from app.workers.garment_studio import MetaGarmentStudio
+        from app.workers.packshot import make_packshot
+
+        return await make_packshot(
+            session,
+            job,
+            studio=MetaGarmentStudio(
+                MetaProvider(recorder=AIRunRecorder(session))
+            ),
+            store=store,
+        )
+
+    async def _draw_piece(session: AsyncSession, job: Job) -> dict | None:
+        # A garment nobody here owns, drawn from the words the
+        # stylist used to name it - so a reply that says "you'd need
+        # white sneakers" can show them rather than only say it.
+        #
+        # One drawing per phrase for the whole product: the row is
+        # keyed on the words and shared by every account, which is
+        # what makes this cost a fraction of the per-person render it
+        # replaced.
+        from app.workers.piece_packshot import PieceArtist, draw_piece
+
+        return await draw_piece(
+            session,
+            job,
+            artist=PieceArtist(MetaProvider(recorder=AIRunRecorder(session))),
+            store=store,
+        )
+
     from app.domain.posts import SCREEN_JOB_KIND as POST_SCREEN_JOB_KIND
 
     return {
         CATEGORISE_JOB_KIND: _categorise,
         BACKGROUND_REMOVAL_JOB_KIND: _remove_background,
+        PACKSHOT_JOB_KIND: _make_packshot,
+        PIECE_PACKSHOT_JOB_KIND: _draw_piece,
         DETECT_OUTFIT_JOB_KIND: _detect_outfit,
         SPLIT_SHOTS_JOB_KIND: _split_shots,
         SHAPE_JOB_KIND: _shape_post,

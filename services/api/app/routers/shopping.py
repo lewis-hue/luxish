@@ -16,6 +16,7 @@ from app.domain import feed as feed_domain
 from app.domain import shopping
 from app.errors import ApiError
 from app.schemas.shopping import (
+    ShopLinkOut,
     OfferMatchOut,
     RetailerOut,
     ShopRecommendationsOut,
@@ -127,14 +128,69 @@ async def for_fit(
     sections = await shopping.like_this_fit(
         db, user_id=ctx.user_id, post_id=post_id
     )
-    return ShopRecommendationsOut(
-        sections=[
+
+    # **The garments in this photograph, read once and shared.**
+    #
+    # `like_this_fit` ranks the catalogue against the pieces a vision
+    # pass named in the picture. A pin nobody has opened has not been
+    # read, so it returns nothing - and the menu's fallback was a
+    # generic shelf, which is why every pin appeared to offer the
+    # same handful of things. Reading it is queued here and the
+    # answer is stored on the post, so the second person to open that
+    # pin pays nothing and gets the same sections.
+    from app.domain import fit_descriptions
+
+    described = await fit_descriptions.get(db, post_id=post_id)
+    if described is None:
+        await fit_descriptions.request_description(db, post_id=post_id)
+        return ShopRecommendationsOut(sections=[], working=True)
+
+    # **Then the open web, per piece, where the catalogue is empty.**
+    #
+    # The catalogue is a seeded table and has nothing like most real
+    # garments, so without this the honest answer was an empty screen.
+    # Searched on the garment the vision pass named - "rust ribbed
+    # crewneck sweater" - which is what makes the results specific to
+    # this pin rather than to the app.
+    from app.domain.web_shopping import where_to_buy
+
+    pieces = fit_descriptions.as_pieces(described)
+    want = [_describe_piece(piece) for piece in pieces]
+    found = await where_to_buy(want, look=described.outfit)
+    links = {result.gap: result.shops for result in found}
+
+    out: list[ShopSectionOut] = []
+    for at, piece in enumerate(pieces):
+        matched = sections[at].items if at < len(sections) else []
+        gap = want[at]
+        out.append(
             ShopSectionOut(
-                key=section.key,
-                title=section.title,
-                reason=section.reason,
-                items=[_out(match) for match in section.items],
+                key=sections[at].key if at < len(sections) else f"piece-{at}",
+                title=sections[at].title if at < len(sections) else gap,
+                reason=(
+                    sections[at].reason
+                    if at < len(sections)
+                    else "Matched to this piece in the photograph"
+                ),
+                items=[_out(match) for match in matched],
+                links=[
+                    ShopLinkOut(title=shop.title, retailer=shop.seller, url=shop.url)
+                    for shop in links.get(gap, ())
+                ],
             )
-            for section in sections
-        ]
+        )
+
+    # A section with nothing in it either way is not shown: an empty
+    # heading is a promise the screen did not keep.
+    return ShopRecommendationsOut(
+        sections=[s for s in out if s.items or s.links]
     )
+
+
+def _describe_piece(piece) -> str:
+    """The garment as a search phrase: colour, then what it is."""
+    said = [
+        (getattr(piece, "colour", None) or "").strip(),
+        (getattr(piece, "name", None) or "").strip(),
+    ]
+    return " ".join(word for word in said if word) or "clothing"

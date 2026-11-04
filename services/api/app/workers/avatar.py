@@ -305,6 +305,190 @@ def likeness_prompt(note: str | None = None) -> str:
     )
 
 
+#: Words that describe a body rather than a garment.
+#:
+#: **These are why a try-on was refused outright.** A pin of toe
+#: rings and anklets was read as "Bare feet with silver and gold toe
+#: rings... around one ankle", and that sentence went into an image
+#: edit that also says "keep the same person, the same body" - which
+#: the vendor's content filter rejected with a 400, consistently. The
+#: reading was accurate about the photograph and useless as an
+#: instruction: nobody wears bare feet.
+#:
+#: Matched as whole words so "barefoot sandals" keeps its sandals and
+#: a "shoulder bag" keeps its bag.
+_NOT_CLOTHING = (
+    "bare feet",
+    "bare foot",
+    "barefoot",
+    "bare legs",
+    "bare arms",
+    "bare shoulders",
+    "bare midriff",
+    "bare skin",
+    "nude",
+    "naked",
+    "topless",
+    "shirtless",
+)
+
+#: What an accessory is worn with when it is the only thing in the pin.
+#:
+#: **A necklace alone is not an outfit.** A pin can legitimately be
+#: one piece - a scarf, a pair of socks, a single chain - and asking
+#: an edit to dress a figure in only that leaves it either unchanged
+#: or undressed, and the second is what the filter objects to. A
+#: plain base lets the piece be seen on a body without competing
+#: with it, and is described as plain so the model does not invent
+#: something louder than the thing being tried on.
+#: **Renamed away from `BASE_OUTFIT`, which it was silently
+#: overwriting.** That name was already taken, forty lines up, by
+#: what the *base figure* wears - and because this assignment runs
+#: later at import time it won, so the avatar and the likeness were
+#: quietly drawn in this t-shirt instead of the grey set they ask
+#: for. Two constants, two jobs, two names.
+#:
+#: **Described rather than dictated.** A fixed outfit under every
+#: accessory means white trainers, a gold necklace and an ochre
+#: scarf all arrive over the same white tee, and two of those three
+#: look wrong. Naming the *character* of the outfit and leaving the
+#: pieces to the model costs nothing - it is words in a prompt that
+#: was being sent anyway - and the model is choosing clothes to go
+#: with something it can see.
+UNDER_AN_ACCESSORY = (
+    "a simple, well-matched everyday outfit in plain neutral tones that "
+    "suits it and does not compete with it"
+)
+
+#: Pieces that need a base outfit under them.
+_ON_TOP_OF_SOMETHING = (
+    "jewellery", "jewelry", "necklace", "chain", "bracelet", "anklet",
+    "ring", "earring", "watch", "scarf", "belt", "hat", "cap", "bag",
+    "sunglasses", "glasses", "sock", "socks", "tights", "gloves",
+    "shoe", "shoes", "boot", "boots", "trainer", "trainers", "sneaker",
+    "sneakers", "sandals", "heels", "loafers", "brogues", "mules",
+    "pendant", "pumps", "clutch", "tote", "handbag", "backpack",
+    "headband", "bandana", "tie", "bowtie", "brooch", "cufflinks",
+)
+
+
+#: Phrases that describe the *photograph*, not the clothes.
+#:
+#: **The reported failure, and it was not subtle.** Trying on a pin
+#: of white trainers produced an empty concrete room with the
+#: trainers sitting on the floor - no figure at all. The stored
+#: description was "A pair of white leather trainers, side on, on
+#: pale concrete", which is a caption for a photograph, and passing
+#: it to an edit as the thing to wear asks the model for that
+#: photograph: side on, on pale concrete, and nobody in it.
+#:
+#: These phrases also defeated the accessory rule below. "on pale
+#: concrete" is not an accessory, so a description made entirely of
+#: shoes plus scenery did not read as accessories-only and never got
+#: the base outfit that would have put it on a person.
+#:
+#: Matched as whole comma-separated clauses as well as inline, since
+#: the describing model writes them both ways.
+_ABOUT_THE_SHOT = (
+    "side on", "side-on", "front on", "front-on", "three quarter",
+    "three-quarter", "from above", "from below", "overhead", "top down",
+    "top-down", "close up", "close-up", "flat lay", "flat-lay",
+    "laid flat", "on a hanger", "hanging", "in the box", "unworn",
+    "on pale concrete", "on concrete", "on a wooden floor", "on the floor",
+    "on a table", "on a bed", "on a chair", "on a shelf", "on a rail",
+    "on a plain background", "on a white background", "on a grey background",
+    "against a wall", "against a white wall", "studio lit", "studio-lit",
+    "natural light", "soft light", "shot on", "photographed",
+)
+
+
+def _only_the_clothes(said: str) -> str:
+    """Strip what the photograph did, keeping what is being worn.
+
+    Clause-first, because "A pair of trainers, side on, on pale
+    concrete" is three clauses and two of them are about the camera
+    and the floor. Whole clauses that are *only* scenery go; a clause
+    that mentions scenery alongside a garment keeps the garment and
+    loses the phrase.
+    """
+    kept: list[str] = []
+    for clause in said.split(","):
+        bit = clause.strip()
+        if not bit:
+            continue
+        lowered = bit.lower()
+        if any(phrase in lowered for phrase in _ABOUT_THE_SHOT) and not any(
+            word in lowered for word in _WEARABLE_HINT
+        ):
+            continue
+        for phrase in _ABOUT_THE_SHOT:
+            lowered = lowered.replace(phrase, " ")
+        tidied = " ".join(lowered.split()).strip(" ,.")
+        if tidied:
+            kept.append(tidied)
+    return ", ".join(kept)
+
+
+#: Enough of a garment word to save a clause from the scenery filter.
+#:
+#: Without this, "a white shirt against a white wall" is dropped
+#: whole - losing the shirt to save us from the wall.
+_WEARABLE_HINT = (
+    "wear", "worn", "shirt", "tee", "t-shirt", "top", "blouse", "dress",
+    "skirt", "trouser", "jean", "short", "jacket", "coat", "knit",
+    "jumper", "sweater", "hoodie", "suit", "trainer", "sneaker", "shoe",
+    "boot", "loafer", "sandal", "heel", "sock", "scarf", "bag", "belt",
+    "hat", "cap", "necklace", "bracelet", "earring", "ring", "glove",
+)
+
+
+def wearable_words(outfit: str) -> str:
+    """The clothes in a description, without the body wearing them.
+
+    Two jobs, both learned from one refusal.
+
+    **Body-part phrases are removed**, because an edit prompt that
+    says "change the clothing to: bare feet with toe rings" is both
+    an instruction nobody can follow and a prompt the vendor filters.
+
+    **An accessory gets something to sit on.** If what is left is
+    only jewellery, shoes or a scarf, a plain base outfit is added -
+    a necklace on an otherwise undressed figure is the same refusal
+    arriving a different way, and is not what anybody meant by "try
+    it on" either.
+    """
+    said = (outfit or "").strip()
+    if not said:
+        return said
+
+    # The scenery first. A caption describing where the photograph
+    # was taken is the loudest instruction in the prompt, and it is
+    # an instruction to draw the room rather than the person.
+    said = _only_the_clothes(said) or said
+
+    lowered = said.lower()
+    for phrase in _NOT_CLOTHING:
+        lowered = lowered.replace(phrase, "")
+    # Tidy what removal left behind: doubled spaces, and a sentence
+    # that now opens with "with" or a stray conjunction.
+    cleaned = " ".join(lowered.split())
+    for lead in ("with ", "and ", ", "):
+        while cleaned.startswith(lead):
+            cleaned = cleaned[len(lead) :].strip()
+    cleaned = cleaned.strip(" ,.")
+    if not cleaned:
+        return UNDER_AN_ACCESSORY
+
+    # Does anything here cover a body, or is it all worn *on* one?
+    only_extras = all(
+        any(word in part for word in _ON_TOP_OF_SOMETHING)
+        for part in (bit.strip() for bit in cleaned.split(",") if bit.strip())
+    )
+    if only_extras:
+        return f"{cleaned}, worn with {UNDER_AN_ACCESSORY}"
+    return cleaned
+
+
 def try_on_prompt(outfit: str) -> str:
     """Instruct an edit that changes the clothes and nothing else.
 
@@ -313,7 +497,22 @@ def try_on_prompt(outfit: str) -> str:
     between outfits is not an avatar.
     """
     return (
-        f"Change only the clothing to: {outfit}.\n"
+        # Cleaned here rather than at the call sites: every path that
+        # reaches a try-on goes through this function, and a body-part
+        # phrase slipping in from a new one would be the same 400
+        # again.
+        f"Change only the clothing to: {wearable_words(outfit)}.\n"
+        # **Said outright, because the failure was the figure
+        # vanishing.** A pin of white trainers came back as an empty
+        # concrete room with the trainers on the floor: the stored
+        # description was a caption for a photograph - "side on, on
+        # pale concrete" - and the edit faithfully drew that
+        # photograph. `wearable_words` now strips the scenery, and
+        # this is the second lock, because the answer to "try it on"
+        # is always somebody wearing it.
+        "The person must stay in the picture, standing and fully dressed, "
+        "wearing every piece named above. Never show the clothing on its "
+        "own, laid out, on a surface, or in an empty room.\n"
         "Keep the same person, the same face, the same body, the same pose, "
         "the same hair, the same background wall, the same floor, the same "
         "lighting and the same framing, all completely unchanged. "

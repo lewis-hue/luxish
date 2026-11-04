@@ -296,3 +296,68 @@ def test_it_never_claims_it_cannot_find_where_to_buy() -> None:
 
     assert "Never say you cannot find where to buy" in ANSWER_SYSTEM
     assert "Never apologise for lacking links" in ANSWER_SYSTEM
+
+
+# --------------------------------------------------------------------------- #
+# Being shown it, rather than told about it
+#
+# Two reported failures, opposite in direction and both about the
+# same thing - whether an answer produces a picture.
+#
+# "Can you generate a mannequin wearing the outfits above?" was
+# refused outright: "I only help with clothes - what are you
+# dressing for?" The topic rail lists "a general question they could
+# ask any assistant", and the model read "generate an image" as one
+# of those. The question could hardly be more about clothes.
+#
+# And before that, the opposite: every answer that happened to name
+# a garment queued a photorealistic render - fifteen to thirty
+# billed seconds - beside a composite that draws the same look
+# instantly, for nothing, out of the garments' own cut-outs.
+#
+# So the picture follows an intention now. `wants_a_picture` is the
+# gate, and it is deliberately a word list rather than a model call:
+# it decides spend, and a second call to decide whether to spend is
+# its own cost on every message.
+# --------------------------------------------------------------------------- #
+def test_asking_to_be_shown_it_is_recognised() -> None:
+    from app.domain.stylist_answer import wants_a_picture
+
+    for asked in (
+        "Can you generate a mannequin wearing the outfits above?",
+        "show me that on my avatar",
+        "Render it please",
+        "put them on a mannequin",
+        "what would it look like?",
+    ):
+        assert wants_a_picture(asked), asked
+
+
+def test_an_ordinary_styling_question_buys_no_render() -> None:
+    """**A false positive costs a billed render nobody wanted.**
+
+    A miss costs nothing visible: the composite is already on the
+    screen, wearing the actual garments.
+    """
+    from app.domain.stylist_answer import wants_a_picture
+
+    for asked in (
+        "What shoes would complete the look you suggested above?",
+        "Does this top go with those trousers?",
+        "What should I wear to a wedding?",
+        "Is this too formal for the office?",
+    ):
+        assert not wants_a_picture(asked), asked
+
+
+def test_the_rails_say_a_picture_request_is_on_topic() -> None:
+    """The carve-out for the refusal above, in the prompt itself.
+
+    Pinned because it is one paragraph among several and the next
+    person tightening the topic rail will not know this happened.
+    """
+    from app.domain.stylist_answer import ANSWER_SYSTEM
+
+    said = ANSWER_SYSTEM.lower()
+    assert "is always about clothes and is never off topic" in said
+    assert "never say you cannot make" in said

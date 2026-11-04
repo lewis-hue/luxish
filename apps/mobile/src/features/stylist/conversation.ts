@@ -18,6 +18,8 @@
  * inside a component is a chat nobody can test.
  */
 
+import type { GapPicture } from '@/features/stylist/ask';
+
 export type Who = 'you' | 'stylist';
 
 export interface Verdict {
@@ -43,6 +45,17 @@ export interface Turn {
   /** Set once the structured half of a reply has landed. */
   verdict?: Verdict;
   shopping?: Shoppable[];
+  /**
+   * A picture per piece they would need, so an answer they own none
+   * of still shows the look instead of only naming it.
+   *
+   * **The reported failure this fixes.** "How would baggy skater
+   * shorts with white sneakers and a white t-shirt look on me?" was
+   * answered with three shop links and nothing to look at, while
+   * every reply around it carried a figure wearing the look. These
+   * go onto the same figure.
+   */
+  pieces?: GapPicture[];
   /**
    * An avatar queued for this turn. The picture appears in the
    * thread when it is ready, which is what makes a try-on part of
@@ -133,6 +146,13 @@ export function shopped(
   shopping: Shoppable[],
 ): Conversation {
   return mapLastStylist(state, (turn) => ({ ...turn, shopping }));
+}
+
+export function pictured(
+  state: Conversation,
+  pieces: GapPicture[],
+): Conversation {
+  return mapLastStylist(state, (turn) => ({ ...turn, pieces }));
 }
 
 export function drawing(state: Conversation, renderId: string): Conversation {

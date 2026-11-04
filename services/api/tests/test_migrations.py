@@ -80,6 +80,8 @@ EXPECTED_ORDER = [
     "0052_account_exports",
     "0053_post_vision",
     "0054_vision_presentation",
+    "0055_packshot_media_kind",
+    "0056_piece_packshots",
 ]
 
 
