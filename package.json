@@ -21,7 +21,7 @@
     "test": "npm run -w @fashion/mobile test",
     "contracts:generate": "npm run -w @fashion/contracts generate",
     "api": "cd services/api && uvicorn app.main:app --reload --port 8000",
-    "api:test": "cd services/api && pytest -q",
+    "api:test": "bash scripts/api-test.sh",
     "api:migrate": "cd services/api && alembic upgrade head",
     "dev:up": "docker compose -f infra/docker-compose.yml up -d",
     "dev:down": "docker compose -f infra/docker-compose.yml down"

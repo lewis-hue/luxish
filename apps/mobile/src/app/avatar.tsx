@@ -13,6 +13,7 @@ import {
   isWorking,
   useAvatar,
   useChooseVehicle,
+  useCancelRender,
   useCreateAvatar,
   useTryOnFit,
   useRenders,
@@ -267,6 +268,15 @@ export default function AvatarScreen() {
   // asked for it. The mutation settles in half a second; the worker takes
   // fifteen to twenty-seven.
   const busy = Boolean(drawing) || create.isPending;
+  // **Stopping is only offered once there is a row to stop.**
+  //
+  // Between tapping and the server answering there is no render id, so
+  // for that half-second `busy` is true and there is nothing to cancel.
+  // A stop button that did nothing in that window would be worse than
+  // none: the one moment somebody presses it hardest is when they have
+  // just realised they chose wrong.
+  const stop = useCancelRender();
+  const stopDrawing = drawing ? () => stop.mutate(drawing.id) : null;
   // What is in the picture on screen, labelled, as it was asked for.
   const shown: Render | undefined = worn ? undefined : newest;
 
@@ -329,7 +339,13 @@ export default function AvatarScreen() {
           Once there is a drawn picture it takes over: somebody who
           has paid for one should not have to ask twice to see it. */}
       {showing ? (
-        <Figure uri={showing} label={worn?.label ?? null} busy={busy} />
+        <Figure
+          uri={showing}
+          label={worn?.label ?? null}
+          busy={busy}
+          onStop={stopDrawing}
+          stopping={stop.isPending}
+        />
       ) : (
         <OutfitFigure
           // **Wearing the fit's own garments, cut from its
@@ -713,10 +729,15 @@ function Figure({
   uri,
   label,
   busy,
+  onStop,
+  stopping,
 }: {
   uri: string | null;
   label: string | null;
   busy: boolean;
+  /** `null` while a request is in flight but no render exists yet. */
+  onStop: (() => void) | null;
+  stopping: boolean;
 }) {
   const colors = Colors[useScheme()];
   const timing = useMotiTiming();
@@ -773,7 +794,7 @@ function Figure({
         </View>
       ) : null}
 
-      {busy ? <Drawing /> : null}
+      {busy ? <Drawing onStop={onStop} stopping={stopping} /> : null}
 
       {label && !busy ? (
         <MotiView
@@ -837,7 +858,13 @@ const STAGES: readonly string[] = [
 /** How long each stage is shown. The render takes 15-30s. */
 const PER_STAGE_MS = 5200;
 
-function Drawing() {
+function Drawing({
+  onStop,
+  stopping,
+}: {
+  onStop: (() => void) | null;
+  stopping: boolean;
+}) {
   const colors = Colors[useScheme()];
   const timing = useMotiTiming();
   const [stage, setStage] = useState(0);
@@ -852,10 +879,16 @@ function Drawing() {
 
   return (
     <View
-      accessible
-      accessibilityRole="progressbar"
-      accessibilityLabel={STAGES[stage]}
-      accessibilityState={{ busy: true }}
+      // **Not `accessible` on this container, and that is deliberate.**
+      //
+      // It used to be, which was right while the overlay was only a
+      // progress report: one node reading "Dressing the figure" is
+      // better than four decorative ones. Now that the card holds a
+      // Stop button, collapsing the subtree hides it - a control that
+      // exists for everyone but can only be reached by sighted touch.
+      //
+      // The progressbar role moves to the wash below, which is the
+      // part that actually reports progress and has nothing to press.
       style={{
         position: 'absolute',
         inset: 0,
@@ -864,8 +897,17 @@ function Drawing() {
         justifyContent: 'flex-end',
         paddingBottom: Spacing.four,
       }}>
-      {/* A wash over the figure, so the card reads against it. */}
+      {/* A wash over the figure, so the card reads against it.
+
+          It also carries the progress report, because it covers the
+          whole frame and has nothing to press: the role that was on
+          the container had to move somewhere that would not swallow
+          the Stop button. */}
       <View
+        accessible
+        accessibilityRole="progressbar"
+        accessibilityLabel={STAGES[stage]}
+        accessibilityState={{ busy: true }}
         style={{
           position: 'absolute',
           inset: 0,
@@ -995,6 +1037,46 @@ function Drawing() {
             />
           ))}
         </View>
+
+        {/* **Stop, in the card rather than beside it.**
+
+            Waiting used to be the only option. One picture is drawn
+            per person at a time, so until a render finished, asking
+            again was answered with the one already going - and a
+            render whose worker had died held both the card and the
+            feature for the ten minutes the server's sweep took to
+            reclaim it. Someone who had simply picked the wrong
+            garment had that same wait.
+
+            It sits under the track because that is where the eye
+            already is, reading the stage. Quiet, not accented: this
+            is the way out of the wait, not the thing to do.
+
+            Hidden rather than disabled while there is no render yet.
+            A greyed-out control invites the press that will not work;
+            nothing invites nothing, and the gap lasts half a second. */}
+        {onStop ? (
+          <Pressable
+            onPress={onStop}
+            disabled={stopping}
+            accessibilityRole="button"
+            accessibilityLabel="Stop drawing this picture"
+            accessibilityState={{ busy: stopping, disabled: stopping }}
+            hitSlop={8}
+            style={({ pressed }) => ({
+              alignSelf: 'center',
+              paddingHorizontal: Spacing.two,
+              paddingVertical: Spacing.half,
+              opacity: stopping ? 0.45 : pressed ? 0.6 : 1,
+            })}>
+            <ThemedText
+              type="small"
+              themeColor="textSecondary"
+              style={{ fontSize: FontSize.meta }}>
+              {stopping ? 'Stopping' : 'Stop'}
+            </ThemedText>
+          </Pressable>
+        ) : null}
       </View>
     </View>
   );

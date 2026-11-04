@@ -1,11 +1,12 @@
 import { Image } from 'expo-image';
 import { useState } from 'react';
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import {
   isWorking,
   outfitSentence,
   useAvatar,
+  useCancelRender,
   useRenders,
   useTryOn,
 } from '@/api/queries/avatar';
@@ -141,6 +142,7 @@ export function AvatarLook({
   const avatar = useAvatar(signedIn);
   const renders = useRenders(signedIn);
   const tryOn = useTryOn();
+  const stop = useCancelRender();
   const [asked, setAsked] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
 
@@ -260,6 +262,44 @@ export function AvatarLook({
             {drawing ? 'Drawing it on you' : 'See it photoreal'}
           </ThemedText>
         </MotionPressable>
+      ) : null}
+
+      {/* **A way out of the half-minute wait.**
+
+          The button above disables itself while the picture is being
+          drawn, which was the whole of the interaction: wait, or leave
+          the screen and come back to a render still holding the slot.
+          One picture is drawn per person at a time, so a try-on that
+          had gone wrong blocked the next one until the server's
+          ten-minute sweep released it - and a photoreal render is the
+          expensive call, so the person most likely to want out is the
+          one who has just noticed they picked the wrong pieces.
+
+          Only once there is a render to stop. `drawing` is also true
+          for the half-second before the server answers with an id,
+          and a button that cannot do its job yet should not be there. */}
+      {drawing && mine ? (
+        <Pressable
+          onPress={() => stop.mutate(mine.id)}
+          disabled={stop.isPending}
+          accessibilityRole="button"
+          accessibilityLabel="Stop drawing this picture"
+          accessibilityState={{ busy: stop.isPending, disabled: stop.isPending }}
+          hitSlop={8}
+          style={({ pressed }) => ({
+            alignSelf: 'center',
+            minHeight: TapTarget,
+            justifyContent: 'center',
+            paddingHorizontal: Spacing.two,
+            opacity: stop.isPending ? 0.45 : pressed ? 0.6 : 1,
+          })}>
+          <ThemedText
+            type="small"
+            themeColor="textSecondary"
+            style={{ fontSize: FontSize.meta }}>
+            {stop.isPending ? 'Stopping' : 'Stop'}
+          </ThemedText>
+        </Pressable>
       ) : null}
     </View>
   );

@@ -19,9 +19,9 @@ deployment path, this fails and the password has to go.
 from __future__ import annotations
 
 import json
-from pathlib import Path
+from tests._repo import repo_root
 
-REPO = Path(__file__).resolve().parents[3]
+REPO = repo_root()
 REALM = REPO / "infra" / "keycloak" / "import" / "luxish-realm.json"
 
 #: The one file allowed to mount the import directory.

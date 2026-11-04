@@ -363,3 +363,35 @@ export function outfitSentence(
     .slice(0, 6);
   return described.join(', ');
 }
+
+/**
+ * Stop a picture that is being drawn.
+ *
+ * **There was no way to do this, and that was the whole of the stale-render
+ * problem.** One render is allowed in flight per kind, so while a row said it
+ * was working, asking again returned that row instead of drawing. A render
+ * whose worker had died held the progress card open and the feature shut for
+ * the ten minutes it took the server's sweep to reclaim it. Someone who had
+ * simply picked the wrong garment had the same wait.
+ *
+ * Cancelling finishes the row, which frees the next request, so there is no
+ * retry mutation to pair with this: retrying is `useCreateAvatar` or
+ * `useTryOn` again. Both lists are invalidated because the avatar screen
+ * reads `current` and the progress card reads `renders`, and a stop that
+ * leaves either one saying "drawing" has not visibly worked.
+ */
+export function useCancelRender() {
+  const queries = useQueryClient();
+  return useMutation({
+    mutationFn: async (renderId: string) => {
+      const { data } = await api.POST('/v1/avatar/renders/{render_id}/cancel', {
+        params: { path: { render_id: renderId } },
+      });
+      return data ?? null;
+    },
+    onSuccess: () => {
+      void queries.invalidateQueries({ queryKey: avatarKeys.renders });
+      void queries.invalidateQueries({ queryKey: avatarKeys.current });
+    },
+  });
+}

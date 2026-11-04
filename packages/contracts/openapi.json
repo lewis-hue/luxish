@@ -610,6 +610,50 @@
         }
       }
     },
+    "/v1/avatar/renders/{render_id}/cancel": {
+      "post": {
+        "tags": [
+          "avatar"
+        ],
+        "summary": "Cancel Render",
+        "description": "Stop a picture being drawn, and let them ask again straight away.\n\n**There was no way to do this.** A render that had been asked for\ncould only be waited out: the progress card sat over the avatar, and\nbecause one render is allowed in flight per kind, asking again\nreturned the same row rather than starting over. Someone who had\npicked the wrong garment watched it being drawn and then waited ten\nminutes for the stranded-row sweep before they could try again.\n\nA `POST` rather than a `DELETE`, because nothing is removed. The row\nstays, saying it was stopped, which is what the screen reads and what\nthe worker checks before it writes a result.\n\nRetrying needs no endpoint of its own: once this returns, nothing is\nin flight, so asking for the picture again just asks for it.",
+        "operationId": "cancel_render_v1_avatar_renders__render_id__cancel_post",
+        "parameters": [
+          {
+            "name": "render_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Render Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RenderOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/billing/entitlements": {
       "get": {
         "tags": [

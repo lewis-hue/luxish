@@ -72,6 +72,13 @@ async def _run(
         # picture, which is the whole reason the state is on the row.
         return {"render_id": str(render.id), "state": "ready", "repeat": True}
 
+    if renders.was_cancelled(render):
+        # Stopped before a worker reached it, which is the common case:
+        # the queue is where a render waits, so that is where somebody
+        # changing their mind catches it. Returning before `draw` is the
+        # point - this is the branch that does not spend the money.
+        return {"render_id": str(render.id), "state": "cancelled", "drawn": False}
+
     await renders.mark_running(session, render=render)
     try:
         asset = await draw(session, render, renderer=renderer, store=store)
@@ -81,6 +88,25 @@ async def _run(
         # one is retried by the normal attempt machinery. The render already
         # says what went wrong either way.
         raise
+
+    # **Asked again, now that drawing is over.** The cancel arrived while
+    # the model was working, in a different request and a different
+    # session, so the copy of the row in this one is half a minute stale.
+    # Without the refresh `mark_ready` writes over it and the avatar
+    # becomes the picture they told us to stop drawing - the worst of the
+    # outcomes, because they watched it happen anyway.
+    await session.refresh(render)
+    if renders.was_cancelled(render):
+        # The row keeps the cancellation. The asset is left where it is
+        # rather than deleted: it is a real drawing, the media store
+        # already has it, and the tombstoned-deletion path (ADR-012) is
+        # what removes media, not an opportunistic unlink in a worker.
+        return {
+            "render_id": str(render.id),
+            "asset_id": str(asset.id),
+            "state": "cancelled",
+            "drawn": True,
+        }
 
     await renders.mark_ready(session, render=render, media_asset_id=asset.id)
     return {"render_id": str(render.id), "asset_id": str(asset.id), "state": "ready"}
@@ -124,8 +150,7 @@ async def try_on_job(
         if not outfit and render.source_post_id is not None:
             if reader is None:
                 raise CapabilityUnavailable(
-                    "This fit has not been read yet and no reader is "
-                    "configured to read it.",
+                    "This fit has not been read yet and no reader is configured to read it.",
                     detail={"capability": "fit_description"},
                 )
             from app.domain import fit_descriptions
@@ -180,9 +205,7 @@ async def likeness_job(
     async def draw(session, render, *, renderer, store):
         from app.domain import likeness
 
-        return await likeness.draw(
-            session, render=render, renderer=renderer, store=store
-        )
+        return await likeness.draw(session, render=render, renderer=renderer, store=store)
 
     return await _run(session, job, renderer=renderer, store=store, draw=draw)
 

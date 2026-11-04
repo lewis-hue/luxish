@@ -416,7 +416,7 @@ up() {
 
   head2 "Where everything is"
   local host; host="$(lan_address)"
-  say "  API        http://$host:8010      (docs at /docs)"
+  say "  API        http://$host:${LUXISH_API_PORT:-8010}      (docs at /docs)"
   say "  Keycloak   http://$host:55080"
   say "  Metro      http://$host:8081"
   say ""

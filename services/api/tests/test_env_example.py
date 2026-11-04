@@ -17,6 +17,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from tests._repo import repo_root
+
 from app.config import Settings
 
 EXAMPLE = Path(__file__).resolve().parents[1] / ".env.example"
@@ -54,9 +56,7 @@ def test_the_example_carries_no_secret() -> None:
     reviewer's own, and it ships empty on purpose."""
     for line in EXAMPLE.read_text(encoding="utf-8").splitlines():
         if line.startswith("LUXISH_META_API_KEY="):
-            assert line.strip() == "LUXISH_META_API_KEY=", (
-                "a real key is committed in .env.example"
-            )
+            assert line.strip() == "LUXISH_META_API_KEY=", "a real key is committed in .env.example"
             return
     raise AssertionError("the model key is not mentioned at all")
 
@@ -68,9 +68,7 @@ def test_the_two_issuer_settings_are_spelled_the_same_way() -> None:
     API rather than a config mismatch. `dev-stack.sh` rewrites both,
     so the examples only have to start consistent.
     """
-    mobile = (
-        EXAMPLE.parents[2] / "apps" / "mobile" / ".env.example"
-    ).read_text(encoding="utf-8")
+    mobile = (repo_root() / "apps" / "mobile" / ".env.example").read_text(encoding="utf-8")
     api = EXAMPLE.read_text(encoding="utf-8")
 
     def value(text: str, key: str) -> str:
@@ -79,6 +77,4 @@ def test_the_two_issuer_settings_are_spelled_the_same_way() -> None:
                 return line.split("=", 1)[1].strip()
         return ""
 
-    assert value(api, "LUXISH_KEYCLOAK_ISSUER") == value(
-        mobile, "EXPO_PUBLIC_KEYCLOAK_ISSUER"
-    )
+    assert value(api, "LUXISH_KEYCLOAK_ISSUER") == value(mobile, "EXPO_PUBLIC_KEYCLOAK_ISSUER")

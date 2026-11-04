@@ -64,8 +64,7 @@ def test_no_module_counts_its_way_to_the_repository_root() -> None:
             if int(match.group(1)) >= 3:
                 offenders.append(f"{rel}: parents[{match.group(1)}]")
     assert not offenders, (
-        "these count past the service root and break when the code moves: "
-        + ", ".join(offenders)
+        "these count past the service root and break when the code moves: " + ", ".join(offenders)
     )
 
 
@@ -114,3 +113,57 @@ def test_the_seed_scripts_use_the_shared_resolver() -> None:
         text = (API / "scripts" / name).read_text(encoding="utf-8")
         assert "parents[3]" not in text, f"{name} still counts to the repo root"
         assert "seed_photos()" in text, f"{name} does not use the resolver"
+
+
+def test_no_test_counts_its_way_to_the_repository_root() -> None:
+    """The suite itself had the bug, and it broke the documented command.
+
+    `npm run api:test` runs in a container where the service sits at
+    `/srv`, so `parents[3]` from `/srv/tests/x.py` raises during
+    collection. Three files did it, pytest reported three errors and
+    collected nothing, and a reviewer following the README saw a
+    broken suite.
+
+    `tests/_repo.py` finds the root by its markers instead. Reaching
+    for a file above `services/api` is fine; counting your way there
+    is not.
+    """
+    offenders: list[str] = []
+    for path in sorted((API / "tests").glob("*.py")):
+        if path.name == "_repo.py":
+            continue
+        code = _code_only(path)
+        for match in re.finditer(r"parents\s*\[\s*(\d+)\s*\]", code):
+            if int(match.group(1)) >= 2:
+                offenders.append(f"tests/{path.name}: parents[{match.group(1)}]")
+        # `API.parents[1]` counts as one by the rule above and is still
+        # an IndexError in the image, because `API` is already the
+        # service root there. Climbing from a name that is itself a
+        # resolved path is the same bug wearing a variable.
+        for match in re.finditer(r"([A-Za-z_]\w*)\s+\.\s+parents\s*\[", code):
+            offenders.append(f"tests/{path.name}: {match.group(1)}.parents[...]")
+
+    assert not offenders, (
+        "these break when the suite runs anywhere but a full checkout; "
+        "use `from tests._repo import repo_root`: " + ", ".join(offenders)
+    )
+
+
+def test_the_repo_resolver_can_be_pointed_at_a_mount() -> None:
+    """`scripts/api-test.sh` names the mount rather than hoping.
+
+    Without the override the container would have to contain a whole
+    checkout for the repository-level guards to run, and they would
+    silently skip instead.
+    """
+    from tests import _repo
+    from tests._repo import repo_root
+
+    assert _repo.ENV_VAR == "LUXISH_REPO_DIR"
+    assert _repo.find_repo() is not None, "cannot find the repository from the suite"
+
+    script = (repo_root() / "scripts" / "api-test.sh").read_text(encoding="utf-8")
+    assert f"-e {_repo.ENV_VAR}=/repo" in script, (
+        "the containerised route does not tell the suite where the repository is"
+    )
+    assert ":/repo:ro" in script, "the repository mount is missing or writable"

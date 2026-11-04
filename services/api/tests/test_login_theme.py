@@ -21,12 +21,13 @@ declarations that are load-bearing.
 
 from __future__ import annotations
 
-from pathlib import Path
 
 import pytest
 
+from tests._repo import repo_root
+
 THEME = (
-    Path(__file__).resolve().parents[3]
+    repo_root()
     / "infra"
     / "keycloak"
     / "themes"

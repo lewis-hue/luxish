@@ -11,9 +11,10 @@ crops the shoes off it.
 from __future__ import annotations
 
 import io
-from pathlib import Path
 
 import pytest
+
+from tests._repo import repo_root
 
 from app.workers.shell_fit import (
     PORTRAIT_TARGET,
@@ -58,15 +59,7 @@ def test_the_bounds_match_the_ones_the_app_clamps_to() -> None:
     other side: every generated picture would be padded *and* then
     cropped.
     """
-    shape_ts = (
-        Path(__file__).resolve().parents[3]
-        / "apps"
-        / "mobile"
-        / "src"
-        / "features"
-        / "feed"
-        / "shape.ts"
-    )
+    shape_ts = repo_root() / "apps" / "mobile" / "src" / "features" / "feed" / "shape.ts"
     if not shape_ts.is_file():  # pragma: no cover - API checked alone
         pytest.skip("mobile app not present in this checkout")
 

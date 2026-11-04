@@ -50,6 +50,36 @@ RUN pip install --upgrade pip \
 
 COPY . .
 
+# **The test stage, which is not the default.**
+#
+# The README promises a reviewer needs Docker and Node and nothing
+# else, and `npm run api:test` broke that promise: there is no Python
+# on the host to run `pytest` with, and the runtime image installs
+# `.` rather than `.[dev]`, so pytest was absent there too. The
+# documented command worked on no clean machine at all.
+#
+# So the suite gets a stage of its own. The runtime image stays lean -
+# it does not ship a test runner - and the tests still run with only
+# Docker installed.
+#
+# `tests/` is in `.dockerignore` and stays there: the suite is
+# bind-mounted at run time instead of copied, so editing a test does
+# not invalidate a layer. `scripts/api-test.sh` does the mounting.
+FROM base AS dev
+
+RUN pip install ".[dev]"
+
+# Root here on purpose. This stage exists to run a suite in a
+# throwaway container, and the suite writes caches and SQLite files
+# wherever pytest points it.
+CMD ["python", "-m", "pytest", "-q"]
+
+# **The runtime stage must stay last in this file.** docker-compose
+# declares no `target`, so it builds whatever the final stage is. Put
+# `dev` below this line and every container in the stack would ship a
+# test runner.
+FROM base AS runtime
+
 # Not root. The container writes only to `.media` and the SQLite
 # file, both of which it owns.
 # **`/data` is created here so the named volume inherits its owner.**

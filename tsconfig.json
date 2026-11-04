@@ -1,4 +1,22 @@
 {
-  "compilerOptions": {},
-  "extends": "expo/tsconfig.base"
+  "//": [
+    "The root project covers only what no workspace owns: `packages/*`.",
+    "",
+    "This was `create-expo-app`'s file - empty options, no `include` - so",
+    "a root `tsc --noEmit` swept every workspace as well, typechecking",
+    "the Expo app's tests without jest types or the `@/` path alias and",
+    "reporting hundreds of 'Cannot find name expect'. The app was fine;",
+    "the config was reading it with the wrong settings.",
+    "",
+    "`apps/mobile` has its own tsconfig and typechecks through",
+    "`npm run typecheck`. Adding a workspace here would mean two",
+    "configs claiming the same files, which is how they drift."
+  ],
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "noEmit": true
+  },
+  "include": ["packages/*/src/**/*.ts", "packages/*/src/**/*.tsx"],
+  "exclude": ["node_modules", "apps", "**/node_modules", "**/dist", "**/build"]
 }

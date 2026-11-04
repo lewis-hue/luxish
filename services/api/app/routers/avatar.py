@@ -73,9 +73,7 @@ async def read_avatar(db: SessionDep, ctx: AuthDep) -> AvatarOut:
 
 
 @router.put("/vehicle", response_model=AvatarOut)
-async def set_vehicle(
-    payload: VehicleIn, db: SessionDep, ctx: AuthDep
-) -> AvatarOut:
+async def set_vehicle(payload: VehicleIn, db: SessionDep, ctx: AuthDep) -> AvatarOut:
     """Choose between the mannequin and a photorealistic likeness.
 
     **The mannequin is the default and this is the only way off it.**
@@ -87,9 +85,7 @@ async def set_vehicle(
     """
     from app.domain.mannequin import choose_vehicle, dresses_their_avatar
 
-    await choose_vehicle(
-        db, user_id=ctx.user_id, on_my_avatar=payload.on_my_avatar
-    )
+    await choose_vehicle(db, user_id=ctx.user_id, on_my_avatar=payload.on_my_avatar)
     asset = await domain.current_avatar(db, user_id=ctx.user_id)
     appearance = await domain.read_appearance(db, user_id=ctx.user_id)
     return AvatarOut(
@@ -100,9 +96,7 @@ async def set_vehicle(
 
 
 @router.put("/appearance", response_model=AppearanceOut)
-async def set_appearance(
-    payload: AppearanceIn, db: SessionDep, ctx: AuthDep
-) -> AppearanceOut:
+async def set_appearance(payload: AppearanceIn, db: SessionDep, ctx: AuthDep) -> AppearanceOut:
     """Record how somebody says they look.
 
     Does not redraw the avatar. Changing a detail and regenerating are two
@@ -187,9 +181,7 @@ async def try_on(payload: TryOnIn, db: SessionDep, ctx: AuthDep) -> RenderOut:
     response_model=RenderOut,
     status_code=status.HTTP_202_ACCEPTED,
 )
-async def from_photo(
-    payload: LikenessIn, db: SessionDep, ctx: AuthDep
-) -> RenderOut:
+async def from_photo(payload: LikenessIn, db: SessionDep, ctx: AuthDep) -> RenderOut:
     """Build an avatar that looks like you, from a photograph of you.
 
     An edit of your own photograph rather than a figure drawn to a
@@ -258,9 +250,7 @@ async def read_photos(db: SessionDep, ctx: AuthDep) -> LikenessPhotosOut:
 
 
 @router.delete("/photos/{asset_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def forget_photo(
-    asset_id: uuid.UUID, db: SessionDep, ctx: AuthDep
-) -> Response:
+async def forget_photo(asset_id: uuid.UUID, db: SessionDep, ctx: AuthDep) -> Response:
     """Remove a photograph of yourself. 204 either way.
 
     Avatars already drawn from it are kept: the link is `SET NULL`, and
@@ -279,15 +269,37 @@ async def read_renders(db: SessionDep, ctx: AuthDep) -> RendersResponse:
 
 
 @router.get("/renders/{render_id}", response_model=RenderOut)
-async def read_render(
-    render_id: uuid.UUID, db: SessionDep, ctx: AuthDep
-) -> RenderOut:
+async def read_render(render_id: uuid.UUID, db: SessionDep, ctx: AuthDep) -> RenderOut:
     """One render, for polling.
 
     404 for somebody else's, rather than 403: distinguishing them would
     confirm the id exists.
     """
     render = await renders.get(db, user_id=ctx.user_id, render_id=render_id)
+    if render is None:
+        raise RenderNotFound()
+    return _render_out(render)
+
+
+@router.post("/renders/{render_id}/cancel", response_model=RenderOut)
+async def cancel_render(render_id: uuid.UUID, db: SessionDep, ctx: AuthDep) -> RenderOut:
+    """Stop a picture being drawn, and let them ask again straight away.
+
+    **There was no way to do this.** A render that had been asked for
+    could only be waited out: the progress card sat over the avatar, and
+    because one render is allowed in flight per kind, asking again
+    returned the same row rather than starting over. Someone who had
+    picked the wrong garment watched it being drawn and then waited ten
+    minutes for the stranded-row sweep before they could try again.
+
+    A `POST` rather than a `DELETE`, because nothing is removed. The row
+    stays, saying it was stopped, which is what the screen reads and what
+    the worker checks before it writes a result.
+
+    Retrying needs no endpoint of its own: once this returns, nothing is
+    in flight, so asking for the picture again just asks for it.
+    """
+    render = await renders.cancel(db, user_id=ctx.user_id, render_id=render_id)
     if render is None:
         raise RenderNotFound()
     return _render_out(render)

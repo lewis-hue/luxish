@@ -403,6 +403,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/avatar/renders/{render_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel Render
+         * @description Stop a picture being drawn, and let them ask again straight away.
+         *
+         *     **There was no way to do this.** A render that had been asked for
+         *     could only be waited out: the progress card sat over the avatar, and
+         *     because one render is allowed in flight per kind, asking again
+         *     returned the same row rather than starting over. Someone who had
+         *     picked the wrong garment watched it being drawn and then waited ten
+         *     minutes for the stranded-row sweep before they could try again.
+         *
+         *     A `POST` rather than a `DELETE`, because nothing is removed. The row
+         *     stays, saying it was stopped, which is what the screen reads and what
+         *     the worker checks before it writes a result.
+         *
+         *     Retrying needs no endpoint of its own: once this returns, nothing is
+         *     in flight, so asking for the picture again just asks for it.
+         */
+        post: operations["cancel_render_v1_avatar_renders__render_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/billing/entitlements": {
         parameters: {
             query?: never;
@@ -6459,6 +6493,37 @@ export interface operations {
         };
     };
     read_render_v1_avatar_renders__render_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                render_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RenderOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_render_v1_avatar_renders__render_id__cancel_post: {
         parameters: {
             query?: never;
             header?: never;

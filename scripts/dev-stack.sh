@@ -211,6 +211,41 @@ tunnel() {
 # Google sign-in is being tested. Email and password, the API and the app
 # are all happy on http across a trusted network, and PKCE with an
 # `exp://` redirect needs no TLS.
+# **The phone's API address, which nothing was rewriting.**
+#
+# `HOST_PINS` covers the three files that carry Keycloak's host, because
+# that is what the tunnel rotated. The app's own API address was not in
+# it - and `apps/mobile/.env.example` says, in as many words, that
+# "dev-stack.sh rewrites both lines with this computer's address on
+# every start". It rewrote one.
+#
+# A reviewer's clone therefore kept `http://127.0.0.1:8010`, and on a
+# phone `127.0.0.1` is the phone. Sign-in worked, because Keycloak's
+# line *was* pinned, and then every screen was empty: the one failure
+# shape most easily read as "this app is broken".
+#
+# Separate from `pin_host` because the value has a different shape -
+# this one carries the API's port and no realm path - and because it is
+# re-pinned whenever the port changes, not only when the address does.
+pin_api_url() {
+  local ip="$1" port="$2"
+  local file="$REPO/apps/mobile/.env"
+  local want="http://$ip:$port"
+  local have
+
+  [ -f "$file" ] || return 0
+  have="$(grep -E '^EXPO_PUBLIC_API_BASE_URL=' "$file" | head -1 | cut -d= -f2-)"
+  [ "$have" = "$want" ] && return 0
+
+  sed -i -E "s|^EXPO_PUBLIC_API_BASE_URL=.*|EXPO_PUBLIC_API_BASE_URL=$want|" "$file"
+  say "app      API address set to $want"
+  # Metro inlines `EXPO_PUBLIC_*` at bundle time, so a running Metro is
+  # serving the old address. Saying so is the whole point: the symptom
+  # of not knowing is an app that cannot reach a backend that is up.
+  say "         (restart Metro if it is already running)"
+  return 1
+}
+
 keycloak_host() {
   if [ "$USE_TUNNEL" = "1" ]; then
     tunnel
@@ -228,6 +263,10 @@ keycloak_host() {
   else
     say "keycloak http://$ip:$KC_PORT (address changed - rewired 3 configs)"
   fi
+
+  # The same address, the API's port. Pinned here because this is where
+  # the LAN address is already known and already re-read on every start.
+  pin_api_url "$ip" "$API_PORT" || HOST_ROTATED=1
 }
 
 # Run the backend in containers, which is the default.
@@ -250,7 +289,20 @@ docker_backend() {
     exit 1
   fi
 
-  if ! ( cd "$REPO/infra" && docker compose up -d >"$LOGS/compose.log" 2>&1 ); then
+  # **`--force-recreate`, and it is not belt and braces.**
+  #
+  # The API and the four workers share one image on purpose, so that a
+  # worker can never lag the API by a rebuild. `docker compose up -d`
+  # undoes that: it recreates only the containers it considers stale,
+  # so a rebuild followed by a plain `up` left the API on the new image
+  # and the workers running the old one.
+  #
+  # That is not a cosmetic difference. It happened here while adding
+  # cancellation: the API accepted the stop and wrote the row, the
+  # workers had no idea what the row meant, drew the picture anyway and
+  # marked it ready a minute later. Every immediate check passed and
+  # the feature silently did not work.
+  if ! ( cd "$REPO/infra" && docker compose up -d --force-recreate            >"$LOGS/compose.log" 2>&1 ); then
     say "the stack did not come up - see $LOGS/compose.log"
     exit 1
   fi
@@ -279,8 +331,26 @@ docker_backend() {
     exit 1
   fi
   say "db       at head"
-  say "api      on :$API_PORT (container)"
-  say "workers  ai, media, default and beat (containers)"
+
+  # **Is the thing on that port the thing we just started?**
+  #
+  # A socket left behind by a dead process kept listening on
+  # `0.0.0.0:8010`. Docker could not have that address, took
+  # `[::]:8010`, and reported a successful publish - so every IPv4
+  # client, the phone included, reached a months-old build with no
+  # workers behind it. Renders were accepted and never drawn, and the
+  # app read as slow rather than misrouted.
+  #
+  # `/healthz` cannot see this: the dead listener answered it happily.
+  # Comparing the served contract against the committed one can.
+  if ! node "$REPO/scripts/verify-api.mjs" "$API_PORT" >"$LOGS/verify.log" 2>&1; then
+    say "something other than this build is answering on :$API_PORT"
+    cat "$LOGS/verify.log"
+    exit 1
+  fi
+
+  say "api      on :$API_PORT (container, serving this checkout)"
+  say "workers  ai, media, default and beat (containers, same image)"
 }
 
 start() {
@@ -383,10 +453,12 @@ start() {
 
   if [ "${HOST_ROTATED:-0}" = "1" ]; then
     say ""
-    say "The Keycloak address changed. Restart Metro so the app picks it up:"
+    say "An address in the app's bundle changed. Restart Metro so it is picked up:"
     say "    npx expo start --clear"
-    say "Then reload the app on the phone. Signing in will fail until you do,"
-    say "because EXPO_PUBLIC_KEYCLOAK_ISSUER is bundled, not read at runtime."
+    say "Then reload the app on the phone. Until you do, the app is still using"
+    say "the old one: EXPO_PUBLIC_* values are compiled into the bundle, not read"
+    say "at runtime. Signing in fails if the issuer moved, and every screen comes"
+    say "up empty if the API address did."
   fi
 }
 

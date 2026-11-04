@@ -65,10 +65,16 @@ When you are done:
 |---|---|
 | **Docker Desktop**, running | Postgres, Redis, Keycloak, the API and the workers |
 | **Node 22.13+** | Metro, which has to run on the host so your phone can reach it |
+| **A POSIX shell** | `review.sh` is a shell script. macOS and Linux already have one; on Windows use **Git Bash**, which comes with [Git for Windows](https://git-scm.com/download/win), or WSL |
 
 That is the whole list. **Python is not required** — the API and all
 four workers run in containers built from
 `services/api/Dockerfile`.
+
+On Windows, run the commands in a Git Bash window rather than
+PowerShell or `cmd`. In PowerShell `./scripts/review.sh` fails with
+"not recognized", which looks like a missing file and is only a
+missing interpreter.
 
 Check the machine without starting anything:
 
@@ -166,6 +172,15 @@ and free — and only buys a photoreal render when somebody asks to
 see one. Pictures of garments nobody owns are drawn once per phrase
 and shared by every account.
 
+**Waiting is escapable.** A render takes nine to forty seconds, and
+one is drawn per person at a time so a second tap cannot pay twice.
+That pairing used to mean a picture could not be called off: the
+progress card sat over the avatar, and asking again returned the
+render already going. The card now carries a Stop, which finishes the
+row so the next request starts fresh, and the worker re-reads the row
+after drawing so a picture somebody stopped is never the one that
+lands (`app/domain/avatar_renders.py`, `app/workers/avatar_jobs.py`).
+
 ---
 
 ## Tests
@@ -180,6 +195,14 @@ npm run lint
 Both suites run offline. No test calls a paid model or the open web;
 providers are stubbed at the seam so a suite run costs nothing and
 is deterministic.
+
+`api:test` needs no Python either. It uses a local `pytest` when the
+machine has one and otherwise builds the `dev` target of
+`services/api/Dockerfile` and runs the suite in a throwaway
+container. Arguments pass through, so `npm run api:test -- -k taste`
+works on both routes. The suite does not talk to a running stack: it
+builds its own database, which is why it can run before you have
+started anything.
 
 ---
 

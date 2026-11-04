@@ -176,7 +176,20 @@ services:
       - ../assets:/srv/assets:ro
       - ../apps/mobile/assets/images/mannequins:/srv/mannequins:ro
     ports:
-      - '8010:8010'
+      # **Configurable, because a port can be taken by nothing at all.**
+      #
+      # A dead process left a socket listening on `0.0.0.0:8010`. Docker
+      # could not have that address, so it bound `[::]:8010` instead and
+      # reported a successful publish. Every IPv4 client - the phone
+      # included - then reached the leaked socket, which answered from a
+      # months-old build whose workers were not running. Avatar renders
+      # were accepted and never processed, and the app looked slow rather
+      # than misrouted.
+      #
+      # `scripts/dev-stack.sh` checks that what answers on this port is
+      # the build it just started, and says to set `LUXISH_API_PORT` when
+      # it is not.
+      - '${LUXISH_API_PORT:-8010}:8010'
     depends_on:
       redis: { condition: service_healthy }
       keycloak: { condition: service_started }

@@ -19,10 +19,12 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from tests._repo import repo_root
+
 import pytest
 
 API_ROOT = Path(__file__).resolve().parents[1]
-APP_ROUTES = API_ROOT.parents[1] / "apps" / "mobile" / "src" / "app"
+APP_ROUTES = repo_root() / "apps" / "mobile" / "src" / "app"
 
 #: Targets that name a record rather than a screen. The segment after
 #: the prefix is an id, so only the prefix is checked.

@@ -61,9 +61,7 @@ async def get(
 ) -> AvatarRender | None:
     """One render, if it belongs to this person."""
     return await session.scalar(
-        sa.select(AvatarRender).where(
-            AvatarRender.id == render_id, AvatarRender.user_id == user_id
-        )
+        sa.select(AvatarRender).where(AvatarRender.id == render_id, AvatarRender.user_id == user_id)
     )
 
 
@@ -126,6 +124,16 @@ def public_reason(error: str | None) -> str | None:
     """
     if not error:
         return None
+
+    # **A cancellation is already a sentence we wrote.**
+    #
+    # Without this it fell through to `UNLUCKY` and somebody who had
+    # just tapped stop was told "That one did not come out. Pull down
+    # to try again." - blaming bad luck for what they chose, and
+    # offering a retry they had already decided against.
+    if error == CANCELLED_NOTE:
+        return CANCELLED_NOTE
+
     lowered = error.lower()
     for needles, said in _PLAINLY:
         if any(needle in lowered for needle in needles):
@@ -170,9 +178,7 @@ def abandoned(render: AvatarRender, *, now: datetime | None = None) -> bool:
     return (now or datetime.now(UTC)) - made > ABANDONED_AFTER
 
 
-async def sweep_abandoned(
-    session: AsyncSession, *, user_id: uuid.UUID
-) -> int:
+async def sweep_abandoned(session: AsyncSession, *, user_id: uuid.UUID) -> int:
     """Fail this person's stranded renders. Returns how many.
 
     **Healing on read, rather than only in a scheduled sweep.** The
@@ -338,9 +344,7 @@ async def mark_ready(
     await session.commit()
 
 
-async def mark_failed(
-    session: AsyncSession, *, render: AvatarRender, reason: str
-) -> None:
+async def mark_failed(session: AsyncSession, *, render: AvatarRender, reason: str) -> None:
     """Record why, in the words the failure used.
 
     A failed render that says nothing is indistinguishable from one still
@@ -351,14 +355,77 @@ async def mark_failed(
     await session.commit()
 
 
+#: What a render says once its owner stopped it.
+#:
+#: **Stored as `failed`, and deliberately.** A fifth state would have to
+#: be added to `RenderOut.state`, taught to every screen that switches on
+#: it, and handled by `in_flight`, `abandoned` and the sweep - for a row
+#: that behaves exactly like a failure in all of them: it is finished, it
+#: is not a picture, and the next request should draw. The difference that
+#: matters to the person is the sentence, so the sentence is what differs.
+#:
+#: It is also the marker the worker reads, which is why it is a constant
+#: rather than copy written at the call site.
+CANCELLED_NOTE = "You stopped this one. Ask for it again whenever you like."
+
+
+def was_cancelled(render: AvatarRender) -> bool:
+    """Whether this row was stopped by its owner rather than by a fault.
+
+    Read by the worker after drawing, so a picture nobody is waiting for
+    is thrown away instead of replacing the avatar they still have.
+    """
+    return render.state == "failed" and render.error == CANCELLED_NOTE
+
+
+async def cancel(
+    session: AsyncSession, *, user_id: uuid.UUID, render_id: uuid.UUID
+) -> AvatarRender | None:
+    """Stop a render this person asked for. `None` if it is not theirs.
+
+    **The gap this fills: waiting was the only option.** A render that
+    had not finished could not be called off, so the progress card sat
+    over the avatar until the ten-minute sweep in `ABANDONED_AFTER`
+    reclaimed it - and because `in_flight` answers the next request with
+    the row already going, asking again did nothing for those ten
+    minutes. Someone who knew they had picked the wrong garment had to
+    watch a picture they did not want being drawn.
+
+    Cancelling writes the row finished, which frees `in_flight`
+    immediately, so retrying is just asking again. That is why there is
+    no separate retry: there is nothing left to retry past.
+
+    Idempotent. A second tap on a row that already finished returns it
+    unchanged rather than failing, because the screen and the database
+    disagree for a few hundred milliseconds every time and a person
+    double-tapping a stop button has not made a mistake.
+    """
+    render = await session.get(AvatarRender, render_id)
+    if render is None or render.user_id != user_id:
+        # Not found and not-yours answer alike on purpose: whether a
+        # render id exists is not something another account may learn.
+        return None
+
+    if render.state not in ("queued", "running"):
+        return render
+
+    render.state = "failed"
+    render.error = CANCELLED_NOTE
+    await session.commit()
+    await session.refresh(render)
+    return render
+
+
 __all__ = [
     "ABANDONED_AFTER",
+    "CANCELLED_NOTE",
     "AvatarRender",
     "GENERATE_JOB_KIND",
     "MAX_ERROR",
     "MAX_PIECES",
     "TRY_ON_JOB_KIND",
     "abandoned",
+    "cancel",
     "get",
     "in_flight",
     "latest",
@@ -369,4 +436,5 @@ __all__ = [
     "recent",
     "request",
     "sweep_abandoned",
+    "was_cancelled",
 ]
