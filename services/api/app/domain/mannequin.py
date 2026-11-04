@@ -33,6 +33,7 @@ precisely where it would be easiest to break.
 from __future__ import annotations
 
 import logging
+import os
 import uuid
 from pathlib import Path
 
@@ -42,16 +43,34 @@ from sqlalchemy.ext.asyncio import AsyncSession
 logger = logging.getLogger(__name__)
 
 #: Where the generated figures live, shipped with the repository.
-MANNEQUIN_DIR = (
-    # parents[4] is the repository root: this file is at
-    # services/api/app/domain/, so four levels up rather than three.
-    Path(__file__).resolve().parents[4]
-    / "apps"
-    / "mobile"
-    / "assets"
-    / "images"
-    / "mannequins"
-)
+#:
+#: **Found, not counted.** This was `parents[4]`, which is the
+#: repository root only when the file sits at
+#: `<repo>/services/api/app/domain/`. In a container it sits at
+#: `/srv/app/domain/`, which has three parents, so importing this
+#: module raised `IndexError: 4` and every request to `/v1/avatar`
+#: answered 500. The same counting bug had already broken six seed
+#: scripts the same way.
+#:
+#: `LUXISH_MANNEQUIN_DIR` wins where it is set, which is how
+#: docker-compose points at the mounted copy. Otherwise the
+#: directory is searched for upward, and a missing one is reported
+#: as an empty roster rather than an import-time crash: a figure
+#: nobody can draw is a feature degraded, not a service down.
+def _mannequin_dir() -> Path:
+    named = os.environ.get("LUXISH_MANNEQUIN_DIR")
+    if named:
+        return Path(named)
+    here = Path(__file__).resolve()
+    for parent in here.parents:
+        candidate = parent / "apps" / "mobile" / "assets" / "images" / "mannequins"
+        if candidate.is_dir():
+            return candidate
+    # Nothing found. Returned rather than raised; see above.
+    return here.parents[-1] / "mannequins-not-found"
+
+
+MANNEQUIN_DIR = _mannequin_dir()
 
 #: What somebody may choose. The file stem is the id.
 #:

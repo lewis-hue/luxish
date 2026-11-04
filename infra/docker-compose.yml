@@ -149,6 +149,22 @@ services:
       # directories up from __file__, which is an IndexError in a
       # container where the tree is two levels deep instead of four.
       LUXISH_ASSETS_DIR: /srv/assets
+      # The mannequin figures live under the mobile app, outside this
+      # service's build context, so they are mounted rather than copied.
+      LUXISH_MANNEQUIN_DIR: /srv/mannequins
+      # **`localhost` means this container, not the host.**
+      #
+      # The API fetches Keycloak's signing keys to verify every token.
+      # A host-side `.env` reasonably points that at
+      # `http://localhost:55080`, which inside a container resolves to
+      # the container itself: the fetch fails, the verifier reports
+      # `jwks_unavailable`, and every authenticated request answers
+      # 401. Sign-in succeeds and nothing else works, which reads as a
+      # broken app rather than one unreachable URL.
+      #
+      # On the compose network Keycloak answers to its service name on
+      # its own port, with no host networking in the path.
+      LUXISH_KEYCLOAK_JWKS_URL_OVERRIDE: http://keycloak:8080/realms/luxish/protocol/openid-connect/certs
     volumes:
       # The database and generated media outlive a container, so a
       # restart does not throw away a seeded world.
@@ -158,6 +174,7 @@ services:
       # the build context. Read-only: the seeder reads them and the
       # container has no business writing there.
       - ../assets:/srv/assets:ro
+      - ../apps/mobile/assets/images/mannequins:/srv/mannequins:ro
     ports:
       - '8010:8010'
     depends_on:
