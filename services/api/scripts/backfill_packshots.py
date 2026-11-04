@@ -9,6 +9,16 @@ sofa. That is the state a reviewer's wardrobe is in.
     python scripts/backfill_packshots.py --dry-run
     python scripts/backfill_packshots.py
     python scripts/backfill_packshots.py --user someone@example.com
+    python scripts/backfill_packshots.py --redo
+
+**`--redo` is for a specific past mistake.** For one release the
+fan-out sent each piece's own cut-out as the packshot's source, so
+the model re-staged a pixelated silhouette: a pair of headphones
+came back as a speckled stone blob. Those garments look done - they
+have a packshot - and the picture is wrong. `--redo` finds them by
+the one marker there is, a source key containing `/piece/`, and
+draws them again from the photograph. It costs a generation each,
+so it is opt-in.
 
 **It adopts before it buys.** The fan-out path used to ask the
 Studio for each piece's packshot and then never point the garment at
@@ -50,6 +60,14 @@ async def main() -> int:
     )
     parser.add_argument("--user", help="one account's email, instead of all")
     parser.add_argument(
+        "--redo",
+        action="store_true",
+        help=(
+            "re-draw garments whose packshot was made from a piece cut-out "
+            "rather than from the photograph. Costs a generation each."
+        ),
+    )
+    parser.add_argument(
         "--limit", type=int, default=500, help="most garments to queue"
     )
     args = parser.parse_args()
@@ -79,7 +97,9 @@ async def main() -> int:
                 .where(
                     Garment.deleted_at.is_(None),
                     Garment.media_asset_id.is_not(None),
-                    sa.or_(
+                    sa.true()
+                    if args.redo
+                    else sa.or_(
                         shot.id.is_(None),
                         shot.kind.not_in(ALREADY_A_PACKSHOT),
                     ),
@@ -97,11 +117,24 @@ async def main() -> int:
                 query = query.where(Garment.user_id == owner)
 
             garments = list((await db.scalars(query)).all())
-            print(f"{len(garments)} garment(s) without a packshot")
+            if args.redo:
+                # The marker, and the only one: a packshot drawn from
+                # the photograph has no record of what it was drawn
+                # from, but the garment still points at the cut-out
+                # that was wrongly used as the source.
+                kept = []
+                for g in garments:
+                    src = await db.get(MediaAsset, g.media_asset_id)
+                    if src is not None and "/piece/" in (src.storage_key or ""):
+                        kept.append(g)
+                garments = kept
+                print(f"{len(garments)} garment(s) drawn from a cut-out")
+            else:
+                print(f"{len(garments)} garment(s) without a packshot")
 
             # Claim the ones already drawn, before buying any.
             adopted = 0
-            if not args.dry_run:
+            if not args.dry_run and not args.redo:
                 for garment in garments:
                     shot = await db.scalar(
                         sa.select(GarmentShot)
@@ -195,7 +228,13 @@ async def main() -> int:
                     # The intake pipeline's own key. A garment whose
                     # shot is already queued is not queued twice, and
                     # neither is one this script has already seen.
-                    idempotency_key=f"{PACKSHOT_JOB_KIND}:{garment.id}",
+                    # `--redo` needs a fresh key, or the original
+                    # job's key makes the re-queue a no-op.
+                    idempotency_key=(
+                        f"{PACKSHOT_JOB_KIND}:redo:{garment.id}"
+                        if args.redo
+                        else f"{PACKSHOT_JOB_KIND}:{garment.id}"
+                    ),
                 )
                 queued += 1
             await db.commit()
