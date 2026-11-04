@@ -141,6 +141,24 @@ the migrations, the API and all four workers, and it rewires the Keycloak
 hostname when the tunnel rotates. Starting pieces individually is how the
 stack ends up in a state nobody can reproduce.
 
+**A worker keeps the code it started with. Restart after touching
+`app/workers`.** The API reloads itself now (`--reload` in
+`dev-stack.sh`), but Celery's prefork pool imports the task modules once,
+so a handler changed on disk is still the old handler in the process.
+This is indistinguishable from the fix not working, and it has cost real
+time twice: three bugs reported against a build that already had the fix,
+and a packshot redraw that ran seven times against the old handler and
+returned byte-for-byte identical pictures.
+
+```bash
+./scripts/dev-stack.sh restart
+```
+
+Worth knowing which is which: a change under `app/routers`, `app/domain`
+or `app/schemas` lands on save; a change under `app/workers` needs the
+restart. When a fix "does not work", check this before diagnosing
+anything else.
+
 **Metro runs from `apps/mobile`, never from the repo root.** The root has no
 `App.tsx` and no `expo-router` entry, so a Metro started there serves
 `expo/AppEntry.js` and the app dies on

@@ -237,9 +237,25 @@ start() {
   if [ "$(running "uvicorn app.main")" != "0" ]; then
     say "api      already running"
   else
+    # **`--reload`, because its absence cost most of a day.**
+    #
+    # Without it the API keeps running whatever code it started
+    # with, so a fix that is in the file is not in the process.
+    # Three separate bugs were reported against a build that had
+    # already been fixed, and one of them - a 500 on search by
+    # picture - was a function signature corrected an hour earlier.
+    # The symptom is indistinguishable from the fix not working,
+    # which is the worst thing to hand somebody testing on a phone.
+    #
+    # This is the dev stack. Production runs the same module with
+    # its own command and is unaffected.
+    #
+    # Scoped to `app` so a write under `.venv` or `.devlogs` does
+    # not trigger a restart loop.
     nohup "$PY" -m uvicorn app.main:app --host 0.0.0.0 --port "$API_PORT" \
+      --reload --reload-dir app \
       > "$LOGS/api.log" 2>&1 &
-    say "api      starting on :$API_PORT"
+    say "api      starting on :$API_PORT (reloads on change)"
   fi
 
   for entry in "${WORKERS[@]}"; do
@@ -325,9 +341,30 @@ status() {
   printf 'beat     : %s\n' "$([ "$n" != "0" ] && echo up || echo DOWN)"
 }
 
+# **`restart` exists because the workers cannot reload themselves.**
+#
+# The API watches its own files now, but Celery's prefork pool loads
+# the task modules once at start, so a change to anything under
+# `app/workers` is invisible until the processes go away. That was
+# real: a packshot redraw ran seven times against the old handler and
+# returned byte-for-byte identical pictures, which reads as the fix
+# not working rather than as a stale process.
+#
+# `stop` then `start` was what everyone typed instead, which is two
+# commands and one of them is easy to forget.
+restart() {
+  stop
+  # Celery's children take a moment to release the broker
+  # connections; starting into that produces a worker that claims
+  # the queue and then dies.
+  sleep 2
+  start
+}
+
 case "${1:-start}" in
-  start)  start ;;
-  stop)   stop ;;
-  status) status ;;
-  *)      say "usage: $0 [start|stop|status]"; exit 2 ;;
+  start)   start ;;
+  stop)    stop ;;
+  restart) restart ;;
+  status)  status ;;
+  *)       say "usage: $0 [start|stop|restart|status]"; exit 2 ;;
 esac

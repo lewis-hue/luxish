@@ -430,3 +430,68 @@ def test_the_caption_writer_is_asked_too() -> None:
     from app.workers.fit_vision import FIT_VISION_USER_TEXT
 
     assert "never use an em dash" in FIT_VISION_USER_TEXT.lower()
+
+
+# --------------------------------------------------------------------------- #
+# Answering the question that was asked
+#
+# Reported as "answering all questions wrongly and not cooperative",
+# with a thread full of examples, and every one of them is the same
+# failure: the question was pushed through the wardrobe-comparison
+# frame instead of being answered.
+#
+#   "Where can I buy it?"          -> styling advice about jeans.
+#   "I want to see that fit with
+#    a necklace. Do that"          -> a description of the necklace.
+#   "There is no chain on the
+#    mannequin"                    -> "you are right", then the same
+#                                     comparison restated.
+#
+# And the mirror of it: the model narrated the pin's photograph as a
+# figure it had produced - "that mannequin wears the cream cable knit
+# with grey trousers and black lace up shoes" - describing clothes
+# nobody could see, including a pearl necklace that was never drawn.
+#
+# Verified live against the model after the change:
+#
+#   "Where can I buy a washed light-wash denim jacket?"
+#     -> missing=['washed light-wash denim jacket'], four shops
+#   "I want to see that fit with a necklace. Do that"
+#     -> using=3 of their own, missing=['a fine gold chain necklace']
+#   "There is no chain on the mannequin"
+#     -> "You're right, I've added it now."
+# --------------------------------------------------------------------------- #
+def test_the_question_is_answered_before_the_wardrobe_is_mentioned() -> None:
+    from app.domain.stylist_answer import ANSWER_SYSTEM
+
+    said = ANSWER_SYSTEM.lower()
+    assert "answer the question they actually asked" in said
+    # The specific failure: a buying question answered with styling.
+    assert "do not answer with styling advice instead" in said
+    # And the other half: a wardrobe recap nobody asked for.
+    assert "does not need to be told again which jeans they own" in said
+
+
+def test_it_may_not_claim_a_picture_exists() -> None:
+    """**It cannot see what was drawn, and it was describing it.**
+
+    The app decides what the figure wears and does not always draw
+    what the sentence describes - which is how a pearl necklace got
+    narrated onto a mannequin that had none.
+    """
+    from app.domain.stylist_answer import ANSWER_SYSTEM
+
+    said = ANSWER_SYSTEM.lower()
+    assert "never describe a picture as though you have made one" in said
+    assert "the mannequin wears" in said, "the exact phrase is named"
+
+
+def test_a_piece_asked_for_is_named_so_it_can_be_drawn() -> None:
+    """`missing` is how a request gets acted on, not only how a gap
+    is reported: each phrase is drawn onto the figure and searched
+    for. "Show me that with a necklace" has to land there."""
+    from app.domain.stylist_answer import ANSWER_SYSTEM
+
+    said = ANSWER_SYSTEM.lower()
+    assert "when they ask to see a piece added to a look" in said
+    assert "describing it instead is not doing what they asked" in said

@@ -93,6 +93,50 @@ ANSWER_SYSTEM = (
     "Answer their question directly and briefly, the way a friend who "
     "knows clothes would. Two or three sentences. No preamble, no "
     "restating the question, no bullet lists.\n\n"
+    # ----------------------------------------------------------------- #
+    # Answering the question that was asked
+    #
+    # **Reported as "answering all questions wrongly and not
+    # cooperative", with a thread full of examples.** Every one of
+    # them is the same failure: the question was pushed through the
+    # wardrobe-comparison frame instead of being answered.
+    #
+    #   "Where can I buy it?"  ->  styling advice about jeans.
+    #   "I want to see that fit with a necklace. Do that"
+    #                          ->  a description of the necklace.
+    #   "There is no chain on the mannequin"
+    #                          ->  "you are right", then the same
+    #                              wardrobe comparison again.
+    #
+    # The wardrobe verdict is what the app *does* with the reply. It
+    # is not what the person asked, and leading with it reads as not
+    # listening - which is exactly how it was reported.
+    # ----------------------------------------------------------------- #
+    "**Answer the question they actually asked, on its own terms, "
+    "before anything else.** Not every question is 'can I make this "
+    "from my wardrobe'. If they ask where to buy something, say what "
+    "the piece is and that it is listed below; do not answer with "
+    "styling advice instead. If they ask you to show or change "
+    "something, treat it as an instruction and carry it out. If they "
+    "correct you, accept it in a few words and move on, do not "
+    "restate your previous answer.\n\n"
+    "Only mention their wardrobe when it answers what they asked, or "
+    "when they asked what to wear. A person asking where to buy a "
+    "jacket does not need to be told again which jeans they own.\n\n"
+    # **They can see the picture; you cannot.** The model is sent the
+    # pin's photograph, and it narrated that photograph as though it
+    # were a figure it had just produced: "the mannequin is styled in
+    # washed double denim", "that mannequin wears the cream cable
+    # knit with grey trousers and black lace up shoes" - describing
+    # clothes nobody could see on screen, including a pearl necklace
+    # that was never drawn. Reported twice, the second time as "there
+    # is no chain on the mannequin".
+    "Never describe a picture as though you have made one, and never "
+    "describe what a figure or mannequin is wearing. The app draws "
+    "those, not you, and it does not always draw what you describe. "
+    "Say what the look is and which pieces make it. Do not say 'the "
+    "mannequin wears', 'here it is on the figure', or anything that "
+    "claims an image exists.\n\n"
     # On the product owner's instruction. An em dash is the single
     # most recognisable tell of machine-written prose, and this
     # assistant is meant to read like somebody who knows clothes
@@ -120,6 +164,25 @@ ANSWER_SYSTEM = (
     "not send somebody shopping for what you have just told them "
     "they can already wear.\n\n"
     "Fill `missing` only when they own nothing that works at all.\n\n"
+    # **`missing` is also how a request gets acted on, not just how
+    # a gap is reported.** Each phrase in it is drawn as a packshot
+    # and laid onto the figure, and searched for somewhere to buy.
+    #
+    # So "I want to see that fit with a necklace, do that" belongs
+    # here: the necklace is a piece they do not own, the app can
+    # draw one, and naming it is the difference between showing them
+    # and describing it at them. Reported as the assistant refusing
+    # to do what it was told - it had answered with a paragraph
+    # about where a chain would sit, twice.
+    "**When they ask to see a piece added to a look, name that piece "
+    "in `missing` and keep everything of theirs in `using`.** 'Show "
+    "me that with a necklace' means a necklace goes in `missing`, "
+    "written as a plain garment phrase like 'a fine gold chain "
+    "necklace'. That is what makes it appear. Describing it instead "
+    "is not doing what they asked.\n\n"
+    "Each phrase in `missing` names one garment, in a few plain "
+    "words, as somebody would type it into a shop. Not a sentence, "
+    "not a setting, not a styling note.\n\n"
     # --------------------------------------------------------------- #
     # The rails
     #
