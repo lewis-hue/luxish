@@ -5810,7 +5810,7 @@
           "stylist"
         ],
         "summary": "Ask",
-        "description": "Answer a question about this person's wardrobe, streaming.\n\nServer-sent events, one JSON object per line:\n\n    {\"event\": \"token\",    \"text\": \"Yes, you \"}\n    {\"event\": \"verdict\",  \"has_match\": true, \"using\": [...]}\n    {\"event\": \"shopping\", \"items\": [...]}\n    {\"event\": \"render\",   \"render_id\": \"...\"}\n    {\"event\": \"done\"}\n\n**SSE rather than a websocket** because this is one short\none-directional burst per question. A socket would be a\nconnection to keep alive, authenticate separately and reconnect,\nfor a stream that lives six seconds.",
+        "description": "Answer a question about this person's wardrobe, streaming.\n\nServer-sent events, one JSON object per line:\n\n    {\"event\": \"token\",    \"text\": \"Yes, you \"}\n    {\"event\": \"verdict\",  \"has_match\": true, \"using\": [...]}\n    {\"event\": \"shopping\", \"items\": [...]}\n    {\"event\": \"pieces\",   \"items\": [{\"phrase\": ..., \"slot\": ...}]}\n    {\"event\": \"render\",   \"render_id\": \"...\"}\n    {\"event\": \"done\"}\n\n**SSE rather than a websocket** because this is one short\none-directional burst per question. A socket would be a\nconnection to keep alive, authenticate separately and reconnect,\nfor a stream that lives six seconds.",
         "operationId": "ask_v1_stylist_ask_post",
         "requestBody": {
           "content": {
@@ -11742,6 +11742,30 @@
         ],
         "title": "SessionResponse"
       },
+      "ShopLinkOut": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "retailer": {
+            "type": "string",
+            "title": "Retailer"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "retailer",
+          "url"
+        ],
+        "title": "ShopLinkOut",
+        "description": "A place on the open web that appears to sell this piece.\n\n**Separate from `items`, and deliberately so.** `OfferMatchOut`\ncarries a price, a currency, stock and the date the price was\ntrue, because a catalogue row knows all of that. A search result\nknows none of it, and forcing one into that shape would mean\ninventing a price - which is the exact failure the recommendation\nrules in this module exist to prevent. A link is offered as what\nit is: somewhere to go and look."
+      },
       "ShopOut": {
         "properties": {
           "name": {
@@ -11817,6 +11841,11 @@
             "const": "curated",
             "title": "Provider",
             "default": "curated"
+          },
+          "working": {
+            "type": "boolean",
+            "title": "Working",
+            "default": false
           }
         },
         "type": "object",
@@ -11842,6 +11871,13 @@
             },
             "type": "array",
             "title": "Items"
+          },
+          "links": {
+            "items": {
+              "$ref": "#/components/schemas/ShopLinkOut"
+            },
+            "type": "array",
+            "title": "Links"
           }
         },
         "type": "object",

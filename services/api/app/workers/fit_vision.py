@@ -105,7 +105,12 @@ FIT_VISION_USER_TEXT = (
     "- If something is cut off or unclear, leave it out rather than "
     "inventing it.\n"
     "- Write in plain English with no sales language and no adjectives of "
-    "praise."
+    "praise.\n"
+    # On the product owner's instruction. The caption is shown under
+    # a pin as though a person wrote it, and an em dash is the
+    # clearest tell that one did not. It is also the only
+    # punctuation here with no plainer substitute already in use.
+    "- Never use an em dash or an en dash. Use a comma or a full stop."
 )
 
 

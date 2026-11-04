@@ -30,11 +30,45 @@ export interface OfferMatch {
   matchLabel: 'confirmed_item' | 'likely_match' | 'similar_style';
 }
 
+/**
+ * One place on the open web that sells this garment.
+ *
+ * Separate from `OfferMatch`, which is a row in the seeded
+ * catalogue and carries a price, a retailer record and a
+ * retrieved-at date. A web result has a title, a seller and a link
+ * and claims nothing else - pretending otherwise would mean
+ * inventing a price nobody checked.
+ */
+export interface ShopLink {
+  title: string;
+  url: string;
+  seller: string;
+}
+
+/** The wire calls the shop `retailer`; the app calls it a seller. */
+function mapLink(link: {
+  title: string;
+  retailer: string;
+  url: string;
+}): ShopLink {
+  return { title: link.title, seller: link.retailer, url: link.url };
+}
+
 export interface ShopSection {
   key: string;
   title: string;
   reason: string;
   items: OfferMatch[];
+  /**
+   * Where to actually buy it, when the catalogue has nothing.
+   *
+   * **The catalogue is a seeded table of twenty-eight products**, so
+   * for almost every real garment `items` is empty and this is the
+   * whole answer. The server searched each piece the vision pass
+   * named in the photograph - "brown top-handle handbag", not
+   * "handbag" - which is what makes the shelf belong to this pin.
+   */
+  links: ShopLink[];
 }
 
 function mapItem(item: {
@@ -104,6 +138,7 @@ export function useShopRecommendations(enabled: boolean) {
         title: section.title,
         reason: section.reason,
         items: (section.items ?? []).map(mapItem),
+        links: (section.links ?? []).map(mapLink),
       }));
     },
   });
@@ -138,6 +173,7 @@ export function useShopForFit(postId: string | null, enabled: boolean) {
         title: section.title,
         reason: section.reason,
         items: (section.items ?? []).map(mapItem),
+        links: (section.links ?? []).map(mapLink),
       }));
     },
   });

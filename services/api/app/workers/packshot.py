@@ -75,6 +75,61 @@ PACKSHOT_MEDIA_KIND = "garment_packshot"
 #: documents exactly this trap.
 PACKSHOT_CONTENT_TYPE = "image/webp"
 
+#: Pictures that already serve as a garment's catalogue shot.
+#:
+#: **`garment_studio` counts, and leaving it out cost a second
+#: generation.** The fan-out path asked the Studio for each piece's
+#: packshot long before this worker existed; those pictures are real
+#: packshots and are already paid for, they just live under the
+#: Studio's media kind. A garment that has adopted one must not be
+#: redrawn - the backfill queued thirty-three drawings on an account
+#: where nine of them already had their picture.
+ALREADY_A_PACKSHOT = (PACKSHOT_MEDIA_KIND, "garment_studio")
+
+#: Used when the source photograph holds more than this garment.
+#:
+#: **The reported failure, and it was my own doing.** A photograph of
+#: somebody wearing six things is split into six garments, and each
+#: one's `media_asset_id` points at its *cut-out* rather than at the
+#: photograph - a documented workaround for the one-garment-per-upload
+#: index. Feeding that cut-out to the packshot meant re-staging a
+#: pixelated, part-occluded silhouette: the headphones came back as a
+#: speckled stone blob, faithfully rendered from rubbish.
+#:
+#: So the edit reads the original upload and is told which garment to
+#: take out of it. The model can see the whole photograph, which is
+#: the only thing that knows what the garment actually looks like -
+#: the cut-out has already thrown that away.
+#: Said in every packshot prompt, because the model does not assume it.
+#:
+#: **Reported: one packshot per shoe.** Asked for "white chunky
+#: sneakers" it returned one sneaker, and the wardrobe then showed a
+#: single shoe as the thing somebody owns. Nobody owns one sneaker.
+#: The same goes for socks, gloves and earrings, which are all one
+#: wardrobe item and two objects.
+AS_A_PAIR = (
+    "If this item is naturally a pair or a set - shoes, trainers, "
+    "boots, socks, gloves, earrings - show both of them together in "
+    "the one picture, arranged side by side as a pair. A single shoe "
+    "is not the item somebody owns. "
+)
+
+ISOLATE = (
+    "From this photograph, take only the {subject} and nothing else, "
+    "and photograph it as a flat catalogue packshot: laid out neatly, "
+    "squared to the camera, shot from directly above, centred and "
+    "filling the frame with a small even margin. "
+    "Keep that exact item - its real colour, material, markings, wear "
+    "and proportions - as it appears in the photograph. Do not "
+    "redesign it, do not clean it up and do not invent detail that is "
+    "not there. "
+    "Nothing else in the picture: no person, no other clothing, no "
+    "hands, no hanger, no props. Plain pure white background with no "
+    "shadow and no visible surface. No brand marks, no logos and no "
+    "text. Evenly lit, true colour, photographed rather than "
+    "illustrated. " + AS_A_PAIR
+)
+
 
 def packshot_storage_key(asset: MediaAsset, *, content_type: str) -> str:
     """Keyed by source asset and version, like the cut-out beside it.
@@ -125,7 +180,7 @@ async def make_packshot(
         if garment.background_removed_asset_id is not None
         else None
     )
-    if current is not None and current.kind == PACKSHOT_MEDIA_KIND:
+    if current is not None and current.kind in ALREADY_A_PACKSHOT:
         return {
             "packshot": True,
             "reason": "already_present",
@@ -136,6 +191,15 @@ async def make_packshot(
     if treatment is None:  # pragma: no cover - a constant, guarded
         return {"packshot": False, "reason": "no_such_treatment"}
 
+    # **Which garment, when the photograph holds several.**
+    #
+    # The fan-out path sends the original upload plus the name of the
+    # piece to take out of it. A single-garment upload sends neither
+    # and runs the treatment's own wording, which says "this exact
+    # garment" and means the only one in frame.
+    subject = (job.payload or {}).get("subject")
+    prompt = ISOLATE.format(subject=subject) if subject else None
+
     try:
         photo = await store.read(asset)
         shot = await studio.shoot(
@@ -143,6 +207,7 @@ async def make_packshot(
             treatment=treatment,
             content_type=asset.content_type or "image/jpeg",
             user_id=payload.user_id,
+            prompt=prompt,
         )
     except CapabilityUnavailable as exc:
         # No edit capability, no credit, or the model refused. None of
@@ -207,6 +272,9 @@ async def make_packshot(
 
 
 __all__ = [
+    "ALREADY_A_PACKSHOT",
+    "AS_A_PAIR",
+    "ISOLATE",
     "PACKSHOT_CONTENT_TYPE",
     "PACKSHOT_JOB_KIND",
     "PACKSHOT_MEDIA_KIND",

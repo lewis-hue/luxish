@@ -148,6 +148,12 @@ TREATMENTS: tuple[Treatment, ...] = (
             "Plain light grey seamless background, soft even studio light "
             "from above with a faint contact shadow beneath the cloth so it "
             "sits on a surface rather than floating. "
+            # A pair is one wardrobe item and two objects. Without
+            # this the model returns a single shoe, and the wardrobe
+            # then shows one sneaker as the thing somebody owns.
+            "If the garment is naturally a pair or a set - shoes, socks, "
+            "gloves, earrings - show both together, side by side, as a "
+            "pair. "
             f"{REALISM}"
         ),
     ),

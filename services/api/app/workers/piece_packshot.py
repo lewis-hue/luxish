@@ -38,7 +38,7 @@ from app.models.media_asset import MediaAsset
 from app.models.piece_packshot import PiecePackshot
 from app.providers.base import AIRequest, GeneratedImage
 from app.workers.categorise import MediaStore, UnavailableMediaStore
-from app.workers.packshot import PACKSHOT_MEDIA_KIND
+from app.workers.packshot import AS_A_PAIR, PACKSHOT_MEDIA_KIND
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +80,11 @@ PIECE_PROMPT = (
     "surface. No brand marks, no logos, no printed graphics and no "
     "text of any kind. "
     "Natural fabric texture and the soft creases a real garment has, "
-    "evenly lit, true colour, photographed rather than illustrated."
+    "evenly lit, true colour, photographed rather than illustrated. "
+    # A pair is one wardrobe item and two objects, and the model does
+    # not assume it: asked for "white chunky sneakers" it returned a
+    # single sneaker. Nobody owns one sneaker.
+    + AS_A_PAIR
 )
 
 #: Where each kind of thing sits on the figure.

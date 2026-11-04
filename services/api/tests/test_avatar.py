@@ -455,22 +455,27 @@ def test_an_accessory_on_its_own_is_given_something_to_sit_on() -> None:
     leaves it unchanged or undressed, and the second is the same
     refusal arriving a different way.
     """
-    from app.workers.avatar import BASE_OUTFIT, wearable_words
+    # **Not `BASE_OUTFIT`, which is a different constant.** The two
+    # were both called `BASE_OUTFIT` in one module and the second
+    # assignment won at import time, so every avatar was drawn in
+    # the accessory filler instead of the grey base it asks for -
+    # and these tests passed while asserting the wrong thing.
+    from app.workers.avatar import UNDER_AN_ACCESSORY, wearable_words
 
     for only in ("a gold chain necklace", "white sneakers", "a silk scarf"):
         said = wearable_words(only)
-        assert BASE_OUTFIT in said, f"{only!r} was left with nothing to sit on"
+        assert UNDER_AN_ACCESSORY in said, f"{only!r} had nothing to sit on"
         assert only.split()[-1] in said, "the piece itself must survive"
 
 
 def test_a_full_outfit_is_left_exactly_as_it_was() -> None:
     """Nothing is added to something already wearable - a base outfit
     under a complete look would be two outfits."""
-    from app.workers.avatar import BASE_OUTFIT, wearable_words
+    from app.workers.avatar import UNDER_AN_ACCESSORY, wearable_words
 
     full = "oversized teal t-shirt, black baggy cargo pants, white sneakers"
     assert wearable_words(full) == full
-    assert BASE_OUTFIT not in wearable_words(full)
+    assert UNDER_AN_ACCESSORY not in wearable_words(full)
 
 
 def test_a_garment_whose_name_contains_a_body_word_survives() -> None:
@@ -482,6 +487,29 @@ def test_a_garment_whose_name_contains_a_body_word_survives() -> None:
 
 
 def test_an_empty_description_still_dresses_the_figure() -> None:
-    from app.workers.avatar import BASE_OUTFIT, wearable_words
+    from app.workers.avatar import UNDER_AN_ACCESSORY, wearable_words
 
-    assert wearable_words("Bare feet.") == BASE_OUTFIT
+    assert wearable_words("Bare feet.") == UNDER_AN_ACCESSORY
+
+
+def test_the_base_figure_and_the_accessory_filler_are_two_things() -> None:
+    """**A name collision that silently changed every avatar.**
+
+    `BASE_OUTFIT` - what the base figure wears, grey and covered -
+    was defined at the top of `workers/avatar.py`. Forty lines down,
+    the filler worn *under* a lone necklace was assigned the same
+    name. Python took the later one, so `avatar_prompt` and the
+    likeness prompt both drew the filler, and two tests asserted
+    the collision was correct.
+
+    Nothing catches a duplicate module-level assignment - not ruff,
+    not mypy, not the type checker - so this is the guard.
+    """
+    from app.workers import avatar
+
+    assert avatar.BASE_OUTFIT != avatar.UNDER_AN_ACCESSORY
+    # The base figure is dressed in something specific and covered.
+    assert "grey" in avatar.BASE_OUTFIT
+    # The filler is described rather than dictated, so the model
+    # picks something that suits what it is going under.
+    assert "suits it" in avatar.UNDER_AN_ACCESSORY

@@ -879,7 +879,14 @@ CATEGORISE_HANDICAP_SECONDS = 20
 #: Longer than the categorisation handicap for the same reason that
 #: one exists: these sit on different queues and are dispatched
 #: together, so the only ordering available is a head start.
-PACKSHOT_HANDICAP_SECONDS = 90
+#
+#: Reported as "they took a lot of time to generate", and ninety
+#: seconds of it was this constant doing nothing. Detection and
+#: categorisation are a vision call each and settle in well under
+#: half a minute; the head start only has to outlast them, not be
+#: generous about it. Twenty-five keeps the ordering and gives the
+#: minute back.
+PACKSHOT_HANDICAP_SECONDS = 25
 
 
 def _starts_at(kind: str) -> datetime | None:

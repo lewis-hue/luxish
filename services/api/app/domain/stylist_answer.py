@@ -93,6 +93,13 @@ ANSWER_SYSTEM = (
     "Answer their question directly and briefly, the way a friend who "
     "knows clothes would. Two or three sentences. No preamble, no "
     "restating the question, no bullet lists.\n\n"
+    # On the product owner's instruction. An em dash is the single
+    # most recognisable tell of machine-written prose, and this
+    # assistant is meant to read like somebody who knows clothes
+    # rather than like a model. Commas, full stops and the odd
+    # colon carry everything it needs to say.
+    "Never use an em dash or an en dash. Write the sentence with a "
+    "comma, a full stop or a colon instead.\n\n"
     "Then decide honestly whether they can put this look together "
     "from what they own. Be strict: a rough approximation is not a "
     "match. If they cannot, say so plainly - telling somebody they "
@@ -472,9 +479,18 @@ _ASKED_TO_SEE = (
     "see them on",
     "put it on",
     "put them on",
-    "on a mannequin",
-    "on the mannequin",
-    "on my avatar",
+    # **Bare, not "on a mannequin".** The phrase form missed "can I
+    # see a mannequin wearing the pieces above?", which is the same
+    # request worded the obvious way, and the reply then said "here
+    # it is on the mannequin" above a flat composite. Nobody types
+    # the word mannequin without wanting to be shown one.
+    "mannequin",
+    "avatar",
+    "can i see",
+    "could i see",
+    "let me see",
+    "can you show",
+    "on a model",
     "what would it look like",
     "what would they look like",
     "how would it look",

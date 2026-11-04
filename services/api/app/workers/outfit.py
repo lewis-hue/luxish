@@ -442,38 +442,81 @@ def crop_to_subject(
 
 
 async def _queue_packshots(
-    session: Any, *, user_id: Any, made: list[dict[str, Any]]
+    session: Any,
+    *,
+    user_id: Any,
+    made: list[dict[str, Any]],
+    source_asset_id: Any,
+    source_version: int | None,
 ) -> int:
-    """Ask the studio for a packshot of each piece. Returns how many.
+    """Queue a wardrobe packshot for each piece. Returns how many.
+
+    **This used to go through the Studio, and the picture was thrown
+    away.** `garment_studio.request` produces a `GarmentShot` row -
+    a shot somebody asked for on the Studio screen - and nothing
+    ever pointed the garment at it. Measured on a real account: nine
+    ready packshots, every one linked to a garment, and zero
+    garments showing one. The wardrobe kept the segmentation cut-out
+    it already had, which is why a pair of white trainers cut from a
+    worn photograph appeared as half a shoe.
+
+    So it queues the wardrobe's own packshot job, which repoints
+    `background_removed_asset_id` when the picture lands. One
+    mechanism produces the garment's picture; the Studio keeps
+    making the shots people ask it for.
 
     **Never fails the detection.** The wardrobe already has its
-    garments by the time this runs; a packshot is a better picture of
-    one, not the thing itself. So a studio that is down, out of quota
-    or misconfigured costs the nicer image and nothing else, and the
-    failure is logged rather than raised.
+    garments by the time this runs; a packshot is a better picture
+    of one, not the thing itself. A studio that is down costs the
+    nicer image and nothing else.
     """
     import logging
 
-    from app.domain import garment_studio
-    from app.workers.garment_studio import treatment_by_id
-
-    packshot = treatment_by_id("packshot")
-    if packshot is None:  # pragma: no cover - the id is a constant
-        return 0
+    from app.domain.jobs import enqueue
+    from app.models.garment import Garment
+    from app.workers.packshot import PACKSHOT_JOB_KIND
 
     queued = 0
     for item in made:
-        # A piece nothing could be isolated from has no picture worth
-        # restyling - the source would be the whole photograph, and
-        # the packshot would be of the person in it.
+        # A piece nothing could be isolated from was never identified
+        # well enough to ask for one by name.
         if not item.get("cut_out"):
             continue
         try:
-            await garment_studio.request(
+            garment_id = uuid.UUID(item["garment_id"])
+            garment = await session.get(Garment, garment_id)
+            if garment is None:
+                continue
+            # **The original upload, never the cut-out.**
+            #
+            # A fan-out piece's `media_asset_id` points at its own
+            # cut-out - the documented workaround for the one-
+            # garment-per-upload index - and those cut-outs are
+            # exactly what the packshot exists to improve on. Sending
+            # one as the source re-staged a pixelated, part-occluded
+            # silhouette and produced a speckled stone blob where a
+            # pair of headphones should have been.
+            #
+            # The photograph is the only thing that still knows what
+            # the garment looks like, so the edit reads that and is
+            # told which piece to take out of it by name.
+            await enqueue(
                 session,
-                user_id=user_id,
-                treatment=packshot,
-                garment_id=uuid.UUID(item["garment_id"]),
+                PACKSHOT_JOB_KIND,
+                {
+                    "garment_id": str(garment_id),
+                    "asset_id": str(source_asset_id),
+                    "asset_version": source_version,
+                    "user_id": str(user_id),
+                    "subject": item.get("name") or "the garment",
+                },
+                idempotency_key=f"{PACKSHOT_JOB_KIND}:{garment_id}",
+                # **No head start here.** The intake pipeline delays
+                # its packshot so detection and categorisation can
+                # settle what the photograph holds. On this path that
+                # has already happened - this *is* detection - so a
+                # delay would be dead time on a picture somebody is
+                # watching a spinner for.
             )
             queued += 1
         except Exception:  # noqa: BLE001 - one piece must not cost the rest
@@ -481,6 +524,7 @@ async def _queue_packshots(
                 "could not queue a packshot",
                 extra={"garment": item["garment_id"]},
             )
+    await session.commit()
     return queued
 
 
@@ -753,7 +797,13 @@ async def detect_outfit(
     # After the commit, deliberately. The garments are the result and
     # a packshot is an improvement on them, so a studio that is down
     # costs the nicer picture and nothing else.
-    packshots = await _queue_packshots(session, user_id=payload.user_id, made=created)
+    packshots = await _queue_packshots(
+        session,
+        user_id=payload.user_id,
+        made=created,
+        source_asset_id=payload.asset_id,
+        source_version=payload.asset_version,
+    )
 
     return {
         "detected": True,

@@ -1,5 +1,6 @@
 import * as Linking from 'expo-linking';
 import { useLocalSearchParams } from 'expo-router';
+import { SymbolView } from 'expo-symbols';
 import { ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -9,6 +10,7 @@ import {
   useShopForFit,
   useShopRecommendations,
   type OfferMatch,
+  type ShopLink,
 } from '@/api/queries/shopping';
 import { ThemedText } from '@/components/themed-text';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -121,8 +123,35 @@ export default function ShopScreen() {
           {section.items.map((item) => (
             <Card key={`${section.key}-${item.productId}`} item={item} />
           ))}
+          {/* **Where the shelf actually comes from.**
+
+              The catalogue is a seeded table of twenty-eight
+              products, so for almost every real garment `items` is
+              empty and these links are the whole answer. The server
+              searched each piece the vision pass named in this
+              photograph - "brown top-handle handbag", not "handbag" -
+              which is what makes the shelf belong to this pin rather
+              than to the app.
+
+              A row with no URL is not rendered rather than rendered
+              dead: the whole point of a shop is that it opens. */}
+          {section.links
+            .filter((link) => Boolean(link.url))
+            .map((link) => (
+              <WebShop key={`${section.key}-${link.url}`} link={link} />
+            ))}
         </View>
       ))}
+
+      {/* Reading the photograph, when nobody has opened this pin
+          before. The answer is stored on the post, so the second
+          person to tap this pays nothing. */}
+      {fitId && forFit.data !== undefined && fitSections.length === 0 &&
+      forFit.isFetching ? (
+        <View style={{ paddingHorizontal: Spacing.three }}>
+          <SkeletonRows count={3} avatar={false} label="Reading this look" />
+        </View>
+      ) : null}
 
       {fitId && !look.isPending && !forFit.isPending &&
       pieces.length === 0 &&
@@ -283,6 +312,56 @@ function LookPiece({ piece }: { piece: PostItemTag }) {
         if (piece.sourceUrl) void Linking.openURL(piece.sourceUrl);
       }}>
       {body}
+    </MotionPressable>
+  );
+}
+
+/**
+ * One shop on the open web, as a row that opens it.
+ *
+ * **Not a `Card`.** A card carries a price, a retailer record and a
+ * retrieved-at line, all of which come from the seeded catalogue. A
+ * web result has a title, a seller and a link and knows nothing
+ * else, so dressing it as a card would mean either blank fields or
+ * invented ones. It says what it has.
+ */
+function WebShop({ link }: { link: ShopLink }) {
+  const colors = Colors[useScheme()];
+  return (
+    <MotionPressable
+      accessibilityRole="link"
+      accessibilityLabel={`${link.title}, at ${link.seller}. Opens in your browser.`}
+      animateEntrance={false}
+      scale={0.98}
+      onPress={() => void Linking.openURL(link.url)}
+      style={{
+        marginHorizontal: Spacing.three,
+        padding: Spacing.three,
+        borderRadius: Radius.md,
+        borderCurve: 'continuous',
+        backgroundColor: colors.backgroundElement,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Spacing.two,
+      }}>
+      <View style={{ flex: 1, gap: Spacing.half }}>
+        <ThemedText type="small" numberOfLines={2}>
+          {link.title}
+        </ThemedText>
+        <ThemedText
+          type="small"
+          themeColor="textSecondary"
+          style={{ fontSize: FontSize.meta }}>
+          {link.seller}
+        </ThemedText>
+      </View>
+      {/* The affordance. Without it a row that opens a browser looks
+          the same as a row that does nothing. */}
+      <SymbolView
+        name="arrow.up.right"
+        size={14}
+        tintColor={colors.textSecondary}
+      />
     </MotionPressable>
   );
 }

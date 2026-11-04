@@ -424,11 +424,33 @@ async def test_detection_never_overwrites_an_answer_that_got_there_first(
 # a packshot for each piece
 # --------------------------------------------------------------------------- #
 async def _shots(db: AsyncSession) -> list[Any]:
+    """The Studio's own shots: pictures somebody asked it to make."""
     import sqlalchemy as sa
 
     from app.models.garment_studio import GarmentShot
 
     rows = await db.scalars(sa.select(GarmentShot))
+    return list(rows)
+
+
+async def _packshot_jobs(db: AsyncSession) -> list[Any]:
+    """The wardrobe packshots the fan-out queued, one per piece.
+
+    **These used to be `GarmentShot` rows and the pictures were
+    thrown away.** `garment_studio.request` makes a shot somebody
+    asked for on the Studio screen, and nothing ever pointed the
+    garment at the result: measured on a real account, nine ready
+    packshots and zero garments showing one. The wardrobe kept its
+    segmentation cut-out, which is the thing a packshot exists to
+    replace. The fan-out now queues the wardrobe's own job, which
+    repoints the garment when the picture lands.
+    """
+    import sqlalchemy as sa
+
+    from app.models.job import Job
+    from app.workers.packshot import PACKSHOT_JOB_KIND
+
+    rows = await db.scalars(sa.select(Job).where(Job.kind == PACKSHOT_JOB_KIND))
     return list(rows)
 
 
@@ -457,12 +479,29 @@ async def test_each_piece_of_a_worn_outfit_gets_its_own_packshot(
     assert outcome["garments"] == 3
     assert outcome["packshots"] == 3
 
-    shots = await _shots(db)
+    shots = await _packshot_jobs(db)
     assert len(shots) == 3
-    assert {shot.treatment for shot in shots} == {"packshot"}
     # Each against its own garment, or the wardrobe gets one picture
     # three times.
-    assert len({shot.garment_id for shot in shots}) == 3
+    assert len({shot.payload["garment_id"] for shot in shots}) == 3
+
+    # **The original photograph, never the piece's cut-out.**
+    #
+    # A fan-out piece's `media_asset_id` points at its own cut-out,
+    # and those cut-outs are exactly what a packshot exists to
+    # improve on. The first version read that field and re-staged a
+    # pixelated silhouette: a pair of headphones came back as a
+    # speckled stone blob, faithfully rendered from rubbish.
+    sources = {shot.payload["asset_id"] for shot in shots}
+    assert len(sources) == 1, "one photograph, which is what they came from"
+
+    # And each job says which garment to take out of it, because the
+    # photograph holds all three.
+    assert {shot.payload["subject"] for shot in shots} == {
+        "lilac long sleeve tee",
+        "patchwork cargo trousers",
+        "tan suede trainers",
+    }
 
 
 async def test_a_piece_nothing_could_be_isolated_from_is_not_shot(
@@ -492,7 +531,7 @@ async def test_a_piece_nothing_could_be_isolated_from_is_not_shot(
 
     assert outcome["without_cutout"] == 2
     assert outcome["packshots"] == 0
-    assert await _shots(db) == []
+    assert await _packshot_jobs(db) == []
 
 
 async def test_a_studio_that_cannot_take_the_work_does_not_lose_the_wardrobe(
@@ -505,12 +544,16 @@ async def test_a_studio_that_cannot_take_the_work_does_not_lose_the_wardrobe(
     detection and no wardrobe items at all, which is strictly worse
     than three pieces with their cut-outs.
     """
-    from app.domain import garment_studio
 
     async def refuse(*args: Any, **kwargs: Any) -> Any:
-        raise RuntimeError("the studio is down")
+        raise RuntimeError("the queue is down")
 
-    monkeypatch.setattr(garment_studio, "request", refuse)
+    # Patched where the fan-out actually calls it. It used to go
+    # through `garment_studio.request`; patching that now proves
+    # nothing, because nothing on this path calls it.
+    from app.domain import jobs as jobs_domain
+
+    monkeypatch.setattr(jobs_domain, "enqueue", refuse)
 
     outcome = await _run(
         db,
@@ -521,7 +564,7 @@ async def test_a_studio_that_cannot_take_the_work_does_not_lose_the_wardrobe(
 
     assert outcome["garments"] == 2, "the wardrobe still got its pieces"
     assert outcome["packshots"] == 0
-    assert await _shots(db) == []
+    assert await _packshot_jobs(db) == []
 
 
 # --------------------------------------------------------------------------- #

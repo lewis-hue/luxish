@@ -325,9 +325,15 @@ def test_asking_to_be_shown_it_is_recognised() -> None:
 
     for asked in (
         "Can you generate a mannequin wearing the outfits above?",
+        # Reported separately, and it slipped the first version: the
+        # phrase list had "on a mannequin" and this says "a
+        # mannequin wearing". The reply then read "here it is on the
+        # mannequin" over a flat composite with no mannequin in it.
+        "Can I see a mannequin wearing the pieces above?",
         "show me that on my avatar",
         "Render it please",
         "put them on a mannequin",
+        "could I see it on a model?",
         "what would it look like?",
     ):
         assert wants_a_picture(asked), asked
@@ -346,6 +352,8 @@ def test_an_ordinary_styling_question_buys_no_render() -> None:
         "Does this top go with those trousers?",
         "What should I wear to a wedding?",
         "Is this too formal for the office?",
+        "Do I have anything in navy?",
+        "Which of these is warmer?",
     ):
         assert not wants_a_picture(asked), asked
 
@@ -361,3 +369,64 @@ def test_the_rails_say_a_picture_request_is_on_topic() -> None:
     said = ANSWER_SYSTEM.lower()
     assert "is always about clothes and is never off topic" in said
     assert "never say you cannot make" in said
+
+
+# --------------------------------------------------------------------------- #
+# No em dashes
+#
+# On the product owner's instruction. An em dash is the single most
+# recognisable tell of machine-written prose, and this assistant is
+# meant to read like somebody who knows clothes rather than like a
+# model.
+#
+# Asked for in the prompt *and* enforced after it, because a prompt
+# is a request: models comply most of the time, which is not the
+# same as complying.
+# --------------------------------------------------------------------------- #
+def test_the_prompt_asks_for_no_em_dash() -> None:
+    from app.domain.stylist_answer import ANSWER_SYSTEM
+
+    assert "never use an em dash" in ANSWER_SYSTEM.lower()
+
+
+def test_an_em_dash_becomes_a_comma() -> None:
+    from app.domain.stylist_ask import plainly
+
+    assert plainly(
+        "Here it is on the mannequin \u2014 your white poplin shirt."
+    ) == "Here it is on the mannequin, your white poplin shirt."
+
+
+def test_an_unspaced_dash_does_not_lose_its_space() -> None:
+    """The model writes it both ways, and "clothes,what" is worse
+    than the dash was."""
+    from app.domain.stylist_ask import plainly
+
+    assert plainly("clothes\u2014what are you dressing for?") == (
+        "clothes, what are you dressing for?"
+    )
+
+
+def test_an_en_dash_goes_too() -> None:
+    from app.domain.stylist_ask import plainly
+
+    assert plainly("A clean look \u2013 smart casual.") == (
+        "A clean look, smart casual."
+    )
+
+
+def test_a_sentence_without_one_is_untouched() -> None:
+    """**It runs on every token of a stream.** A rule that rewrites
+    ordinary text would corrupt every reply, not just the ones with
+    a dash in."""
+    from app.domain.stylist_ask import plainly
+
+    for said in ("Nothing to change here.", "", "a-line skirt", "1970s"):
+        assert plainly(said) == said
+
+
+def test_the_caption_writer_is_asked_too() -> None:
+    """It is shown under a pin as though a person wrote it."""
+    from app.workers.fit_vision import FIT_VISION_USER_TEXT
+
+    assert "never use an em dash" in FIT_VISION_USER_TEXT.lower()

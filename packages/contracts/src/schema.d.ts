@@ -2894,6 +2894,7 @@ export interface paths {
          *         {"event": "token",    "text": "Yes, you "}
          *         {"event": "verdict",  "has_match": true, "using": [...]}
          *         {"event": "shopping", "items": [...]}
+         *         {"event": "pieces",   "items": [{"phrase": ..., "slot": ...}]}
          *         {"event": "render",   "render_id": "..."}
          *         {"event": "done"}
          *
@@ -5235,6 +5236,26 @@ export interface components {
              */
             expires_at: string;
         };
+        /**
+         * ShopLinkOut
+         * @description A place on the open web that appears to sell this piece.
+         *
+         *     **Separate from `items`, and deliberately so.** `OfferMatchOut`
+         *     carries a price, a currency, stock and the date the price was
+         *     true, because a catalogue row knows all of that. A search result
+         *     knows none of it, and forcing one into that shape would mean
+         *     inventing a price - which is the exact failure the recommendation
+         *     rules in this module exist to prevent. A link is offered as what
+         *     it is: somewhere to go and look.
+         */
+        ShopLinkOut: {
+            /** Title */
+            title: string;
+            /** Retailer */
+            retailer: string;
+            /** Url */
+            url: string;
+        };
         /** ShopOut */
         ShopOut: {
             /** Name */
@@ -5262,6 +5283,11 @@ export interface components {
              * @constant
              */
             provider: "curated";
+            /**
+             * Working
+             * @default false
+             */
+            working: boolean;
         };
         /** ShopSectionOut */
         ShopSectionOut: {
@@ -5273,6 +5299,8 @@ export interface components {
             reason: string;
             /** Items */
             items?: components["schemas"]["OfferMatchOut"][];
+            /** Links */
+            links?: components["schemas"]["ShopLinkOut"][];
         };
         /** ShoppingSearchOut */
         ShoppingSearchOut: {

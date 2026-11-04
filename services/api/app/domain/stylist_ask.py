@@ -60,6 +60,41 @@ class Asked:
     render_id: uuid.UUID | None = None
 
 
+#: Punctuation the assistant is asked not to use, and then stopped
+#: from using.
+#:
+#: **A prompt is a request; this is the guarantee.** On the product
+#: owner's instruction the stylist is told never to write an em dash,
+#: and models comply most of the time, which is not the same as
+#: complying. The substitution is per character and the character is
+#: not part of any word, so it survives being applied to a stream one
+#: token at a time with no buffering.
+#:
+#: An em dash between clauses becomes a comma and a space; where the
+#: model already spaced it, the surrounding whitespace collapses so
+#: the sentence does not end up with a gap before its comma.
+_DASHES = {
+    "—": ", ",  # em dash
+    "–": ", ",  # en dash
+}
+
+
+def plainly(text: str) -> str:
+    """The reply without the punctuation that marks it as written."""
+    if not text:
+        return text
+    for dash, instead in _DASHES.items():
+        if dash not in text:
+            continue
+        # " - " and "- " both collapse to one comma, not two spaces
+        # around one.
+        text = text.replace(f" {dash} ", instead)
+        text = text.replace(f"{dash} ", instead)
+        text = text.replace(f" {dash}", instead)
+        text = text.replace(dash, instead)
+    return text
+
+
 async def wardrobe_for(
     db: Any, *, user_id: uuid.UUID, limit: int = MOST_GARMENTS
 ) -> list[Any]:
@@ -227,7 +262,7 @@ async def stream_answer(
         async for chunk in provider.stream(request, user_id=user_id):
             fresh = reader.feed(chunk)
             if fresh:
-                yield "token", fresh
+                yield "token", plainly(fresh)
     except Exception as caught:  # noqa: BLE001 - reported, not swallowed
         logger.warning("the stylist could not answer: %s", caught)
         yield "token", (
@@ -249,7 +284,7 @@ async def stream_answer(
     # reply that arrived in one chunk after the reader had given up.
     # Sending it now is better than an empty bubble.
     if not reader.text and verdict.answer:
-        yield "token", verdict.answer
+        yield "token", plainly(verdict.answer)
 
     yield "verdict", out
 
@@ -477,5 +512,6 @@ __all__ = [
     "Asked",
     "about_post",
     "stream_answer",
+    "plainly",
     "wardrobe_for",
 ]

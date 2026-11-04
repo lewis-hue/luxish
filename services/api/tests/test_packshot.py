@@ -61,10 +61,20 @@ class Studio:
         self.content_type = content_type
         self.calls: list[Treatment] = []
 
+        self.prompts: list[str | None] = []
+        self.photos: list[bytes] = []
+
     async def shoot(
-        self, *, photo: bytes, treatment: Treatment, **_: Any
+        self,
+        *,
+        photo: bytes,
+        treatment: Treatment,
+        prompt: str | None = None,
+        **_: Any,
     ) -> GeneratedImage:
         self.calls.append(treatment)
+        self.prompts.append(prompt)
+        self.photos.append(photo)
         return GeneratedImage(data=self.image, content_type=self.content_type)
 
 
@@ -310,3 +320,90 @@ async def test_adding_a_garment_queues_one(db: AsyncSession) -> None:
     # Held back, so detection and categorisation settle what this
     # photograph actually is before a shot is hung off it.
     assert job.available_at is not None and job.available_at > job.created_at
+
+
+# --------------------------------------------------------------------------- #
+# Which picture it is made from
+#
+# **Reported, and it was my own doing.** A photograph of somebody
+# wearing six things is split into six garments, and each one's
+# `media_asset_id` points at its own cut-out - the documented
+# workaround for the one-garment-per-upload index. The first version
+# of this worker read that field for its source, so it re-staged a
+# pixelated, part-occluded silhouette and produced a speckled stone
+# blob where a pair of headphones should have been. Garbage in,
+# faithfully rendered.
+#
+# The photograph is the only thing that still knows what the garment
+# looks like. The cut-out has already thrown that away.
+# --------------------------------------------------------------------------- #
+async def test_a_named_piece_is_isolated_from_the_whole_photograph(
+    db: AsyncSession,
+) -> None:
+    garment, asset, job, store = await _ready(db)
+    job.payload = {**(job.payload or {}), "subject": "white neck headphones"}
+    await db.commit()
+    studio = Studio()
+
+    await make_packshot(db, job, studio=studio, store=store)
+
+    [prompt] = studio.prompts
+    assert prompt is not None, "the treatment's own wording packshots everything"
+    assert "white neck headphones" in prompt
+    assert "no person" in prompt and "no other clothing" in prompt
+    # And it is told not to improve on what it can see, because the
+    # point is this garment rather than a nicer one.
+    assert "do not invent detail" in prompt.lower()
+
+
+async def test_a_single_garment_upload_runs_the_plain_treatment(
+    db: AsyncSession,
+) -> None:
+    """Nothing to disambiguate: there is one garment in the frame."""
+    _garment, _asset, job, store = await _ready(db)
+    studio = Studio()
+
+    await make_packshot(db, job, studio=studio, store=store)
+
+    assert studio.prompts == [None]
+
+
+async def test_the_bytes_edited_are_the_source_assets(db: AsyncSession) -> None:
+    """Pinned because the whole defect was reading the wrong asset."""
+    _garment, asset, job, store = await _ready(db)
+    studio = Studio()
+
+    await make_packshot(db, job, studio=studio, store=store)
+
+    assert studio.photos == [store.objects[asset.storage_key or str(asset.id)]]
+
+
+# --------------------------------------------------------------------------- #
+# A pair is one thing
+#
+# **Reported: one packshot per shoe.** Asked for "white chunky
+# sneakers" the model returned a single sneaker, and the wardrobe
+# then showed one shoe as the item somebody owns. Nobody owns one
+# sneaker. Socks, gloves and earrings are the same shape of mistake:
+# one wardrobe item, two objects, and the model does not assume it.
+#
+# Pinned across all three prompts because they were written at
+# different times for different callers and the next person editing
+# one of them will not know about the other two.
+# --------------------------------------------------------------------------- #
+def test_every_packshot_prompt_keeps_a_pair_together() -> None:
+    from app.workers.garment_studio import treatment_by_id
+    from app.workers.packshot import ISOLATE
+    from app.workers.piece_packshot import PIECE_PROMPT
+
+    wardrobe = treatment_by_id("packshot")
+    assert wardrobe is not None
+
+    for name, said in (
+        ("isolate-from-photo", ISOLATE.format(subject="white sneakers")),
+        ("from-words", PIECE_PROMPT.format(phrase="white sneakers")),
+        ("studio-treatment", wardrobe.prompt),
+    ):
+        lowered = said.lower()
+        assert "pair" in lowered, name
+        assert "side by side" in lowered, name

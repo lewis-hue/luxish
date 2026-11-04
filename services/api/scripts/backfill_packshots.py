@@ -10,6 +10,12 @@ sofa. That is the state a reviewer's wardrobe is in.
     python scripts/backfill_packshots.py
     python scripts/backfill_packshots.py --user someone@example.com
 
+**It adopts before it buys.** The fan-out path used to ask the
+Studio for each piece's packshot and then never point the garment at
+the result - measured on a real account as nine ready packshots and
+zero garments showing one. Those pictures exist and are paid for, so
+this claims them first and only queues a drawing for what is left.
+
 **It queues; it does not draw.** Each shot is a billed image edit on
 a worker, so this writes job rows and returns. The idempotency key is
 the garment's, the same one the intake pipeline uses, so a garment
@@ -50,9 +56,10 @@ async def main() -> int:
 
     from app.domain.jobs import enqueue
     from app.models.garment import Garment
+    from app.models.garment_studio import GarmentShot
     from app.models.media_asset import MediaAsset
     from app.models.user import User
-    from app.workers.packshot import PACKSHOT_JOB_KIND, PACKSHOT_MEDIA_KIND
+    from app.workers.packshot import ALREADY_A_PACKSHOT, PACKSHOT_JOB_KIND
 
     engine = create_async_engine(get_settings().database_url)
     maker = async_sessionmaker(engine, expire_on_commit=False)
@@ -74,7 +81,7 @@ async def main() -> int:
                     Garment.media_asset_id.is_not(None),
                     sa.or_(
                         shot.id.is_(None),
-                        shot.kind != PACKSHOT_MEDIA_KIND,
+                        shot.kind.not_in(ALREADY_A_PACKSHOT),
                     ),
                 )
                 .order_by(Garment.created_at.desc())
@@ -91,6 +98,44 @@ async def main() -> int:
 
             garments = list((await db.scalars(query)).all())
             print(f"{len(garments)} garment(s) without a packshot")
+
+            # Claim the ones already drawn, before buying any.
+            adopted = 0
+            if not args.dry_run:
+                for garment in garments:
+                    shot = await db.scalar(
+                        sa.select(GarmentShot)
+                        .where(
+                            GarmentShot.garment_id == garment.id,
+                            GarmentShot.treatment == "packshot",
+                            GarmentShot.state == "ready",
+                            GarmentShot.media_asset_id.is_not(None),
+                            GarmentShot.deleted_at.is_(None),
+                        )
+                        .order_by(GarmentShot.created_at.desc())
+                    )
+                    if shot is None:
+                        continue
+                    garment.background_removed_asset_id = shot.media_asset_id
+                    # An edit of their own photograph, so not a render.
+                    garment.image_is_rendered = False
+                    adopted += 1
+                if adopted:
+                    await db.commit()
+                    print(f"adopted {adopted} packshot(s) already drawn")
+                # A garment that just adopted one is done; drawing
+                # it again would buy a picture it already has.
+                still_wanting = []
+                for g in garments:
+                    if g.background_removed_asset_id is None:
+                        still_wanting.append(g)
+                        continue
+                    have = await db.get(
+                        MediaAsset, g.background_removed_asset_id
+                    )
+                    if have is None or have.kind not in ALREADY_A_PACKSHOT:
+                        still_wanting.append(g)
+                garments = still_wanting
             if args.dry_run:
                 for one in garments[:20]:
                     print(f"  {one.name or '(unnamed)'}")
@@ -104,14 +149,48 @@ async def main() -> int:
                 if asset is None:
                     skipped += 1
                     continue
+
+                # **The original photograph, never a piece cut-out.**
+                #
+                # A garment split out of a worn photograph points
+                # `media_asset_id` at its own cut-out - the documented
+                # workaround for the one-garment-per-upload index -
+                # and re-staging one of those produced a speckled
+                # blob where a pair of headphones should have been.
+                #
+                # The cut-out's storage key carries its parent: the
+                # worker writes `{source key}/piece/{hex}.png`, so
+                # the photograph is recoverable from the prefix. A
+                # string prefix is a weak join and it is the only one
+                # there is; a piece whose parent has gone is skipped
+                # rather than shot from itself.
+                subject: str | None = None
+                key = asset.storage_key or ""
+                if "/piece/" in key:
+                    parent_key = key.split("/piece/", 1)[0]
+                    parent = await db.scalar(
+                        sa.select(MediaAsset).where(
+                            MediaAsset.storage_key == parent_key,
+                            MediaAsset.deleted_at.is_(None),
+                        )
+                    )
+                    if parent is None:
+                        skipped += 1
+                        continue
+                    asset = parent
+                    # The photograph holds every piece, so the job has
+                    # to say which one it is for.
+                    subject = garment.name or "the garment"
+
                 await enqueue(
                     db,
                     PACKSHOT_JOB_KIND,
                     {
                         "garment_id": str(garment.id),
-                        "asset_id": str(garment.media_asset_id),
+                        "asset_id": str(asset.id),
                         "asset_version": asset.version,
                         "user_id": str(garment.user_id),
+                        **({"subject": subject} if subject else {}),
                     },
                     # The intake pipeline's own key. A garment whose
                     # shot is already queued is not queued twice, and
