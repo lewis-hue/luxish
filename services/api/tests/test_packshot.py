@@ -407,3 +407,45 @@ def test_every_packshot_prompt_keeps_a_pair_together() -> None:
         lowered = said.lower()
         assert "pair" in lowered, name
         assert "side by side" in lowered, name
+
+
+async def test_a_forced_job_redraws_a_garment_that_already_has_one(
+    db: AsyncSession,
+) -> None:
+    """**Without this a redraw silently does nothing.**
+
+    A garment whose packshot was made from the wrong source, or
+    before a prompt was fixed, still *has* a packshot - so the
+    already-present check returned, the job succeeded, and the
+    picture did not change. Found by measuring: redrawing seven
+    garments produced byte-for-byte identical files.
+    """
+    garment, _asset, job, store = await _ready(db)
+    await make_packshot(db, job, studio=Studio(image=b"first"), store=store)
+    await db.commit()
+    before = (await reload(db, garment.id)).background_removed_asset_id
+
+    job.payload = {**(job.payload or {}), "force": True}
+    await db.commit()
+    again = Studio(image=b"second")
+    out = await make_packshot(db, job, studio=again, store=store)
+    await db.commit()
+
+    assert out["packshot"] is True
+    assert len(again.calls) == 1, "it actually drew"
+    assert (await reload(db, garment.id)).background_removed_asset_id != before
+
+
+async def test_an_unforced_job_still_refuses_to_pay_twice(
+    db: AsyncSession,
+) -> None:
+    """The saving `force` steps around must survive for everyone else."""
+    _garment, _asset, job, store = await _ready(db)
+    await make_packshot(db, job, studio=Studio(), store=store)
+    await db.commit()
+
+    second = Studio()
+    assert (
+        await make_packshot(db, job, studio=second, store=store)
+    )["reason"] == "already_present"
+    assert second.calls == []

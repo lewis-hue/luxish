@@ -619,13 +619,50 @@ async def read_visual_search(
             status_code=status.HTTP_404_NOT_FOUND,
             code="not_found",
         )
-    return VisualSearchOut(
+    out = VisualSearchOut(
         job_id=found.job_id,
         state=found.state,
         tags=list(found.tags),
         outfit=found.outfit,
         error=found.error,
     )
+    if found.state != "succeeded":
+        return out
+
+    # **The results, rather than a tag to go and look up.**
+    #
+    # This used to hand back words and let the client jump to one
+    # tag's page - and when no tag matched, the client showed an
+    # alert saying "nothing to go on" and left the person where they
+    # started. That is the worst answer available to somebody who
+    # opened a camera, framed a shot and waited nine seconds.
+    #
+    # `loosely` is the half that matters: pins ranked by what they
+    # are *of*, on the vectors Discover already uses. A photograph of
+    # rings on a hand finds the hand-accessory pins. No model call -
+    # the reading is paid for and the vectors are stored.
+    from app.domain import visual_matches
+
+    found_pins = await visual_matches.matches(
+        db,
+        user_id=ctx.user_id,
+        tags=list(found.tags),
+        pieces=list(found.pieces),
+    )
+    out.subject = found_pins.subject
+    if found_pins.close:
+        out.close = await _render(
+            db,
+            await domain.by_ids(db, user_id=ctx.user_id, ids=found_pins.close),
+            viewer_id=ctx.user_id,
+        )
+    if found_pins.loosely:
+        out.loosely = await _render(
+            db,
+            await domain.by_ids(db, user_id=ctx.user_id, ids=found_pins.loosely),
+            viewer_id=ctx.user_id,
+        )
+    return out
 
 
 @router.get("/explore", response_model=ExploreOut)

@@ -1,4 +1,5 @@
 import { api } from '@/api/client';
+import { toFeedFit, type FeedFit } from '@/api/queries/discover-feed';
 import { uploadMedia } from '@/features/media/upload';
 
 /**
@@ -26,7 +27,35 @@ export interface VisualResult {
   tags: string[];
   /** What the reader thought the outfit was. */
   outfit: string;
+  /**
+   * Pins actually tagged with what the reader saw. Often empty: a
+   * tag exists only if an author typed it.
+   */
+  close: FeedFit[];
+  /**
+   * The nearest pins by what they are *of*.
+   *
+   * **This is the half that makes the camera worth using.** Before
+   * it, a picture nothing was tagged with produced an alert saying
+   * "nothing to go on" and left the person exactly where they
+   * started, having opened a camera, framed a shot and waited nine
+   * seconds. Shown under its own heading, because "the nearest
+   * thing" and "this is your picture" are different claims.
+   */
+  loosely: FeedFit[];
+  /** What the picture was read as, for the heading. */
+  subject: string;
 }
+
+/**
+ * **One mapper, shared with the board.**
+ *
+ * These come back as full feed items from the same serialiser the
+ * board uses, so a second mapper here would be a second place for a
+ * field to be forgotten - which is the argument `toFeedFit`'s own
+ * comment already makes about the tag page.
+ */
+const pin = (raw: Record<string, unknown>): FeedFit => toFeedFit(raw);
 
 /**
  * Upload a picture and read it into tags.
@@ -56,7 +85,13 @@ export async function searchByPicture(uri: string): Promise<VisualResult> {
 
     const { state, tags, outfit, error } = read.data;
     if (state === 'succeeded') {
-      return { tags: tags ?? [], outfit: outfit ?? '' };
+      return {
+        tags: tags ?? [],
+        outfit: outfit ?? '',
+        close: (read.data.close ?? []).map(pin),
+        loosely: (read.data.loosely ?? []).map(pin),
+        subject: read.data.subject ?? 'outfit',
+      };
     }
     if (state === 'failed' || state === 'cancelled') {
       throw new VisualSearchFailed(

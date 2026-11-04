@@ -51,7 +51,12 @@ import {
   filtered,
   type SearchFilter,
 } from '@/features/feed/search-filter';
-import { searchByPicture } from '@/features/feed/visual-search';
+import { PictureResults } from '@/features/feed/picture-results';
+import { Scanning } from '@/features/feed/scanning';
+import {
+  searchByPicture,
+  type VisualResult,
+} from '@/features/feed/visual-search';
 import { useGarmentCapture } from '@/features/wardrobe/capture';
 import { useScheme } from '@/hooks/use-theme';
 
@@ -92,6 +97,10 @@ export default function SearchScreen() {
   const [filter, setFilter] = useState<SearchFilter>(NO_FILTER);
   const [filtering, setFiltering] = useState(false);
   const [reading, setReading] = useState(false);
+  /** Their photograph, shown under the scanner while it is read. */
+  const [scanning, setScanning] = useState<string | null>(null);
+  /** What the camera found, once it has. */
+  const [found, setFound] = useState<VisualResult | null>(null);
 
   const auth = useAuth();
   const signedIn = auth.status === 'signedIn';
@@ -211,21 +220,26 @@ export default function SearchScreen() {
     const shot = result[0];
     if (!shot) return;
 
+    // **The wait goes over their photograph, not on a button.**
+    //
+    // Reading costs five to nine seconds, and the old version spent
+    // it with the camera closed and a button reading "Reading" on an
+    // otherwise unchanged screen. Somebody who has just framed a
+    // shot is looking at their picture.
+    setScanning(shot.uri);
     setReading(true);
     try {
       const found = await searchByPicture(shot.uri);
-      if (found.tags.length === 0) {
-        Alert.alert(
-          'Nothing to go on',
-          found.outfit
-            ? `That looked like: ${found.outfit}. Nothing here is tagged with it yet.`
-            : 'No clothes were recognisable in that picture.',
-        );
-        return;
-      }
       void successFeedback();
-      // The strongest tag. The rest arrive as related on the page.
-      search(found.tags[0]);
+      // **The results, in a sheet, rather than a jump or an alert.**
+      //
+      // This used to take the strongest tag and navigate to its
+      // page - losing the photograph and every other reading - and
+      // when no tag matched it showed "Nothing to go on" and left
+      // the person exactly where they started. The sheet shows what
+      // was found, including the nearest things when nothing was
+      // tagged, and says which is which.
+      setFound(found);
     } catch (caught) {
       Alert.alert(
         'Could not search that',
@@ -233,6 +247,7 @@ export default function SearchScreen() {
       );
     } finally {
       setReading(false);
+      setScanning(null);
     }
   };
 
@@ -581,6 +596,18 @@ export default function SearchScreen() {
           setFiltering(false);
         }}
       />
+
+      {/* **The wait, over their own photograph.**
+
+          Mounted only while the read runs, so it starts at its
+          first line by being new rather than by resetting state in
+          an effect. */}
+      {scanning ? <Scanning uri={scanning} /> : null}
+
+      {/* What it found, as a sheet over this screen. Dismissing it
+          leaves the query and the board exactly as they were. */}
+      <PictureResults result={found} onClose={() => setFound(null)} />
+
     </View>
   );
 }

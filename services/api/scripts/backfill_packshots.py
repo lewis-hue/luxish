@@ -224,6 +224,11 @@ async def main() -> int:
                         "asset_version": asset.version,
                         "user_id": str(garment.user_id),
                         **({"subject": subject} if subject else {}),
+                        # Without this the worker sees a garment that
+                        # already has a packshot and returns
+                        # "already present" - the job succeeds and
+                        # the picture does not change. Measured.
+                        **({"force": True} if args.redo else {}),
                     },
                     # The intake pipeline's own key. A garment whose
                     # shot is already queued is not queued twice, and

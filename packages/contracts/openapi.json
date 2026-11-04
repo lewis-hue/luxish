@@ -13291,6 +13291,25 @@
               }
             ],
             "title": "Error"
+          },
+          "close": {
+            "items": {
+              "$ref": "#/components/schemas/FeedItemOut"
+            },
+            "type": "array",
+            "title": "Close"
+          },
+          "loosely": {
+            "items": {
+              "$ref": "#/components/schemas/FeedItemOut"
+            },
+            "type": "array",
+            "title": "Loosely"
+          },
+          "subject": {
+            "type": "string",
+            "title": "Subject",
+            "default": "outfit"
           }
         },
         "type": "object",

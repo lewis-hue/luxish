@@ -60,6 +60,10 @@ class VisualSearch:
     #: What the reader thought the outfit was, so the answer can
     #: explain itself rather than just jumping somewhere.
     outfit: str = ""
+    #: The garments it named. Carried because the matcher reads the
+    #: nouns to decide what kind of thing was photographed, and a
+    #: tag is a word about the whole picture rather than a piece.
+    pieces: tuple[str, ...] = ()
     error: str | None = None
 
 
@@ -118,6 +122,7 @@ async def read(
         state=job.state,
         tags=tuple(result.get("tags") or ()),
         outfit=str(result.get("outfit") or ""),
+        pieces=tuple(result.get("pieces") or ()),
         error=job.last_error,
     )
 

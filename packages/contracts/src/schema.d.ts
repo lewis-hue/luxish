@@ -5953,6 +5953,15 @@ export interface components {
             outfit: string;
             /** Error */
             error?: string | null;
+            /** Close */
+            close?: components["schemas"]["FeedItemOut"][];
+            /** Loosely */
+            loosely?: components["schemas"]["FeedItemOut"][];
+            /**
+             * Subject
+             * @default outfit
+             */
+            subject: string;
         };
         /** WornIn */
         WornIn: {

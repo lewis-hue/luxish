@@ -164,6 +164,24 @@ class VisualSearchOut(BaseModel):
     #: explain itself rather than only jumping somewhere.
     outfit: str = ""
     error: str | None = None
+    #: Pins actually tagged with what the reader saw.
+    #:
+    #: Often empty, because a tag only exists if an author typed it -
+    #: which is why `loosely` is here rather than an empty sheet and
+    #: an apology.
+    close: list[FeedItemOut] = Field(default_factory=list)
+    #: The nearest pins by what they are *of*, ranked on the same
+    #: vision vectors Discover uses.
+    #:
+    #: **Under their own heading, never mixed into `close`.** A
+    #: photograph of rings on a hand finds the hand-accessory pins,
+    #: which is the useful answer and is not the same claim as "this
+    #: is your picture". Presenting the two as one list would make
+    #: the app look wrong rather than helpful.
+    loosely: list[FeedItemOut] = Field(default_factory=list)
+    #: What the picture was read as: `outfit`, `jewellery`,
+    #: `footwear`, `bag`. The sheet uses it for the heading.
+    subject: str = "outfit"
 
 
 class DoorOut(BaseModel):

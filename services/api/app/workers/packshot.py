@@ -175,12 +175,20 @@ async def make_packshot(
     # is checked on the asset's *kind* rather than on the field being
     # set - the field is also where a plain cut-out lands, and a
     # cut-out is precisely what this is here to improve on.
+    # **`force` exists because a redraw is a real need and the guard
+    # below silently defeated it.** A garment whose packshot was made
+    # from the wrong source, or before a prompt was fixed, *has* a
+    # packshot - so the check said "already present", the job
+    # succeeded, and nothing changed. Verified the hard way: a
+    # redraw of seven garments returned byte-for-byte identical
+    # pictures. Only the backfill's `--redo` sets this.
+    forced = bool((job.payload or {}).get("force"))
     current = (
         await session.get(MediaAsset, garment.background_removed_asset_id)
         if garment.background_removed_asset_id is not None
         else None
     )
-    if current is not None and current.kind in ALREADY_A_PACKSHOT:
+    if not forced and current is not None and current.kind in ALREADY_A_PACKSHOT:
         return {
             "packshot": True,
             "reason": "already_present",

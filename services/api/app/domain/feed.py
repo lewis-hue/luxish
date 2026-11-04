@@ -808,6 +808,67 @@ MAX_TAG_ITEMS = 120
 GENERATED_KINDS: tuple[str, ...] = ("avatar", "garment_render", "garment_studio")
 
 
+async def by_ids(
+    db: AsyncSession,
+    *,
+    user_id: uuid.UUID,
+    ids: list[uuid.UUID],
+) -> list[FeedPost]:
+    """These pins, in the order asked for, if this person may see them.
+
+    **The order is the caller's and must survive.** A ranked list -
+    nearest-first from a visual search, say - loses its whole point
+    if the database hands it back in insertion order. SQL has no
+    cheap way to sort by a literal list across both dialects here, so
+    the rows are fetched and re-ordered in Python, which is a
+    dictionary lookup per pin.
+
+    Every gate the rest of the feed applies is applied here too. A
+    search is not a way round a block.
+    """
+    if not ids:
+        return []
+
+    hidden = await hidden_either_way(db, user_id=user_id)
+    query = (
+        sa.select(Post)
+        .join(User, User.id == Post.user_id)
+        .where(
+            Post.id.in_(ids),
+            shown_to_strangers(),
+            User.deleted_at.is_(None),
+            visible_author(user_id),
+        )
+    )
+    if hidden:
+        query = query.where(Post.user_id.not_in(hidden))
+
+    posts = {post.id: post for post in await db.scalars(query)}
+    kept = [posts[one] for one in ids if one in posts]
+    if not kept:
+        return []
+
+    found = [post.id for post in kept]
+    tags = await _tags(db, found)
+    media = await _media(db, found)
+    reactions, saves, mine, saved = await _counts(db, found, viewer_id=user_id)
+
+    return [
+        FeedPost(
+            post=post,
+            author_id=post.user_id,
+            tags=tags.get(post.id, []),
+            groups=categorise(tags.get(post.id, [])),
+            media_asset_ids=media.get(post.id, []),
+            reactions=int(reactions.get(post.id, 0)),
+            saves=int(saves.get(post.id, 0)),
+            my_reaction=mine.get(post.id),
+            saved_by_me=post.id in saved,
+        )
+        for post in kept
+    ]
+
+
 async def by_tag(
     db: AsyncSession,
     *,
