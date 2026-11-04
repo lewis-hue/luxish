@@ -278,6 +278,7 @@ async def request(
     source_post_id: uuid.UUID | None = None,
     source_asset_id: uuid.UUID | None = None,
     note: str | None = None,
+    on_mannequin: bool = False,
 ) -> AvatarRender:
     """Record the request and queue the work. Returns immediately.
 
@@ -316,10 +317,23 @@ async def request(
         "base": GENERATE_JOB_KIND,
         "from_photo": LIKENESS_JOB_KIND,
     }.get(kind, TRY_ON_JOB_KIND)
+    # **`on_mannequin` rides on the job, not the row.**
+    #
+    # It is an instruction to the worker about this one piece of work,
+    # which is exactly what a job payload is for, and it needs no
+    # column and no migration. It survives a retry because the payload
+    # is stored with the job.
+    payload: dict[str, Any] = {
+        "render_id": str(render.id),
+        "user_id": str(user_id),
+    }
+    if on_mannequin:
+        payload["on_mannequin"] = True
+
     job = await enqueue(
         session,
         job_kind,
-        {"render_id": str(render.id), "user_id": str(user_id)},
+        payload,
         # Keyed on the render, so a retried request rides the same job rather
         # than paying for a second picture.
         idempotency_key=f"{job_kind}:{render.id}",

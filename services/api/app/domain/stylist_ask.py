@@ -95,9 +95,7 @@ def plainly(text: str) -> str:
     return text
 
 
-async def wardrobe_for(
-    db: Any, *, user_id: uuid.UUID, limit: int = MOST_GARMENTS
-) -> list[Any]:
+async def wardrobe_for(db: Any, *, user_id: uuid.UUID, limit: int = MOST_GARMENTS) -> list[Any]:
     """Everything they own and could actually wear.
 
     The same availability filter the stylist's own candidate query
@@ -180,9 +178,7 @@ async def about_post(
         words = described.outfit
 
     link = await db.scalar(
-        sa.select(PostMedia).where(
-            PostMedia.post_id == post_id, PostMedia.position == 0
-        )
+        sa.select(PostMedia).where(PostMedia.post_id == post_id, PostMedia.position == 0)
     )
     if link is None:
         return words, None, "image/jpeg"
@@ -309,9 +305,7 @@ async def stream_answer(
     garments = await wardrobe_for(db, user_id=user_id)
     lines = wardrobe_lines(garments)
     owned = {g.id for g in garments}
-    words, picture, content_type = await about_post(
-        db, user_id=user_id, post_id=post_id
-    )
+    words, picture, content_type = await about_post(db, user_id=user_id, post_id=post_id)
 
     # **What "this" refers to, when they attached one of their own.**
     #
@@ -351,9 +345,7 @@ async def stream_answer(
                 yield "token", plainly(fresh)
     except Exception as caught:  # noqa: BLE001 - reported, not swallowed
         logger.warning("the stylist could not answer: %s", caught)
-        yield "token", (
-            "I could not reach the stylist just then. Try me again in a moment."
-        )
+        yield "token", ("I could not reach the stylist just then. Try me again in a moment.")
         yield "done", Asked(answer="")
         return
 
@@ -418,9 +410,7 @@ async def stream_answer(
         # sneakers waits for a row lookup. That is what makes
         # showing it affordable; a render per person per question
         # was not, which is why the one above this was removed.
-        out.pieces = await _picture_gaps(
-            db, user_id=user_id, wants=plan.look_for
-        )
+        out.pieces = await _picture_gaps(db, user_id=user_id, wants=plan.look_for)
         if out.pieces:
             yield "pieces", out.pieces
 
@@ -529,9 +519,7 @@ async def _shop_for(
     return found
 
 
-async def _picture_gaps(
-    db: Any, *, user_id: uuid.UUID, wants: Any
-) -> list[Any]:
+async def _picture_gaps(db: Any, *, user_id: uuid.UUID, wants: Any) -> list[Any]:
     """A drawable picture for each gap, as the client composes them.
 
     Failure-tolerant on purpose. This hangs off an answer that has
@@ -593,11 +581,17 @@ async def _draw(
             kind="try_on",
             outfit=outfit,
             source_post_id=post_id,
-            note=(
-                "from your wardrobe"
-                if plan.verdict.has_match
-                else "pieces to look for"
-            ),
+            note=("from your wardrobe" if plan.verdict.has_match else "pieces to look for"),
+            # **The stylist draws on the mannequin, always.**
+            #
+            # Asked for by the product owner, and it is the right
+            # default for what this picture is: an answer to "what
+            # would these look like together", shown on a neutral
+            # figure. Somebody who has switched the rest of the app
+            # onto their likeness has said where *they* want to be
+            # seen, which is a different question from what an
+            # assistant's illustration should stand on.
+            on_mannequin=True,
         )
     except Exception as caught:  # noqa: BLE001
         logger.info("no avatar to dress: %s", caught)
@@ -622,9 +616,7 @@ def _plainly(garment: Any) -> str:
     # categorisation found, rather than drawing nothing.
     found = getattr(garment, "effective_attributes", None) or {}
     colour = str(found.get("colour") or "").strip()
-    kind = str(
-        found.get("category") or getattr(garment, "category", "") or ""
-    ).strip()
+    kind = str(found.get("category") or getattr(garment, "category", "") or "").strip()
     return " ".join(word for word in (colour, kind) if word)
 
 
@@ -685,6 +677,7 @@ async def _outfit_words(db: Any, *, user_id: uuid.UUID, plan: Any) -> str:
     # The additions, named in plain words already.
     said.extend(phrase.strip() for phrase in plan.look_for if phrase.strip())
     return ", ".join(said)
+
 
 __all__ = [
     "MOST_GARMENTS",

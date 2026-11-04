@@ -42,6 +42,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
+
 #: Where the generated figures live, shipped with the repository.
 #:
 #: **Found, not counted.** This was `parents[4]`, which is the
@@ -122,9 +123,7 @@ def bytes_for(figure: str = DEFAULT_FIGURE) -> bytes | None:
     return source.read_bytes()
 
 
-async def stated_figure(
-    session: AsyncSession, *, user_id: uuid.UUID
-) -> str:
+async def stated_figure(session: AsyncSession, *, user_id: uuid.UUID) -> str:
     """The figure this person chose, or the neutral default.
 
     Read from their own stated preferences and nowhere else.
@@ -153,9 +152,7 @@ VEHICLE_KEY = "tryon_vehicle"
 ON_MY_AVATAR = "avatar"
 
 
-async def dresses_their_avatar(
-    session: AsyncSession, *, user_id: uuid.UUID
-) -> bool:
+async def dresses_their_avatar(session: AsyncSession, *, user_id: uuid.UUID) -> bool:
     """Whether this person asked for try-ons on their own avatar."""
     from app.models.preference import Preference
 
@@ -168,9 +165,7 @@ async def dresses_their_avatar(
     return held is not None and _as_text(held.value) == ON_MY_AVATAR
 
 
-async def choose_vehicle(
-    session: AsyncSession, *, user_id: uuid.UUID, on_my_avatar: bool
-) -> None:
+async def choose_vehicle(session: AsyncSession, *, user_id: uuid.UUID, on_my_avatar: bool) -> None:
     """Record whether to use their likeness or the mannequin.
 
     Written beside `dresses_their_avatar` so the key, its values and
@@ -180,21 +175,21 @@ async def choose_vehicle(
 
     wanted = ON_MY_AVATAR if on_my_avatar else "mannequin"
     held = await session.scalar(
-        sa.select(Preference).where(
-            Preference.user_id == user_id, Preference.key == VEHICLE_KEY
-        )
+        sa.select(Preference).where(Preference.user_id == user_id, Preference.key == VEHICLE_KEY)
     )
     if held is None:
-        session.add(
-            Preference(user_id=user_id, key=VEHICLE_KEY, value=wanted)
-        )
+        session.add(Preference(user_id=user_id, key=VEHICLE_KEY, value=wanted))
     else:
         held.value = wanted
     await session.commit()
 
 
 async def figure_to_dress(
-    session: AsyncSession, *, user_id: uuid.UUID, store: object
+    session: AsyncSession,
+    *,
+    user_id: uuid.UUID,
+    store: object,
+    force: bool = False,
 ) -> tuple[bytes, str] | None:
     """What to draw the clothes on: `(pixels, content type)`.
 
@@ -211,10 +206,23 @@ async def figure_to_dress(
     So the mannequin is what a try-on uses, and the avatar is a setting
     somebody turns on (`VEHICLE_KEY`). Having built an avatar is no
     longer the same as having chosen to wear everything on it.
+
+    **`force` ignores that setting, and only the stylist uses it.**
+    An assistant's picture is an illustration of an answer - "these
+    would go together" - and it belongs on a neutral figure the same
+    way a catalogue does. Somebody who has switched the app onto
+    their likeness has said where *they* want to be seen, which is a
+    different question, and the product owner's instruction is that
+    the assistant does not follow it.
+
+    Everything else still honours the preference: the avatar screen's
+    own try-on is about them, so it is drawn on whatever they chose.
     """
     from app.domain.avatar import current_avatar
 
-    if await dresses_their_avatar(session, user_id=user_id):
+    # `force` is the stylist, which draws on the mannequin whatever
+    # anybody has switched on. See the note in the docstring.
+    if not force and await dresses_their_avatar(session, user_id=user_id):
         mine = await current_avatar(session, user_id=user_id)
         if mine is not None and mine.storage_key:
             try:

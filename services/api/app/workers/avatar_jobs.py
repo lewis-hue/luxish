@@ -181,6 +181,10 @@ async def try_on_job(
             outfit=outfit,
             renderer=renderer,
             store=store,
+            # Set by the stylist, which draws on the mannequin whatever
+            # vehicle somebody has chosen. Read off the job rather than
+            # the render so it needs no column and survives a retry.
+            on_mannequin=bool((job.payload or {}).get("on_mannequin")),
         )
 
     return await _run(session, job, renderer=renderer, store=store, draw=draw)

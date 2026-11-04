@@ -54,25 +54,17 @@ async def write_appearance(
     that structural.
     """
     existing = await session.scalar(
-        sa.select(Preference).where(
-            Preference.user_id == user_id, Preference.key == APPEARANCE_KEY
-        )
+        sa.select(Preference).where(Preference.user_id == user_id, Preference.key == APPEARANCE_KEY)
     )
     if existing is None:
-        session.add(
-            Preference(
-                user_id=user_id, key=APPEARANCE_KEY, value=appearance.as_stored()
-            )
-        )
+        session.add(Preference(user_id=user_id, key=APPEARANCE_KEY, value=appearance.as_stored()))
     else:
         existing.value = appearance.as_stored()
     await session.commit()
     return appearance
 
 
-async def current_avatar(
-    session: AsyncSession, *, user_id: uuid.UUID
-) -> MediaAsset | None:
+async def current_avatar(session: AsyncSession, *, user_id: uuid.UUID) -> MediaAsset | None:
     """The newest avatar this person has, if any.
 
     Newest rather than only: regenerating leaves the old one in place so a
@@ -155,6 +147,7 @@ async def try_on(
     outfit: str,
     renderer: AvatarRenderer,
     store: Any,
+    on_mannequin: bool = False,
 ) -> MediaAsset:
     """Put an outfit on the avatar and keep the result as its own asset.
 
@@ -172,7 +165,7 @@ async def try_on(
     # simply never reachable from here.
     from app.domain.mannequin import figure_to_dress
 
-    found = await figure_to_dress(session, user_id=user_id, store=store)
+    found = await figure_to_dress(session, user_id=user_id, store=store, force=on_mannequin)
     if found is None:
         raise NoAvatarYet()
     source, source_type = found

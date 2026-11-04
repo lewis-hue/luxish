@@ -226,3 +226,129 @@ async def test_a_stated_preference_picks_the_figure(
 async def test_no_preference_is_the_default(db: AsyncSession) -> None:
     me = await make_user(db)
     assert await stated_figure(db, user_id=me) == DEFAULT_FIGURE
+
+
+# --------------------------------------------------------------------------
+# The stylist draws on the mannequin whatever anybody has switched on.
+# --------------------------------------------------------------------------
+
+
+async def test_the_stylist_ignores_a_chosen_likeness(db: AsyncSession) -> None:
+    """**Asked for by the product owner: "let the assistant always use
+    the mannequin".**
+
+    An assistant's picture illustrates an answer - "these would go
+    together" - and belongs on a neutral figure the way a catalogue
+    does. Switching the app onto your likeness says where *you* want
+    to be seen, which is a different question.
+
+    The decisive part is that this account *has* opted in, and the
+    reader is rigged to fail the test if the avatar is touched.
+    """
+    from app.domain.mannequin import (
+        MANNEQUIN_CONTENT_TYPE,
+        choose_vehicle,
+    )
+
+    user_id = await make_user(db)
+    await _give_them_an_avatar(db, user_id)
+    await choose_vehicle(db, user_id=user_id, on_my_avatar=True)
+
+    # **Recorded, not raised.** `figure_to_dress` catches `Exception`
+    # when an avatar cannot be read and falls back to the mannequin,
+    # so a stub that raises makes this test pass whether `force`
+    # works or not. It did, until the revert check caught it.
+    read_attempts: list[object] = []
+
+    class Watching:
+        async def read(self, asset):
+            read_attempts.append(asset)
+            return b"their-likeness"
+
+    forced = await figure_to_dress(db, user_id=user_id, store=Watching(), force=True)
+
+    assert read_attempts == [], "the stylist read their likeness"
+
+    assert forced is not None
+    pixels, content_type = forced
+    assert content_type == MANNEQUIN_CONTENT_TYPE
+    assert pixels == bytes_for(await stated_figure(db, user_id=user_id))
+
+
+async def test_without_force_a_chosen_likeness_is_still_honoured(
+    db: AsyncSession,
+) -> None:
+    """The avatar screen's own try-on is about them, so it follows them.
+
+    Guards against `force` quietly becoming the only behaviour, which
+    would make the vehicle setting dead and the toggle a lie.
+    """
+    from app.domain.mannequin import choose_vehicle
+
+    user_id = await make_user(db)
+    await _give_them_an_avatar(db, user_id)
+    await choose_vehicle(db, user_id=user_id, on_my_avatar=True)
+
+    class Theirs:
+        async def read(self, asset):
+            return b"their-likeness"
+
+    found = await figure_to_dress(db, user_id=user_id, store=Theirs())
+
+    assert found is not None
+    assert found[0] == b"their-likeness"
+
+
+async def test_the_stylist_asks_for_the_mannequin_in_the_job(
+    db: AsyncSession,
+) -> None:
+    """The flag has to reach the worker, which is where drawing happens.
+
+    `figure_to_dress` taking `force` is no use if nothing sets it, and
+    the path from the stylist to the worker runs through a job payload
+    rather than the render row.
+    """
+    from app.domain import avatar_renders, stylist_ask
+    from app.domain.stylist_answer import Verdict, plan_from
+    from app.models.garment import Garment
+    from app.models.job import Job
+
+    user_id = await make_user(db)
+    tee = Garment(user_id=user_id, name="white tee", category="top", availability="available")
+    db.add(tee)
+    await db.commit()
+    await db.refresh(tee)
+
+    # Through `_draw`, which is what the stylist actually calls. The
+    # first version of this called `request` directly with the flag
+    # already set, so it passed with the stylist not setting it.
+    render_id = await stylist_ask._draw(
+        db,
+        user_id=user_id,
+        plan=plan_from(Verdict(answer="Wear it.", has_match=True, using=(tee.id,), missing=())),
+        post_id=None,
+    )
+    assert render_id is not None, "the stylist queued nothing to assert about"
+
+    render = await avatar_renders.get(db, user_id=user_id, render_id=render_id)
+    assert render is not None
+    job = await db.get(Job, render.job_id)
+    assert job is not None
+    assert (job.payload or {}).get("on_mannequin") is True
+
+
+async def test_an_ordinary_try_on_does_not_pin_the_figure(
+    db: AsyncSession,
+) -> None:
+    """Absent rather than false, so the payload says only what it means."""
+    from app.domain import avatar_renders
+    from app.models.job import Job
+
+    user_id = await make_user(db)
+    render = await avatar_renders.request(
+        db, user_id=user_id, kind="try_on", outfit="a navy blazer"
+    )
+
+    job = await db.get(Job, render.job_id)
+    assert job is not None
+    assert "on_mannequin" not in (job.payload or {})
