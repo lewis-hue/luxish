@@ -230,11 +230,72 @@ keycloak_host() {
   fi
 }
 
+# Run the backend in containers, which is the default.
+#
+# **So reviewing this app needs Docker and Node, and not Python.**
+# The API and the four workers used to run as local processes, so a
+# reviewer had to install Python 3.12, build a virtualenv and
+# resolve seventeen dependencies before anything started - and a
+# version mismatch failed in ways that looked like a broken app
+# rather than a missing toolchain.
+#
+# `LUXISH_LOCAL_BACKEND=1` keeps the old path for anybody actually
+# working on the API, where an editable install and a debugger
+# attached to a local process are worth the setup.
+docker_backend() {
+  say "building the backend image (first run takes a few minutes) ..."
+  if ! ( cd "$REPO/infra" && docker compose build api >"$LOGS/build.log" 2>&1 ); then
+    say "image build FAILED - see $LOGS/build.log"
+    tail -5 "$LOGS/build.log"
+    exit 1
+  fi
+
+  if ! ( cd "$REPO/infra" && docker compose up -d >"$LOGS/compose.log" 2>&1 ); then
+    say "the stack did not come up - see $LOGS/compose.log"
+    exit 1
+  fi
+
+  printf '       waiting for the API '
+  local up=0
+  for _ in $(seq 1 60); do
+    if curl -sf --max-time 2 "http://127.0.0.1:$API_PORT/healthz" >/dev/null 2>&1; then
+      up=1; break
+    fi
+    printf '.'; sleep 2
+  done
+  printf '
+'
+  if [ "$up" -ne 1 ]; then
+    say "api      did not become healthy - docker compose logs api"
+    exit 1
+  fi
+
+  # Migrations run inside the container, against the same database
+  # the API will serve. See the note in the local path for why this
+  # is not left to chance.
+  if ! ( cd "$REPO/infra" && docker compose exec -T api           alembic upgrade head >"$LOGS/migrate.log" 2>&1 ); then
+    say "migrations FAILED - see $LOGS/migrate.log"
+    tail -5 "$LOGS/migrate.log"
+    exit 1
+  fi
+  say "db       at head"
+  say "api      on :$API_PORT (container)"
+  say "workers  ai, media, default and beat (containers)"
+}
+
 start() {
   seed_env_files
   HOST_ROTATED=0
+
+  if [ "${LUXISH_LOCAL_BACKEND:-0}" != "1" ]; then
+    keycloak_host || true
+    docker_backend
+    return 0
+  fi
+
   if [ ! -x "$PY" ]; then
-    say "No virtualenv at $API_DIR/.venv. Create it before running this."
+    say "No virtualenv at $API_DIR/.venv. Create it, or unset"
+    say "LUXISH_LOCAL_BACKEND to run the backend in Docker instead."
     exit 1
   fi
 
@@ -330,6 +391,10 @@ start() {
 }
 
 stop() {
+  # The backend runs in containers by default, so stopping has to
+  # reach them. Harmless when they were never started.
+  ( cd "$REPO/infra" && docker compose stop api worker-ai worker-media       worker-default beat >/dev/null 2>&1 ) || true
+
   powershell.exe -NoProfile -Command \
     "Get-CimInstance Win32_Process -Filter \"Name='python.exe'\" -ErrorAction SilentlyContinue |
      Where-Object { \$_.CommandLine -like '*uvicorn app.main*' -or \$_.CommandLine -like '*celery*' } |

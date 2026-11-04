@@ -34,7 +34,10 @@ import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from _assets import seed_photos
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import sqlalchemy as sa  # noqa: E402
 
@@ -344,7 +347,7 @@ FOLDER_TAGS: dict[str, list[str]] = {
 #: fresh clone with no external drive attached. A subset — the full
 #: library is too large to carry — but enough that Discover is never
 #: empty for somebody who just checked the project out.
-BUNDLED_PHOTOS = Path(__file__).resolve().parents[3] / "assets" / "seed-photos"
+BUNDLED_PHOTOS = seed_photos()
 
 
 def photo_root() -> Path | None:

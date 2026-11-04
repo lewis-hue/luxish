@@ -64,12 +64,14 @@ doctor() {
     fatal=1
   fi
 
+  # **Not a requirement any more.** The backend runs in containers,
+  # so Python is only needed by somebody working on the API itself.
+  # It used to be fatal here, which turned "review this app" into
+  # "install a Python toolchain first".
   if [ -x "$PY" ]; then
-    ok "API virtualenv at services/api/.venv"
+    ok "API virtualenv present (optional - the backend runs in Docker)"
   else
-    bad "no virtualenv at services/api/.venv"
-    note "python -m venv services/api/.venv && services/api/.venv/*/pip install -r services/api/requirements.txt"
-    fatal=1
+    note "No local Python virtualenv. Not needed: the backend runs in Docker."
   fi
 
   if command -v node >/dev/null 2>&1; then
@@ -135,6 +137,29 @@ list_avds() {
 # --------------------------------------------------------------------------- #
 # Up
 # --------------------------------------------------------------------------- #
+# Where an API script should run.
+#
+# **The seeders used to run on the host, always.** With the backend
+# in containers that is a different SQLite file from the one the API
+# serves, so every seed step reported success against a database
+# nobody reads - and a reviewer scanned the QR, signed in and found
+# an empty app. Measured, not assumed: the host said 719 pins and
+# the container said 0.
+if [ "${LUXISH_LOCAL_BACKEND:-0}" = "1" ]; then
+  SEED_PHOTOS="$REPO/assets/seed-photos"
+else
+  # The read-only mount declared in docker-compose.
+  SEED_PHOTOS="/srv/assets/seed-photos"
+fi
+
+api_py() {
+  if [ "${LUXISH_LOCAL_BACKEND:-0}" = "1" ]; then
+    ( cd "$API_DIR" && "$PY" "$@" )
+  else
+    ( cd "$REPO/infra" && docker compose exec -T api python "$@" )
+  fi
+}
+
 seed_if_empty() {
   local count
   # **From `$API_DIR`, and the error is kept.**
@@ -146,7 +171,7 @@ seed_if_empty() {
   # and carried on. The consequence was the worst one available
   # here: a reviewer scanned the QR and got an empty app, with
   # nothing on screen saying why.
-  count="$( cd "$API_DIR" && "$PY" - <<'PYEOF' 2>>"$LOGS/seed.log"
+  count="$( api_py - <<'PYEOF' 2>>"$LOGS/seed.log"
 import asyncio, os, sys
 sys.path.insert(0, ".")
 os.environ.setdefault("LUXISH_ENVIRONMENT", "local")
@@ -172,8 +197,8 @@ PYEOF
     ok "database already has $count pins"
   else
     say "  seeding a demo world (this takes a minute) ..."
-    ( cd "$API_DIR" && "$PY" scripts/seed_demo_world.py \
-        --photos "$REPO/assets/seed-photos" >"$LOGS/seed.log" 2>&1 ) \
+    ( api_py scripts/seed_demo_world.py \
+        --photos "$SEED_PHOTOS" >"$LOGS/seed.log" 2>&1 ) \
       && ok "seeded" \
       || { bad "seeding failed - see .devlogs/seed.log"; return 1; }
   fi
@@ -202,7 +227,7 @@ PYEOF
 # launch regardless; this is the follow graph, which needs a person
 # to hang off.
 join_reviewer() {
-  if ( cd "$API_DIR" && "$PY" scripts/seed_demo_world.py --join "$REVIEWER"         >"$LOGS/join.log" 2>&1 ); then
+  if ( api_py scripts/seed_demo_world.py --join "$REVIEWER" >"$LOGS/join.log" 2>&1 ); then
     if grep -q "no account for" "$LOGS/join.log" 2>/dev/null; then
       note "sign in once, then run this again to fill the Community tab"
     else
@@ -218,7 +243,7 @@ join_reviewer() {
 # Idempotent - matched on the picture's checksum, so a second run adds
 # nothing.
 post_generated_pins() {
-  if ( cd "$API_DIR" && "$PY" scripts/import_generated_pins.py >"$LOGS/pins.log" 2>&1 ); then
+  if ( api_py scripts/import_generated_pins.py >"$LOGS/pins.log" 2>&1 ); then
     ok "the generated board is posted"
   else
     note "could not post the generated board - see .devlogs/pins.log"
@@ -230,7 +255,7 @@ post_generated_pins() {
 # than as one bad row. The API cannot create one; seeding that writes
 # rows directly can, so the board is checked after it runs.
 repair_pins() {
-  if ( cd "$API_DIR" && "$PY" scripts/repair_pins.py --fix >"$LOGS/repair.log" 2>&1 ); then
+  if ( api_py scripts/repair_pins.py --fix >"$LOGS/repair.log" 2>&1 ); then
     ok "every pin has a photograph"
   else
     note "pin check could not run - see .devlogs/repair.log"

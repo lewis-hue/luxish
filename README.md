@@ -22,9 +22,12 @@ npm install
 ./scripts/review.sh
 ```
 
-The script brings up Postgres, Redis, Keycloak, the API, four
-workers, the scheduler and Metro, seeds a demo world if the database
-is empty, and then prints a QR code.
+The script builds the backend image, brings up Postgres, Redis,
+Keycloak, the API, four workers, the scheduler and Metro, seeds a
+demo world if the database is empty, and then prints a QR code.
+
+**The first run takes a few minutes** while Docker builds the
+backend image. Later runs start in seconds.
 
 **On your phone**, install Expo Go:
 
@@ -60,9 +63,12 @@ When you are done:
 
 | | Why |
 |---|---|
-| **Docker Desktop**, running | Postgres, Redis and Keycloak are containers |
-| **Node 20+** | The Expo app and the typed API client |
-| **Python 3.12** | The API and the workers |
+| **Docker Desktop**, running | Postgres, Redis, Keycloak, the API and the workers |
+| **Node 22.13+** | Metro, which has to run on the host so your phone can reach it |
+
+That is the whole list. **Python is not required** — the API and all
+four workers run in containers built from
+`services/api/Dockerfile`.
 
 Check the machine without starting anything:
 
@@ -73,13 +79,20 @@ Check the machine without starting anything:
 It reports what is missing and how to fix it, and refuses to start a
 half-working stack rather than leaving you to diagnose one.
 
-**First run needs a Python virtualenv** for the API. The doctor says
-so if it is absent:
+### Working on the API itself
+
+The backend runs in Docker by default. If you want it as a local
+process instead — for a debugger, or an editable install — set one
+variable:
 
 ```bash
 python -m venv services/api/.venv
-services/api/.venv/bin/pip install -r services/api/requirements.txt   # Windows: services/api/.venv/Scripts/pip
+services/api/.venv/bin/pip install -e "services/api[dev]"   # Windows: services/api/.venv/Scripts/pip
+LUXISH_LOCAL_BACKEND=1 ./scripts/review.sh
 ```
+
+Everything else is identical. The seeders follow the backend, so
+they always write to the database the API is actually serving.
 
 ### If you would rather use an emulator
 
@@ -103,7 +116,8 @@ real iPhone with Expo Go, an Android emulator, or a hosted Mac.
 | Expo Go cannot reach the URL | Phone and laptop are on different networks |
 | App opens but is empty | The seed check failed. See `.devlogs/seed.log` |
 | Sign-in page never loads | Keycloak is still starting. Wait, then reload |
-| A fix you just made has not appeared | Workers cache their code: `./scripts/dev-stack.sh restart` |
+| A fix you just made has not appeared | Rebuild the image: `docker compose -f infra/docker-compose.yml up -d --build api` |
+| Want to see backend logs | `docker compose -f infra/docker-compose.yml logs -f api` |
 
 Every service logs to `.devlogs/`. Start there.
 
@@ -171,11 +185,13 @@ is deterministic.
 
 ## Notes for a reviewer
 
-**The demo world is seeded, not faked.** 633 published pins across
-22 accounts, with real photographs, captions, tags and a follow
-graph, posted over three weeks so trending has a baseline to measure
-against. Discover, Search and the boards are populated from the
-first launch.
+**The demo world is seeded, not faked.** The repository ships 406
+photographs - 106 shot for the seed and 300 generated - which the
+seeder turns into published pins across dozens of accounts, with
+captions, tags and a follow graph, dated over three weeks so
+trending has a baseline to measure against rather than a flat line.
+Discover, Search and the boards are populated from the first
+launch.
 
 **The Community tab starts empty until you sign in.** The API keys
 an account on the identity provider's subject and deliberately

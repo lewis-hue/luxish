@@ -44,7 +44,10 @@ import uuid
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+from _assets import seed_photos
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 os.environ.setdefault("LUXISH_ENVIRONMENT", "local")
 
 import sqlalchemy as sa  # noqa: E402  (after the path insert, deliberately)
@@ -65,7 +68,7 @@ from app.providers.meta import MetaProvider  # noqa: E402
 #: Where the pictures land. Inside the repository, because a reviewer
 #: who clones this and runs the script must get a full board without
 #: spending a penny on the vendor.
-OUT = Path(__file__).resolve().parents[3] / "assets" / "seed-photos" / "generated"
+OUT = seed_photos() / "generated"
 
 #: Long edge after downscaling.
 #:

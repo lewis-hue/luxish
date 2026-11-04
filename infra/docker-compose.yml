@@ -120,5 +120,123 @@ services:
       retries: 30
       start_period: 40s
 
+  # --------------------------------------------------------------- #
+  # The backend, containerised.
+  #
+  # **So a reviewer needs Docker and Node, and not Python.** These
+  # ran as local processes, which meant installing Python 3.12,
+  # building a virtualenv and resolving fourteen dependencies before
+  # the app would start - and a wrong version failed in ways that
+  # looked like a broken app rather than a missing toolchain.
+  #
+  # One image for the API and all four workers. They import the same
+  # modules and must run the same code: a worker lagging the API by
+  # a rebuild is the stale-process bug this project has already paid
+  # for twice.
+  # --------------------------------------------------------------- #
+  api:
+    build:
+      context: ../services/api
+      dockerfile: Dockerfile
+    image: luxish-api:local
+    env_file: ../services/api/.env
+    environment:
+      # Inside the compose network the stores answer on their service
+      # names and standard ports, not the host's 55xxx offsets.
+      LUXISH_REDIS_URL: redis://redis:6379/0
+      LUXISH_DATABASE_URL: sqlite+aiosqlite:////data/luxish_dev.sqlite3
+      # Named rather than inferred: the seed scripts used to count
+      # directories up from __file__, which is an IndexError in a
+      # container where the tree is two levels deep instead of four.
+      LUXISH_ASSETS_DIR: /srv/assets
+    volumes:
+      # The database and generated media outlive a container, so a
+      # restart does not throw away a seeded world.
+      - apidata:/data
+      - apimedia:/srv/.media
+      # The seed photographs live at the repository root, outside
+      # the build context. Read-only: the seeder reads them and the
+      # container has no business writing there.
+      - ../assets:/srv/assets:ro
+    ports:
+      - '8010:8010'
+    depends_on:
+      redis: { condition: service_healthy }
+      keycloak: { condition: service_started }
+    healthcheck:
+      test: ['CMD', 'curl', '-fsS', 'http://127.0.0.1:8010/healthz']
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+
+  worker-ai:
+    image: luxish-api:local
+    depends_on:
+      api: { condition: service_started }
+    env_file: ../services/api/.env
+    environment:
+      LUXISH_REDIS_URL: redis://redis:6379/0
+      LUXISH_DATABASE_URL: sqlite+aiosqlite:////data/luxish_dev.sqlite3
+    volumes:
+      - apidata:/data
+      - apimedia:/srv/.media
+    # Paid model work. Its own queue so a slow image call cannot
+    # block a thumbnail.
+    command: >
+      celery -A app.queue.celery_app:celery_app worker
+      --queues ai --concurrency 2 --loglevel info --pool solo
+    restart: unless-stopped
+
+  worker-media:
+    image: luxish-api:local
+    depends_on:
+      api: { condition: service_started }
+    env_file: ../services/api/.env
+    environment:
+      LUXISH_REDIS_URL: redis://redis:6379/0
+      LUXISH_DATABASE_URL: sqlite+aiosqlite:////data/luxish_dev.sqlite3
+    volumes:
+      - apidata:/data
+      - apimedia:/srv/.media
+    command: >
+      celery -A app.queue.celery_app:celery_app worker
+      --queues media --concurrency 2 --loglevel info --pool solo
+    restart: unless-stopped
+
+  worker-default:
+    image: luxish-api:local
+    depends_on:
+      api: { condition: service_started }
+    env_file: ../services/api/.env
+    environment:
+      LUXISH_REDIS_URL: redis://redis:6379/0
+      LUXISH_DATABASE_URL: sqlite+aiosqlite:////data/luxish_dev.sqlite3
+    volumes:
+      - apidata:/data
+      - apimedia:/srv/.media
+    command: >
+      celery -A app.queue.celery_app:celery_app worker
+      --queues default,maintenance --concurrency 2 --loglevel info --pool solo
+    restart: unless-stopped
+
+  beat:
+    image: luxish-api:local
+    depends_on:
+      api: { condition: service_started }
+    env_file: ../services/api/.env
+    environment:
+      LUXISH_REDIS_URL: redis://redis:6379/0
+      LUXISH_DATABASE_URL: sqlite+aiosqlite:////data/luxish_dev.sqlite3
+    volumes:
+      - apidata:/data
+      - apimedia:/srv/.media
+    command: >
+      celery -A app.queue.celery_app:celery_app beat --loglevel info
+    restart: unless-stopped
+
 volumes:
+  apidata:
+  apimedia:
   pgdata:

@@ -40,7 +40,10 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+from _assets import seed_photos
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 os.environ.setdefault("LUXISH_ENVIRONMENT", "local")
 
 import sqlalchemy as sa  # noqa: E402  (after the path insert, deliberately)
@@ -53,11 +56,7 @@ from sqlalchemy.ext.asyncio import (  # noqa: E402
 from app.config import get_settings  # noqa: E402
 
 PINS = (
-    Path(__file__).resolve().parents[3]
-    / "assets"
-    / "seed-photos"
-    / "generated"
-    / "pins.json"
+    seed_photos() / "generated" / "pins.json"
 )
 
 #: Who posts them. First name, handle, the scene they mostly post in.

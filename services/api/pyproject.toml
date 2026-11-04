@@ -41,6 +41,23 @@ dependencies = [
   # found nothing". Imported lazily; its absence degrades to a labelled
   # capability gap rather than a crash (app/providers/segmentation.py).
   "meta-sam-parser>=0.0.6",
+  # **Declared late, and they were always required.** The worker
+  # tier would not start from a clean install - `celery` is the
+  # whole of it - and the local database driver was missing too, so
+  # `pip install .` produced an API that could not open its own
+  # SQLite file. They were present here only because this machine's
+  # virtualenv had them from somewhere else, which is the kind of
+  # thing that works until somebody else clones the repository.
+  "celery>=5.4",
+  "aiosqlite>=0.20",
+  # Alembic's synchronous URL for migrations; the async driver above
+  # cannot run them.
+  "psycopg[binary]>=3.1",
+  # kombu's Redis transport imports this and does not declare it, so
+  # every worker died on `No module named 'packaging'` the moment it
+  # tried to reach the broker. Pinned here because a transitive
+  # dependency nobody declares is one nobody notices disappearing.
+  "packaging>=23.0",
 ]
 
 [project.optional-dependencies]

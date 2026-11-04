@@ -41,6 +41,8 @@ import sys
 import unicodedata
 from pathlib import Path
 
+from _assets import seed_photos
+
 #: Source folder to the folder it lands in here.
 #:
 #: `PORTRAITS` becomes `beauty` on the evidence rather than the label:
@@ -115,7 +117,7 @@ def main() -> int:
     parser.add_argument("--from", dest="source", required=True)
     parser.add_argument(
         "--into",
-        default=str(Path(__file__).resolve().parents[3] / "assets" / "seed-photos"),
+        default=str(seed_photos()),
     )
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()

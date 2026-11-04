@@ -152,7 +152,12 @@
       ],
       "realmRoles": [
         "default-roles-luxish"
-      ]
+      ],
+      "attributes": {
+        "luxish:purpose": [
+          "Local review account. This realm import is mounted only by infra/docker-compose.yml and is never read by the deployed stack, which provisions Keycloak through Terraform with generated passwords. Changing that is what would make this password dangerous."
+        ]
+      }
     }
   ]
 }
