@@ -285,12 +285,31 @@ async def ask(payload: AskCreate, db: SessionDep, ctx: AuthDep) -> StreamingResp
 
 
 def _offer(match) -> dict:
-    """One shoppable thing, as the client renders it."""
-    product = getattr(match, "product", None)
+    """One shoppable thing, as the client renders it.
+
+    **Every field falls back to the match itself.** This read
+    `retailer` and `url` from a nested `product` only, which is the
+    shape a catalogue row has and not the shape a web result has - so
+    a result looked up on the open web arrived with both null. The
+    visible consequence was precise: the shop name never appeared and
+    the row could not be tapped, because the client disables a link
+    with no URL. A list of shops nobody can open is a worse answer
+    than no list.
+
+    Written as a fallback rather than two branches because the two
+    sources agree on the names and differ only in nesting, and a
+    branch here would need updating every time a third source turns
+    up.
+    """
+
+    def field(name: str):
+        product = getattr(match, "product", None)
+        return getattr(product, name, None) or getattr(match, name, None)
+
     return {
         "product_id": str(getattr(match, "product_id", "") or ""),
-        "title": getattr(product, "title", None) or getattr(match, "title", None),
-        "retailer": getattr(product, "retailer", None),
-        "url": getattr(product, "url", None),
+        "title": field("title"),
+        "retailer": field("retailer"),
+        "url": field("url"),
         "match_label": getattr(match, "match_label", None),
     }

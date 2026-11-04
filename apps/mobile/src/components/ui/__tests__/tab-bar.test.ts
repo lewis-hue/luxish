@@ -344,3 +344,30 @@ describe('the bar stands down while you scroll forward', () => {
     ).toBe(false);
   });
 });
+
+describe('a pushed screen lights the section it belongs to', () => {
+  it('lights Profile for your avatar, whichever tab pushed it', () => {
+    // **The common path is "Try it on" on a pin in Discover**, so the
+    // navigator reports Discover - and the bar lit the grid while the
+    // screen said "Your avatar". The bar says which section somebody
+    // is in, and this one is the profile's.
+    expect(currentHref('/avatar', '/')).toBe('/profile');
+    expect(currentHref('/avatar', '/search')).toBe('/profile');
+    expect(currentHref('/avatar', null)).toBe('/profile');
+  });
+
+  it('still lights Discover for a pin', () => {
+    expect(currentHref('/fit/abc', '/profile')).toBe('/');
+  });
+
+  it('leaves the closet to the navigator', () => {
+    // The closet is the wardrobe's own grid and is reached from that
+    // tab, so it is a wardrobe thing - claiming it for Profile was an
+    // overreach two existing tests caught.
+    expect(currentHref('/closet', '/wardrobe')).toBe('/wardrobe');
+  });
+
+  it('falls back to the navigator for anything unclaimed', () => {
+    expect(currentHref('/collage', '/search')).toBe('/search');
+  });
+});

@@ -288,6 +288,14 @@ const BELONGS_TO: Record<string, string> = {
   'profile-edit': '/profile',
   subscription: '/profile',
   insights: '/profile',
+  // **Your avatar is a Profile thing wherever you reached it from.**
+  //
+  // It is reachable from three places, and the most common is "Try
+  // it on" on a pin in Discover - so the navigator reported Discover
+  // and the bar lit the grid while the screen said "Your avatar".
+  // The bar is meant to say which section somebody is in, and this
+  // one is the profile's.
+  avatar: '/profile',
   saved: '/profile',
 };
 

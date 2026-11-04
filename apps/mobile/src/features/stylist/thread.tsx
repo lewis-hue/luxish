@@ -1,4 +1,5 @@
 import { Image } from 'expo-image';
+import { SymbolView } from 'expo-symbols';
 import { MotiView } from 'moti';
 import { useMemo, useState } from 'react';
 import {
@@ -20,6 +21,7 @@ import {
   FontSize,
   Radius,
   Spacing,
+  TapTarget,
   labelType,
 } from '@/constants/theme';
 import { BRAND } from '@/branding';
@@ -165,6 +167,20 @@ function Bubble({
     [turn.verdict?.using, wardrobe],
   );
 
+  // Each missing piece with the shops that sell it. Grouped on
+  // `match_label`, which the server sets to the gap each result
+  // was searched for - so the pairing is carried rather than
+  // guessed at by matching text.
+  const gaps = useMemo(() => {
+    const want = turn.verdict?.missing ?? [];
+    if (want.length === 0) return [];
+    const offers = turn.shopping ?? [];
+    return want.map((one) => ({
+      want: one,
+      shops: offers.filter((item) => item.match_label === one),
+    }));
+  }, [turn.verdict?.missing, turn.shopping]);
+
   // **What somebody typed, in a capsule on the right.**
   //
   // Short by nature - a question, not a paragraph - so a bubble suits
@@ -303,23 +319,42 @@ function Bubble({
         </ThemedText>
       )}
 
-      {/* What they would need to buy, named before any shop is
-          searched: "you have no cream trousers" is useful on its own
-          and arrives a second before the offers do. */}
-      {turn.verdict && !turn.verdict.hasMatch && turn.verdict.missing.length ? (
-        <Listing title="What would do it">
-          {turn.verdict.missing.map((want) => (
-            <Line key={want}>{want}</Line>
-          ))}
-        </Listing>
-      ) : null}
+      {/* **One section, grouped by the piece.**
 
-      {turn.shopping?.length ? (
-        <Listing title="Where to get them">
-          {turn.shopping.map((item) => (
-            <Shoplink key={item.product_id} item={item} />
+          These were two: a list of what was missing, then a flat
+          list of twelve shop links underneath it. The links were in
+          gap order but nothing said so, so "Amazon: Varsity Jacket"
+          and "Light Wash Baggy Jeans - Tillys" sat in one column
+          with no way to tell which belonged to what - and the piece
+          names were printed twice, once as the list above and once
+          inside every link's title.
+
+          Each missing piece is a heading now, with the places that
+          sell it under it. The gaps still show before any shop is
+          found, because "you have no cream trousers" is useful on
+          its own and arrives a second before the links do. */}
+      {gaps.length > 0 ? (
+        <View style={{ alignSelf: 'stretch', gap: Spacing.three }}>
+          <ThemedText type="smallBold" style={{ fontSize: FontSize.subhead }}>
+            What would do it
+          </ThemedText>
+          {gaps.map((gap) => (
+            <View key={gap.want} style={{ gap: Spacing.half }}>
+              <ThemedText
+                type="smallBold"
+                style={{ fontSize: FontSize.footnote }}>
+                {gap.want}
+              </ThemedText>
+              {gap.shops.length === 0 ? (
+                <Line>Looking for somewhere to buy this</Line>
+              ) : (
+                gap.shops.map((item) => (
+                  <Shoplink key={item.product_id} item={item} />
+                ))
+              )}
+            </View>
           ))}
-        </Listing>
+        </View>
       ) : null}
 
       {/* The nearby-shops button stood here.
@@ -432,39 +467,6 @@ function Thinking() {
   );
 }
 
-/**
- * A short titled list under an answer.
- *
- * Indented by a hairline rather than by a heading and a gap: the rule
- * says "these belong to the sentence above" in one pixel, where a
- * second bold heading per list was starting to make every reply look
- * like a document.
- */
-function Listing({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    // **Full measure, like the sentence above it.**
-    //
-    // This was indented behind a hairline at footnote size, which
-    // squeezed "brown suede trucker jacket with shearling collar"
-    // into a narrow column while the paragraph above it ran the full
-    // width. It is part of the same answer and reads as one only if
-    // it is set like one: same measure, same size, the heading doing
-    // the separating that the rule was doing.
-    <View style={{ alignSelf: 'stretch', gap: Spacing.one }}>
-      <ThemedText type="smallBold" style={{ fontSize: FontSize.subhead }}>
-        {title}
-      </ThemedText>
-      {children}
-    </View>
-  );
-}
-
 function Line({ children }: { children: React.ReactNode }) {
   return (
     <ThemedText
@@ -548,6 +550,7 @@ function Shoplink({
 }: {
   item: { title: string | null; retailer: string | null; url: string | null };
 }) {
+  const colors = Colors[useScheme()];
   const url = item.url;
   const label = item.title ?? 'A match';
   return (
@@ -566,19 +569,47 @@ function Shoplink({
           // a suggestion. The row stays, and nothing happens.
         });
       }}
-      style={{ paddingVertical: Spacing.half, gap: Spacing.half }}>
-      {item.retailer ? (
-        <ThemedText type="smallBold" style={{ fontSize: FontSize.subhead }}>
-          {item.retailer}
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Spacing.two,
+        // A row somebody is meant to tap needs to be tappable-sized,
+        // not text-sized.
+        minHeight: TapTarget,
+        paddingVertical: Spacing.half,
+      }}>
+      <View style={{ flex: 1, gap: Spacing.half }}>
+        {item.retailer ? (
+          <ThemedText type="smallBold" style={{ fontSize: FontSize.subhead }}>
+            {item.retailer}
+          </ThemedText>
+        ) : null}
+        <ThemedText
+          numberOfLines={2}
+          type="small"
+          themeColor="textSecondary"
+          style={{ fontSize: FontSize.footnote }}>
+          {label}
         </ThemedText>
+      </View>
+      {/* **It has to look like it opens something.**
+
+          These were plain grey paragraphs, so nothing said they were
+          links and nobody would have tried. A chevron is the
+          platform's own mark for "this goes somewhere", and it is
+          shown only when there is actually a URL - a row that cannot
+          open must not advertise that it can. */}
+      {url ? (
+        <SymbolView
+          name={{
+            ios: 'arrow.up.right',
+            android: 'open_in_new',
+            web: 'open_in_new',
+          }}
+          size={13}
+          tintColor={colors.textSecondary}
+        />
       ) : null}
-      <ThemedText
-        numberOfLines={2}
-        type="small"
-        themeColor="textSecondary"
-        style={{ fontSize: FontSize.footnote }}>
-        {label}
-      </ThemedText>
     </MotionPressable>
   );
 }

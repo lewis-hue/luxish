@@ -809,8 +809,9 @@ function Drawing() {
         overflow: 'hidden',
         alignItems: 'center',
         justifyContent: 'flex-end',
+        paddingBottom: Spacing.four,
       }}>
-      {/* A wash over the figure, so the marks read against it. */}
+      {/* A wash over the figure, so the card reads against it. */}
       <View
         style={{
           position: 'absolute',
@@ -820,67 +821,112 @@ function Drawing() {
         }}
       />
 
-      {/* **A thread being stitched, rather than a bar sweeping.**
+      {/* **The ring, over the middle of the figure.**
 
-          The sweep read as a page loading - the same scanline every
-          skeleton uses, and it said nothing about what was happening.
-          This is five marks on a vertical line, lighting in sequence
-          and fading behind, like a seam being run. It belongs to the
-          subject: the thing being waited for is a garment going onto
-          a figure.
+          Where the eye already is. In the card at the bottom it was
+          a small detail beside a label on the edge of the frame, and
+          the thing somebody is actually looking at - the figure -
+          had nothing happening on it. Centred, the one moving object
+          sits on the subject.
 
-          Five because there are five stages, and the lit mark is the
-          stage - so the motion is the progress rather than decoration
-          beside it. Nothing here is a percentage, because the render
-          does not report one and a bar that invents its own is a lie
-          that gets found out at the end.
-       */}
+          Three sides of a ring rather than a full circle, because a
+          complete ring turning looks identical at every angle. */}
       <View
+        // The centring wrapper. `position: absolute` with no offsets
+        // pins to a corner, and this container aligns its children
+        // to the bottom - so the ring needs a full-size box of its
+        // own to sit in the middle of.
+        pointerEvents="none"
         style={{
           position: 'absolute',
+          inset: 0,
           alignItems: 'center',
-          gap: Spacing.two,
+          justifyContent: 'center',
         }}>
-        {STAGES.map((_name, at) => (
-          <MotiView
-            key={at}
-            from={{ opacity: 0.18, scale: 0.7 }}
-            animate={
-              at === stage
-                ? { opacity: 1, scale: 1.25 }
-                : at < stage
-                  ? { opacity: 0.55, scale: 1 }
-                  : { opacity: 0.18, scale: 0.7 }
-            }
-            transition={timing({ duration: Motion.slow })}
-            style={{
-              width: Spacing.two,
-              height: Spacing.two,
-              borderRadius: Spacing.one,
-              backgroundColor: colors.accent,
-            }}
-          />
-        ))}
+        <MotiView
+          from={{ rotate: '0deg' }}
+          animate={{ rotate: '360deg' }}
+          transition={timing({ duration: 1100, loop: true, repeat: -1 })}
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: 22,
+            borderWidth: 3,
+            borderColor: colors.accent,
+            borderTopColor: 'transparent',
+          }}
+        />
       </View>
 
-      <MotiView
-        // Keyed on the stage so each line fades in as its own element
-        // rather than the text swapping underneath a static label.
-        key={stage}
-        from={{ opacity: 0, translateY: 6 }}
-        animate={{ opacity: 1, translateY: 0 }}
-        transition={timing({ duration: Motion.base })}
+      {/* **One card, not a label with marks scattered around it.**
+
+          The first version put five dots on a vertical line behind
+          the label, which from a thumb's distance read as three
+          stray dots sitting on the figure's feet rather than as
+          progress. The marks and the words belong to each other, so
+          they are one object: a card with the stage written across
+          it and the track underneath.
+
+          The track is five segments because there are five stages,
+          and the filled ones are the stages done - so the motion is
+          the progress rather than decoration beside it. No
+          percentage, because the render does not report one and a
+          bar that invents its own is a lie that gets found out at
+          the end. The last segment pulses instead of filling, which
+          says "still working" without claiming a sixth stage. */}
+      <View
         style={{
-          marginBottom: Spacing.four,
           paddingHorizontal: Spacing.three,
           paddingVertical: Spacing.two,
-          borderRadius: Radius.full,
+          borderRadius: Radius.lg,
+          borderCurve: 'continuous',
           backgroundColor: colors.background,
+          gap: Spacing.two,
+          minWidth: 180,
+          boxShadow: '0 4px 14px rgba(0, 0, 0, 0.12)',
         }}>
-        <ThemedText type="smallBold" style={{ fontSize: FontSize.footnote }}>
-          {STAGES[stage]}
-        </ThemedText>
-      </MotiView>
+        <MotiView
+          // Keyed on the stage so each line fades in as its own
+          // element rather than the text swapping under a static one.
+          key={stage}
+          from={{ opacity: 0, translateY: 4 }}
+          animate={{ opacity: 1, translateY: 0 }}
+          transition={timing({ duration: Motion.base })}>
+          <ThemedText
+            type="smallBold"
+            style={{ fontSize: FontSize.footnote, textAlign: 'center' }}>
+            {STAGES[stage]}
+          </ThemedText>
+        </MotiView>
+
+        <View style={{ flexDirection: 'row', gap: Spacing.half }}>
+          {STAGES.map((_name, at) => (
+            <MotiView
+              key={at}
+              from={{ opacity: 0.15 }}
+              animate={
+                at < stage
+                  ? { opacity: 1 }
+                  : at === stage
+                    ? { opacity: 0.45 }
+                    : { opacity: 0.15 }
+              }
+              // The live segment breathes; the finished ones hold.
+              transition={
+                at === stage
+                  ? timing({ duration: 760, loop: true, repeatReverse: true })
+                  : timing({ duration: Motion.base })
+              }
+              style={{
+                flex: 1,
+                height: 3,
+                borderRadius: 2,
+                backgroundColor: colors.accent,
+              }}
+            />
+          ))}
+        </View>
+      </View>
     </View>
   );
 }

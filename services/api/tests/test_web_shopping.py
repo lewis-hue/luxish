@@ -216,3 +216,55 @@ async def test_the_answers_pair_with_the_gaps_in_order() -> None:
 def test_found_defaults_to_reached() -> None:
     """Because the common case is that it worked."""
     assert Found(gap="x").reached is True
+
+
+# --------------------------------------------------------------------------- #
+# Getting a web result to the screen intact
+#
+# The lookup worked and the rows arrived unusable: the serialiser read
+# `retailer` and `url` from a nested `product`, which is the shape a
+# catalogue row has and not the shape a web result has. Both came back
+# null, so the shop name never showed and the row could not be tapped -
+# the client disables a link with no URL. A list of shops nobody can
+# open is a worse answer than no list.
+# --------------------------------------------------------------------------- #
+def test_a_web_result_keeps_its_link_and_its_shop_name() -> None:
+    from app.domain.stylist_ask import _WebOffer
+    from app.routers.stylist import _offer
+
+    out = _offer(
+        _WebOffer(
+            product_id="https://thursdayboots.com/p",
+            title="Suede Trucker Jacket",
+            retailer="thursdayboots.com",
+            url="https://thursdayboots.com/p",
+            match_label="brown suede trucker jacket",
+        )
+    )
+
+    assert out["url"] == "https://thursdayboots.com/p", "a row with no url cannot be tapped"
+    assert out["retailer"] == "thursdayboots.com"
+    assert out["title"] == "Suede Trucker Jacket"
+
+
+def test_a_catalogue_row_still_serialises_the_way_it_did() -> None:
+    """The fallback must not cost the shape it was written for."""
+    from app.routers.stylist import _offer
+
+    class Product:
+        title = "Wool Overcoat"
+        retailer = "Zara"
+        url = "https://zara.com/overcoat"
+
+    class Match:
+        product = Product()
+        product_id = "cat-1"
+        match_label = "overcoat"
+        title = None
+        retailer = None
+        url = None
+
+    out = _offer(Match())
+    assert out["retailer"] == "Zara"
+    assert out["url"] == "https://zara.com/overcoat"
+    assert out["product_id"] == "cat-1"
