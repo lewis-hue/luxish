@@ -52,7 +52,21 @@ MAX_ITEMS = 50
 
 #: Every kind this inbox can produce. Closed, so a client can render each one
 #: deliberately rather than falling back to a generic row.
-KINDS = ("wardrobe_sorted", "stylist_ready", "fit_reactions")
+KINDS = (
+    "wardrobe_sorted",
+    "stylist_ready",
+    "fit_reactions",
+    # **Work somebody started and then walked away from.**
+    #
+    # Both of these run on a worker and take twenty to thirty
+    # seconds, which is long enough that nobody waits on the
+    # screen - they change tabs. Before these two kinds existed
+    # the work finished silently and the only way to find out was
+    # to navigate back and look, so a picture somebody paid for
+    # could sit unseen indefinitely.
+    "studio_ready",
+    "render_ready",
+)
 
 #: Things that are worth a banner but are not inbox entries.
 #:
@@ -228,6 +242,73 @@ async def _stylist_ready(
     return out
 
 
+async def _studio_ready(
+    session: AsyncSession, *, user_id: uuid.UUID, cutoff: datetime
+) -> list[Notification]:
+    """Studio shots that finished while they were somewhere else."""
+    from app.models.garment_studio import GarmentShot
+
+    rows = (
+        await session.scalars(
+            sa.select(GarmentShot)
+            .where(
+                GarmentShot.user_id == user_id,
+                GarmentShot.state == "ready",
+                GarmentShot.updated_at >= cutoff,
+            )
+            .order_by(GarmentShot.updated_at.desc())
+            .limit(MAX_ITEMS)
+        )
+    ).all()
+    return [
+        Notification(
+            kind="studio_ready",
+            occurred_at=shot.updated_at or datetime.now(UTC),
+            title="Your picture is ready",
+            # The treatment, because somebody who queued three wants
+            # to know which one this is without opening it.
+            body=f"The {shot.treatment} shot finished.",
+            target="/studio",
+        )
+        for shot in rows
+    ]
+
+
+async def _render_ready(
+    session: AsyncSession, *, user_id: uuid.UUID, cutoff: datetime
+) -> list[Notification]:
+    """Figures that finished drawing after somebody left the screen."""
+    from app.models.avatar_render import AvatarRender
+
+    rows = (
+        await session.scalars(
+            sa.select(AvatarRender)
+            .where(
+                AvatarRender.user_id == user_id,
+                AvatarRender.state == "ready",
+                AvatarRender.updated_at >= cutoff,
+            )
+            .order_by(AvatarRender.updated_at.desc())
+            .limit(MAX_ITEMS)
+        )
+    ).all()
+    return [
+        Notification(
+            kind="render_ready",
+            occurred_at=render.updated_at or datetime.now(UTC),
+            title=(
+                "Your try-on is ready"
+                if render.kind == "try_on"
+                else "Your avatar is ready"
+            ),
+            body=(render.note or "").strip()[:120]
+            or "It finished drawing while you were elsewhere.",
+            target="/avatar",
+        )
+        for render in rows
+    ]
+
+
 async def _fit_reactions(
     session: AsyncSession, *, user_id: uuid.UUID, cutoff: datetime
 ) -> list[Notification]:
@@ -325,6 +406,16 @@ async def inbox(
             []
             if "fit_reactions" in muted
             else await _fit_reactions(session, user_id=user_id, cutoff=cutoff)
+        ),
+        *(
+            []
+            if "studio_ready" in muted
+            else await _studio_ready(session, user_id=user_id, cutoff=cutoff)
+        ),
+        *(
+            []
+            if "render_ready" in muted
+            else await _render_ready(session, user_id=user_id, cutoff=cutoff)
         ),
     ]
     items.sort(key=lambda item: item.occurred_at, reverse=True)

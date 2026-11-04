@@ -173,7 +173,21 @@ export default function RootLayout() {
                   // a native header would reserve a row above it.
                   options={{ headerShown: false }}
                 />
-                <Stack.Screen name="insights" />
+                <Stack.Screen
+                  name="insights"
+                  options={{
+                    // **A pushed screen needs a way back.**
+                    //
+                    // This had no options at all, so no header and no
+                    // chevron - and Insights is not a tab, so the bar
+                    // at the bottom does not lead out of it either.
+                    // The only exit was the system back gesture, which
+                    // is not an exit somebody can see.
+                    headerShown: true,
+                    headerBackButtonDisplayMode: 'minimal',
+                    title: 'Insights',
+                  }}
+                />
                 <Stack.Screen
                   name="closet"
                   // Every piece somebody owns, with renaming and

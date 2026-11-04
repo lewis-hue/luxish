@@ -261,13 +261,19 @@ export default function AvatarScreen() {
         paddingBottom: insets.bottom + Spacing.six,
         gap: Spacing.four,
       }}
+      // **The header's own inset, not a guessed margin.**
+      //
+      // Without this the first child starts under the translucent
+      // stack header: "This is you" was rendered greyed and clipped
+      // behind it, half under the status bar.
+      contentInsetAdjustmentBehavior="automatic"
       showsVerticalScrollIndicator={false}>
-      <View style={{ gap: Spacing.one, marginTop: Spacing.two }}>
-        <ThemedText style={{ ...labelType(34, 800), lineHeight: 38 }}>
-          {showing ? 'This is you' : 'Build your avatar'}
-        </ThemedText>
-
-      </View>
+      {/* The page's own 34pt title stood here, under a stack header
+          already titled "Your avatar" - two titles for one screen,
+          and the lower one slid under the upper one as soon as
+          anything scrolled. AGENTS.md says to use the stack title
+          rather than a text element on the page, and the stack title
+          is the one that stays put. */}
 
       {/* The free figure leads; the drawn one replaces it.
 
@@ -804,30 +810,58 @@ function Drawing() {
         alignItems: 'center',
         justifyContent: 'flex-end',
       }}>
-      {/* The ground, so the sweep has something to pass over. */}
+      {/* A wash over the figure, so the marks read against it. */}
       <View
         style={{
           position: 'absolute',
           inset: 0,
           backgroundColor: colors.text,
-          opacity: 0.06,
+          opacity: 0.05,
         }}
       />
 
-      {/* The sweep. A tall soft band travelling top to bottom. */}
-      <MotiView
-        from={{ translateY: -260 }}
-        animate={{ translateY: 420 }}
-        transition={timing({ duration: 1900, loop: true })}
+      {/* **A thread being stitched, rather than a bar sweeping.**
+
+          The sweep read as a page loading - the same scanline every
+          skeleton uses, and it said nothing about what was happening.
+          This is five marks on a vertical line, lighting in sequence
+          and fading behind, like a seam being run. It belongs to the
+          subject: the thing being waited for is a garment going onto
+          a figure.
+
+          Five because there are five stages, and the lit mark is the
+          stage - so the motion is the progress rather than decoration
+          beside it. Nothing here is a percentage, because the render
+          does not report one and a bar that invents its own is a lie
+          that gets found out at the end.
+       */}
+      <View
         style={{
           position: 'absolute',
-          left: 0,
-          right: 0,
-          height: 180,
-          backgroundColor: colors.accent,
-          opacity: 0.1,
-        }}
-      />
+          alignItems: 'center',
+          gap: Spacing.two,
+        }}>
+        {STAGES.map((_name, at) => (
+          <MotiView
+            key={at}
+            from={{ opacity: 0.18, scale: 0.7 }}
+            animate={
+              at === stage
+                ? { opacity: 1, scale: 1.25 }
+                : at < stage
+                  ? { opacity: 0.55, scale: 1 }
+                  : { opacity: 0.18, scale: 0.7 }
+            }
+            transition={timing({ duration: Motion.slow })}
+            style={{
+              width: Spacing.two,
+              height: Spacing.two,
+              borderRadius: Spacing.one,
+              backgroundColor: colors.accent,
+            }}
+          />
+        ))}
+      </View>
 
       <MotiView
         // Keyed on the stage so each line fades in as its own element

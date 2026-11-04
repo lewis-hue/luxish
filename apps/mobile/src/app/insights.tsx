@@ -72,10 +72,11 @@ export default function InsightsScreen() {
         gap: Spacing.five,
       }}
       showsVerticalScrollIndicator={false}>
+      {/* The chips only. The 40pt "Insights" that stood above them
+          duplicated the stack header this screen now has, and two
+          titles on one screen is how the upper one ends up with the
+          lower one sliding under it. */}
       <View style={{ paddingHorizontal: Spacing.three, gap: Spacing.two }}>
-        <ThemedText accessibilityRole="header" style={{ ...labelType(40, 800), lineHeight: 44 }}>
-          Insights
-        </ThemedText>
         <WindowChips value={window} onChange={setWindow} />
       </View>
 

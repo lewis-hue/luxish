@@ -318,3 +318,126 @@ async def test_preferences_belong_to_exactly_one_person(
 
     r = await client.get("/v1/notifications/preferences", headers=other)
     assert r.json()["wardrobe_sorted"] is True
+
+
+# --------------------------------------------------------------------------- #
+# Work that finished while somebody was somewhere else
+#
+# Both of these run on a worker for twenty to thirty seconds, which is
+# long enough that nobody waits on the screen - they change tabs.
+# Without these kinds the work finished silently and the only way to
+# find out was to navigate back and look.
+# --------------------------------------------------------------------------- #
+async def test_a_studio_shot_that_finished_reaches_the_inbox(
+    db: AsyncSession,
+) -> None:
+    from app.domain import notifications as domain
+    from app.models.garment_studio import GarmentShot
+    from tests.test_garment_media import make_asset, make_user
+
+    me = await make_user(db)
+    source = await make_asset(db, user_id=me)
+    db.add(
+        GarmentShot(
+            user_id=me,
+            source_asset_id=source.id,
+            treatment="packshot",
+            state="ready",
+        )
+    )
+    await db.commit()
+
+    items, _unread = await domain.inbox(db, user_id=me)
+    kinds = [item.kind for item in items]
+    assert "studio_ready" in kinds
+    said = next(i for i in items if i.kind == "studio_ready")
+    assert "packshot" in said.body, "which shot it was is the useful part"
+    assert said.target == "/studio"
+
+
+async def test_a_finished_try_on_reaches_the_inbox(db: AsyncSession) -> None:
+    from app.domain import notifications as domain
+    from app.models.avatar_render import AvatarRender
+    from tests.test_garment_media import make_user
+
+    me = await make_user(db)
+    db.add(AvatarRender(user_id=me, kind="try_on", state="ready"))
+    await db.commit()
+
+    items, _unread = await domain.inbox(db, user_id=me)
+    said = next(i for i in items if i.kind == "render_ready")
+    assert said.title == "Your try-on is ready"
+    assert said.target == "/avatar"
+
+
+async def test_an_avatar_and_a_try_on_are_announced_differently(
+    db: AsyncSession,
+) -> None:
+    """They are different things to have been waiting for."""
+    from app.domain import notifications as domain
+    from app.models.avatar_render import AvatarRender
+    from tests.test_garment_media import make_user
+
+    me = await make_user(db)
+    db.add(AvatarRender(user_id=me, kind="base", state="ready"))
+    await db.commit()
+
+    items, _unread = await domain.inbox(db, user_id=me)
+    said = next(i for i in items if i.kind == "render_ready")
+    assert said.title == "Your avatar is ready"
+
+
+async def test_work_still_running_is_not_announced(db: AsyncSession) -> None:
+    """**Only `ready`.** A queued job is not news, and announcing one
+    would mean the badge lit the moment somebody pressed the button."""
+    from app.models.avatar_render import AvatarRender
+    from app.domain import notifications as domain
+    from app.models.garment_studio import GarmentShot
+    from tests.test_garment_media import make_asset, make_user
+
+    me = await make_user(db)
+    source = await make_asset(db, user_id=me)
+    db.add(AvatarRender(user_id=me, kind="try_on", state="queued"))
+    db.add(
+        GarmentShot(
+            user_id=me,
+            source_asset_id=source.id,
+            treatment="packshot",
+            state="queued",
+        )
+    )
+    await db.commit()
+
+    items, _unread = await domain.inbox(db, user_id=me)
+    assert not [i for i in items if i.kind in ("render_ready", "studio_ready")]
+
+
+async def test_both_new_kinds_can_be_muted(db: AsyncSession) -> None:
+    """Every other kind can be, so these must be too - or the
+    preferences screen quietly stops covering the inbox."""
+    from app.domain import notifications as domain
+    from app.domain.notification_prefs import write_prefs
+    from app.models.avatar_render import AvatarRender
+    from app.models.garment_studio import GarmentShot
+    from tests.test_garment_media import make_asset, make_user
+
+    me = await make_user(db)
+    source = await make_asset(db, user_id=me)
+    db.add(AvatarRender(user_id=me, kind="try_on", state="ready"))
+    db.add(
+        GarmentShot(
+            user_id=me,
+            source_asset_id=source.id,
+            treatment="packshot",
+            state="ready",
+        )
+    )
+    await db.commit()
+
+    await write_prefs(
+        db,
+        user_id=me,
+        changes={"render_ready": False, "studio_ready": False},
+    )
+    items, _unread = await domain.inbox(db, user_id=me)
+    assert not [i for i in items if i.kind in ("render_ready", "studio_ready")]
