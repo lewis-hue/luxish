@@ -140,7 +140,20 @@ services:
       dockerfile: Dockerfile
     image: luxish-api:local
     env_file: ../services/api/.env
-    environment:
+    # **Anchored, because the workers must not drift from this.**
+    #
+    # The mannequin figures were mounted here and nowhere else. The
+    # API could read them and the workers could not - and the workers
+    # are where drawing happens, so every try-on by anybody without
+    # their own avatar failed with "no mannequin file for
+    # 'androgynous-average' and no default", surfaced on the phone as
+    # "I could not draw that".
+    #
+    # One image already serves all five roles so a worker cannot run
+    # different code. These anchors do the same for what it can see:
+    # adding a mount here reaches every role, because copying a block
+    # four times is how the last one gets forgotten.
+    environment: &backend-env
       # Inside the compose network the stores answer on their service
       # names and standard ports, not the host's 55xxx offsets.
       LUXISH_REDIS_URL: redis://redis:6379/0
@@ -165,7 +178,7 @@ services:
       # On the compose network Keycloak answers to its service name on
       # its own port, with no host networking in the path.
       LUXISH_KEYCLOAK_JWKS_URL_OVERRIDE: http://keycloak:8080/realms/luxish/protocol/openid-connect/certs
-    volumes:
+    volumes: &backend-volumes
       # The database and generated media outlive a container, so a
       # restart does not throw away a seeded world.
       - apidata:/data
@@ -207,11 +220,8 @@ services:
       api: { condition: service_started }
     env_file: ../services/api/.env
     environment:
-      LUXISH_REDIS_URL: redis://redis:6379/0
-      LUXISH_DATABASE_URL: sqlite+aiosqlite:////data/luxish_dev.sqlite3
-    volumes:
-      - apidata:/data
-      - apimedia:/srv/.media
+      <<: *backend-env
+    volumes: *backend-volumes
     # Paid model work. Its own queue so a slow image call cannot
     # block a thumbnail.
     command: >
@@ -225,11 +235,8 @@ services:
       api: { condition: service_started }
     env_file: ../services/api/.env
     environment:
-      LUXISH_REDIS_URL: redis://redis:6379/0
-      LUXISH_DATABASE_URL: sqlite+aiosqlite:////data/luxish_dev.sqlite3
-    volumes:
-      - apidata:/data
-      - apimedia:/srv/.media
+      <<: *backend-env
+    volumes: *backend-volumes
     command: >
       celery -A app.queue.celery_app:celery_app worker
       --queues media --concurrency 2 --loglevel info --pool solo
@@ -241,11 +248,8 @@ services:
       api: { condition: service_started }
     env_file: ../services/api/.env
     environment:
-      LUXISH_REDIS_URL: redis://redis:6379/0
-      LUXISH_DATABASE_URL: sqlite+aiosqlite:////data/luxish_dev.sqlite3
-    volumes:
-      - apidata:/data
-      - apimedia:/srv/.media
+      <<: *backend-env
+    volumes: *backend-volumes
     command: >
       celery -A app.queue.celery_app:celery_app worker
       --queues default,maintenance --concurrency 2 --loglevel info --pool solo
@@ -257,11 +261,8 @@ services:
       api: { condition: service_started }
     env_file: ../services/api/.env
     environment:
-      LUXISH_REDIS_URL: redis://redis:6379/0
-      LUXISH_DATABASE_URL: sqlite+aiosqlite:////data/luxish_dev.sqlite3
-    volumes:
-      - apidata:/data
-      - apimedia:/srv/.media
+      <<: *backend-env
+    volumes: *backend-volumes
     command: >
       celery -A app.queue.celery_app:celery_app beat --loglevel info
     restart: unless-stopped

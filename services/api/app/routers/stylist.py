@@ -244,6 +244,7 @@ async def ask(payload: AskCreate, db: SessionDep, ctx: AuthDep) -> StreamingResp
                 user_id=ctx.user_id,
                 question=payload.question,
                 post_id=payload.post_id,
+                garment_id=payload.garment_id,
                 history=[(t.who, t.text) for t in payload.history],
                 provider=provider,
             ):

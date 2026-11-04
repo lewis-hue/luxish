@@ -223,6 +223,21 @@ export function StylistPanel({
   const scroller = useRef<ScrollViewInstance | null>(null);
   const [attachment, setAttachment] = useState<StylistAttachment | null>(null);
   const [attachedFor, setAttachedFor] = useState<string | null>(null);
+  /**
+   * The garment this conversation is about, once one has been attached.
+   *
+   * **Kept past the turn that sent it, which is the whole point.** The
+   * composer clears the attachment after sending, deliberately: a card
+   * pinned above the box implied every later question was still about
+   * that one thing. But the conversation *is* still about it, and the
+   * follow-up proves it. "Show it as a mannequin" carried no subject,
+   * so the model chose a shirt from the wardrobe that had never been
+   * mentioned and drew that instead of the tee the question was about.
+   *
+   * Cleared when a different thing is attached, which is the only
+   * moment the subject actually changes.
+   */
+  const [subject, setSubject] = useState<string | null>(null);
   const colors = Colors[useScheme()];
   const favourites = useFavouriteGarments();
   const wardrobe = useWardrobe(favourites.values);
@@ -361,6 +376,12 @@ export function StylistPanel({
     // implied every later question was still about that one pin, and
     // it was the single biggest piece of furniture on the screen.
     const sentWith = attachment?.uri ?? undefined;
+    // Read before the composer is cleared below, and kept for the
+    // turns after this one.
+    const askingAbout = attachment?.garmentId ?? subject ?? null;
+    if (attachment?.garmentId && attachment.garmentId !== subject) {
+      setSubject(attachment.garmentId);
+    }
     setChat((was) => chatAsked(was, question, sentWith));
     // Emptied now rather than at the end: the question is on its
     // way, and a field still holding it invites a second send.
@@ -368,7 +389,12 @@ export function StylistPanel({
     setAttachment(null);
 
     await askStylist(
-      { question, postId: fitParam ?? null, history: earlier },
+      {
+        question,
+        postId: fitParam ?? null,
+        garmentId: askingAbout,
+        history: earlier,
+      },
       {
         onToken: (chunk) => setChat((was) => chatStreamed(was, chunk)),
         onVerdict: (verdict) => setChat((was) => chatDecided(was, verdict)),
@@ -753,7 +779,18 @@ export function StylistPanel({
         {attachment ? (
           <AttachedCard
             attachment={attachment}
-            onClear={() => setAttachment(null)}
+            onClear={() => {
+              setAttachment(null);
+              // **And stop the conversation being about it.**
+              //
+              // The subject outlives the turn that sent it, so that
+              // "Show it as a mannequin" still knows what "it" is.
+              // Taking the card off before sending is the one moment
+              // somebody says they no longer mean that thing, so it
+              // is the moment the subject has to go too - otherwise
+              // the only way out of it is leaving the screen.
+              setSubject(null);
+            }}
           />
         ) : null}
 

@@ -81,6 +81,18 @@ export async function askStylist(
     question: string;
     postId?: string | null;
     /**
+     * One of their own clothes, when that is what the question points
+     * at.
+     *
+     * **The composer could attach a garment and this could not carry
+     * it.** The attachment showed in the transcript and went no
+     * further, so "What pants and accessories can I wear with this?"
+     * reached the server as those words and nothing else. The model
+     * guessed which garment "this" was, answered about the wrong one,
+     * and the figure beside the answer wore no top.
+     */
+    garmentId?: string | null;
+    /**
      * What has already been said, oldest first.
      *
      * Sent by the client rather than kept on the server: it is a
@@ -111,6 +123,7 @@ export async function askStylist(
       body: JSON.stringify({
         question: input.question,
         post_id: input.postId ?? null,
+        garment_id: input.garmentId ?? null,
         history: input.history ?? [],
       }),
       signal,

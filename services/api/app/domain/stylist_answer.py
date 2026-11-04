@@ -337,6 +337,11 @@ def build_request(
     image: bytes | None = None,
     content_type: str = "image/jpeg",
     history: list[tuple[str, str]] | None = None,
+    #: The garment the question points at, when they attached one of
+    #: their own. Both halves are needed: the name for the sentence,
+    #: the id so it can be required in `using` and checked afterwards.
+    subject_id: uuid.UUID | None = None,
+    subject: str | None = None,
 ) -> AIRequest:
     """The one call. Wardrobe in, verdict out.
 
@@ -350,11 +355,33 @@ def build_request(
     )
     said = question.strip() or "What should I wear?"
 
+    # **What "this" is, named, when they pointed at something of their
+    # own.**
+    #
+    # Without it the model was handed "What pants and accessories can I
+    # wear with this?" and a list of a hundred garments, and had to
+    # guess which one "this" was. It guessed, answered confidently
+    # about the wrong one, and the figure beside the answer wore no top
+    # at all, because the subject was in neither list.
+    #
+    # The id is given as well as the name so the model can put it
+    # straight into `using`. `stylist_ask` then checks that it did:
+    # this paragraph is the request, that check is the guarantee.
+    pointing = ""
+    if subject_id is not None and subject:
+        pointing = (
+            f'"this" is their own {subject}, id {subject_id}. The '
+            "question is about wearing it, so it must appear in "
+            "`using` and the answer must be about what goes with "
+            "it.\n\n"
+        )
+
     parts: list[dict[str, Any]] = [
         {
             "type": "text",
             "text": (
                 f"They asked: {said}\n\n"
+                + pointing
                 + (f"About this look: {about}\n\n" if about else "")
                 + "Everything they own and can wear right now, as "
                 "`id - description`:\n"

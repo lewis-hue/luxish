@@ -3101,6 +3101,8 @@ export interface components {
             question: string;
             /** Post Id */
             post_id?: string | null;
+            /** Garment Id */
+            garment_id?: string | null;
             /** History */
             history?: components["schemas"]["AskTurn"][];
         };

@@ -132,3 +132,68 @@ def test_the_reported_api_url_is_the_one_in_use() -> None:
         "review.sh prints a hardcoded port, which is wrong whenever LUXISH_API_PORT is set"
     )
     assert "LUXISH_API_PORT" in REVIEW
+
+
+# --------------------------------------------------------------------------
+# The five roles have to see the same world, not just run the same code.
+# --------------------------------------------------------------------------
+
+BACKEND_ROLES = ("api", "worker-ai", "worker-media", "worker-default", "beat")
+
+
+def _services() -> dict:
+    import yaml
+
+    return yaml.safe_load(COMPOSE)["services"]
+
+
+def _targets(service: dict) -> set[str]:
+    """Where each of a service's volumes lands inside the container."""
+    found = set()
+    for mount in service.get("volumes") or []:
+        if isinstance(mount, str):
+            parts = mount.split(":")
+            if len(parts) >= 2:
+                found.add(parts[1])
+        elif isinstance(mount, dict) and mount.get("target"):
+            found.add(mount["target"])
+    return found
+
+
+def test_every_backend_role_sees_the_same_files() -> None:
+    """**Mounted on the API and nowhere else, and drawing is a worker.**
+
+    The mannequin figures were on `api` only. Every try-on by anybody
+    without their own avatar failed, in three seconds, with
+
+        no mannequin file for 'androgynous-average' and no default
+
+    which the phone showed as "I could not draw that" under an answer
+    that had just described the outfit. The API could read the figures
+    the whole time, so anything checked against the API looked right.
+    """
+    services = _services()
+    expected = _targets(services["api"])
+    for role in BACKEND_ROLES:
+        assert _targets(services[role]) == expected, (
+            f"{role} does not see the same files as the api; a mount added "
+            "to one role and not the others is how this broke"
+        )
+
+
+def test_every_backend_role_has_the_same_settings() -> None:
+    """A path named for one role and not another fails the same way."""
+    services = _services()
+    expected = services["api"].get("environment") or {}
+    for role in BACKEND_ROLES:
+        assert (services[role].get("environment") or {}) == expected, (
+            f"{role}'s environment differs from the api's"
+        )
+
+
+def test_the_figures_are_mounted_somewhere() -> None:
+    """Guards the two tests above from passing by matching emptiness."""
+    targets = _targets(_services()["api"])
+    assert "/srv/mannequins" in targets, (
+        "no mannequin mount at all, so the roles agree on having none"
+    )

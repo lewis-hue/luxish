@@ -261,6 +261,18 @@ class AskCreate(BaseModel):
 
     question: str = Field(min_length=1, max_length=500)
     post_id: uuid.UUID | None = None
+    #: One of their own clothes, when that is what "this" means.
+    #:
+    #: **The composer could attach a garment and the request could
+    #: not carry it.** The attachment reached the transcript and
+    #: stopped there, so "What pants and accessories can I wear with
+    #: this?" arrived as those words and a wardrobe list, with
+    #: nothing saying which row "this" was. The model guessed,
+    #: answered about something else, and the figure beside the
+    #: answer wore no top because the subject was in neither list.
+    #:
+    #: A pin wins where both are given: it is the thing on screen.
+    garment_id: uuid.UUID | None = None
     #: What has already been said in this conversation, oldest first.
     #:
     #: **Sent by the client rather than kept on the server**, which

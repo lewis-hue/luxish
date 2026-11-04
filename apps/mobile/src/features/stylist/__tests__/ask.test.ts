@@ -183,7 +183,32 @@ it('sends the pin it was opened from', async () => {
   mockFetch.mockResolvedValue(streaming([frame({ event: 'done' })]));
   await askStylist({ question: 'q', postId: 'post-1' }, {});
   const body = JSON.parse(mockFetch.mock.calls[0][1].body as string);
-  expect(body).toEqual({ question: 'q', post_id: 'post-1', history: [] });
+  expect(body).toEqual({
+    question: 'q',
+    post_id: 'post-1',
+    garment_id: null,
+    history: [],
+  });
+});
+
+it('sends the garment the question points at', async () => {
+  // **The field whose absence was the bug.** The composer could
+  // attach one of their own clothes and this request could not carry
+  // it, so "What pants and accessories can I wear with this?" reached
+  // the server as those words and a wardrobe list. The model guessed
+  // which garment "this" was, answered about the wrong one, and the
+  // figure beside the answer wore no top at all.
+  mockFetch.mockResolvedValue(streaming([frame({ event: 'done' })]));
+  await askStylist({ question: 'what goes with this?', garmentId: 'g-7' }, {});
+  const body = JSON.parse(mockFetch.mock.calls[0][1].body as string);
+  expect(body.garment_id).toBe('g-7');
+});
+
+it('sends a null garment when the question points at nothing', async () => {
+  mockFetch.mockResolvedValue(streaming([frame({ event: 'done' })]));
+  await askStylist({ question: 'what should I wear?' }, {});
+  const body = JSON.parse(mockFetch.mock.calls[0][1].body as string);
+  expect(body.garment_id).toBeNull();
 });
 
 it('sends a null pin when there is none', async () => {

@@ -6149,6 +6149,18 @@
             ],
             "title": "Post Id"
           },
+          "garment_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Garment Id"
+          },
           "history": {
             "items": {
               "$ref": "#/components/schemas/AskTurn"

@@ -29,7 +29,7 @@ from __future__ import annotations
 import logging
 import uuid
 from collections.abc import AsyncIterator
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -199,6 +199,76 @@ async def about_post(
     return words, data, asset.content_type or "image/jpeg"
 
 
+async def about_garment(
+    db: Any, *, user_id: uuid.UUID, garment_id: uuid.UUID | None
+) -> tuple[str | None, bytes | None, str, uuid.UUID | None]:
+    """The garment the question is about, in words and in pixels.
+
+    **"This" had no referent.** The composer lets somebody attach one
+    of their own clothes and ask about it, and the attachment reached
+    the transcript and stopped there: `AskCreate` carried a question,
+    a pin id and the history, and no way at all to name a garment. So
+    "What pants and accessories can I wear with this?" arrived at the
+    model as those words and a wardrobe list, with nothing saying
+    which of the hundred-odd rows "this" was.
+
+    The model did what anyone would: it picked something plausible
+    and answered about that. Reported with two screenshots - a
+    question about a white printed tee answered with trousers, shoes
+    and a scarf and a figure wearing no top at all, and then "Show it
+    as a mannequin" which produced a sand linen shirt that had never
+    been mentioned.
+
+    Returns the subject's id as well as its words, because naming it
+    to the model is only half: the id is what lets the outfit be
+    checked afterwards, and a prompt is a request rather than a
+    guarantee.
+
+    Scoped to the asker, like everything else that resolves an id out
+    of a request body. A garment that is not theirs, or is deleted,
+    answers as though it were not named - the same shape `about_post`
+    uses, so a 404 confirms nothing.
+    """
+    if garment_id is None:
+        return None, None, "image/jpeg", None
+
+    import sqlalchemy as sa
+
+    from app.config import get_settings
+    from app.errors import CapabilityUnavailable
+    from app.models.garment import Garment
+    from app.models.media_asset import MediaAsset
+    from app.workers.runner import build_media_store
+
+    garment = await db.scalar(
+        sa.select(Garment).where(
+            Garment.id == garment_id,
+            Garment.user_id == user_id,
+            Garment.deleted_at.is_(None),
+        )
+    )
+    if garment is None:
+        return None, None, "image/jpeg", None
+
+    words = _plainly(garment) or None
+
+    if garment.media_asset_id is None:
+        return words, None, "image/jpeg", garment.id
+    asset = await db.get(MediaAsset, garment.media_asset_id)
+    if asset is None or not asset.storage_key:
+        return words, None, "image/jpeg", garment.id
+
+    try:
+        store = build_media_store(get_settings())
+        data = await store.read(asset)
+    except (CapabilityUnavailable, Exception):  # noqa: BLE001
+        # The words alone still answer the question. A missing
+        # picture is a worse answer, not a failed one - the same
+        # choice `about_post` makes.
+        return words, None, "image/jpeg", garment.id
+    return words, data, asset.content_type or "image/jpeg", garment.id
+
+
 async def stream_answer(
     db: Any,
     *,
@@ -207,6 +277,7 @@ async def stream_answer(
     post_id: uuid.UUID | None,
     provider: Any,
     history: list[tuple[str, str]] | None = None,
+    garment_id: uuid.UUID | None = None,
 ) -> AsyncIterator[tuple[str, Any]]:
     """Yield `(event, payload)` as the answer is written and acted on.
 
@@ -241,6 +312,19 @@ async def stream_answer(
     words, picture, content_type = await about_post(
         db, user_id=user_id, post_id=post_id
     )
+
+    # **What "this" refers to, when they attached one of their own.**
+    #
+    # A pin wins where both are given: it is the thing on screen. A
+    # garment is the other way somebody points at something, and until
+    # now it reached the transcript and went no further.
+    subject_words, subject_picture, subject_type, subject_id = await about_garment(
+        db, user_id=user_id, garment_id=garment_id
+    )
+    if post_id is None and subject_words:
+        words = subject_words
+        if subject_picture is not None:
+            picture, content_type = subject_picture, subject_type
     # **A pin they may not see is not a pin they asked about.**
     # Dropped here as well as above, so an id that failed the gate
     # cannot still ride along on the avatar render as
@@ -255,6 +339,8 @@ async def stream_answer(
         image=picture,
         content_type=content_type,
         history=history,
+        subject_id=subject_id,
+        subject=subject_words,
     )
 
     reader = FieldStream("answer")
@@ -273,6 +359,27 @@ async def stream_answer(
 
     verdict = parse(reader.raw, owned=owned)
     plan = plan_from(verdict)
+
+    # **The subject is worn, whatever the model returned.**
+    #
+    # Telling it "this must appear in `using`" is a request. This is
+    # the guarantee, and the two screenshots that prompted it show why
+    # a request is not enough: a question about a white printed tee
+    # produced trousers, loafers and a scarf, and the figure beside it
+    # wore no top, because the tee was in neither `using` nor the
+    # picture. An outfit built around a garment that is not in the
+    # outfit is the one answer that cannot be right.
+    #
+    # The same move as `plainly` stripping em dashes the prompt
+    # already forbids: ask, then make sure.
+    #
+    # Prepended, not appended: it is what the question is about, so it
+    # reads first in the sentence the renderer is given and is drawn
+    # as the base the rest is built on.
+    if subject_id is not None and subject_id not in plan.wear:
+        plan = replace(plan, wear=(subject_id, *plan.wear))
+        verdict = replace(verdict, using=(subject_id, *verdict.using))
+
     out = Asked(
         answer=verdict.answer,
         has_match=verdict.has_match,
