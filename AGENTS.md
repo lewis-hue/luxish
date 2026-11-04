@@ -141,23 +141,29 @@ the migrations, the API and all four workers, and it rewires the Keycloak
 hostname when the tunnel rotates. Starting pieces individually is how the
 stack ends up in a state nobody can reproduce.
 
-**A worker keeps the code it started with. Restart after touching
-`app/workers`.** The API reloads itself now (`--reload` in
-`dev-stack.sh`), but Celery's prefork pool imports the task modules once,
-so a handler changed on disk is still the old handler in the process.
-This is indistinguishable from the fix not working, and it has cost real
-time twice: three bugs reported against a build that already had the fix,
-and a packshot redraw that ran seven times against the old handler and
-returned byte-for-byte identical pictures.
+**A running backend keeps the code it started with.** This has cost
+real time twice: three bugs reported against a build that already had
+the fix, and a packshot redraw that ran seven times against the old
+handler and returned byte-for-byte identical pictures. The symptom is
+indistinguishable from the fix not working, so check it before
+diagnosing anything else.
+
+The backend runs in containers by default, and an image does not
+reload:
 
 ```bash
-./scripts/dev-stack.sh restart
+docker compose -f infra/docker-compose.yml up -d --build api worker-ai worker-media worker-default beat
 ```
 
-Worth knowing which is which: a change under `app/routers`, `app/domain`
-or `app/schemas` lands on save; a change under `app/workers` needs the
-restart. When a fix "does not work", check this before diagnosing
-anything else.
+On the local path (`LUXISH_LOCAL_BACKEND=1`) the API reloads itself -
+`--reload` in `dev-stack.sh` - but Celery's prefork pool imports its
+task modules once, so `app/routers`, `app/domain` and `app/schemas`
+land on save while anything under `app/workers` needs
+`./scripts/dev-stack.sh restart`.
+
+**Verify by the output, not by the restart.** A worker that reported
+seven successful jobs while returning identical files is what a stale
+process looks like from the outside.
 
 **Metro runs from `apps/mobile`, never from the repo root.** The root has no
 `App.tsx` and no `expo-router` entry, so a Metro started there serves
