@@ -912,9 +912,14 @@ export default function FitDetailScreen() {
               }}>
               {intoColumns(shelf).map((lane, at) => (
                 <View key={at} style={{ flex: 1, gap: Spacing.two }}>
-                  {lane.map((other) => (
+                  {lane.map((other, down) => (
                     <FitCard
-                      key={other.id}
+                      // Keyed on the slot, like the board: the
+                      // exclude list the client sends is capped, so
+                      // after enough slices a pin can legitimately
+                      // come round again and two tiles would share an
+                      // id.
+                      key={`${at}:${down}:${other.id}`}
                       fit={other}
                       onOpen={() =>
                         router.push({

@@ -302,8 +302,18 @@ export default function DiscoverScreen() {
         drawDistance={height}
         data={rows}
         masonry
-        keyExtractor={(item) =>
-          item.kind === 'fit' ? item.fit.id : 'ideas-shelf'
+        // **The slot, not the pin.**
+        //
+        // The board is endless by design: walking past the last
+        // unseen pin starts a fresh lap rather than stopping, so the
+        // same pin legitimately appears again further down. Keying on
+        // the pin id made that a duplicate key - React warned, and
+        // the second copy was liable to be dropped or to inherit the
+        // first one's state. The position in the list is what is
+        // actually unique, and it is stable for as long as a row
+        // stays where it is.
+        keyExtractor={(item, at) =>
+          item.kind === 'fit' ? `${at}:${item.fit.id}` : 'ideas-shelf'
         }
         // Without this the list recycles a photograph's view for the
         // shelf and measures the wrong height, which moves the column
