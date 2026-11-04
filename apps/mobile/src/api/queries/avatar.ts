@@ -75,6 +75,16 @@ export interface Render {
   /** Labelled and searchable, without a second model call. */
   pieces: readonly Piece[];
   error: string | null;
+  /**
+   * Whether its owner stopped it, rather than it going wrong.
+   *
+   * A cancellation is a `failed` render on the server, deliberately -
+   * it is finished, it is not a picture, and asking again should draw.
+   * The avatar screen retries the newest failure on pull-to-refresh,
+   * so without this the gesture bought the render again the moment
+   * somebody stopped one.
+   */
+  stopped: boolean;
   /** Local file URI, once the picture has been fetched. */
   uri: string | null;
 }
@@ -220,6 +230,7 @@ export function useRenders(enabled: boolean) {
             category: piece.category ?? null,
           })),
           error: item.error ?? null,
+          stopped: item.stopped ?? false,
           // Only a finished picture is worth a download.
           uri: item.asset_id
             ? await fetchAvatarImage(item.asset_id, {

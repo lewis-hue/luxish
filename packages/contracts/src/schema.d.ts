@@ -5065,6 +5065,11 @@ export interface components {
             pieces?: components["schemas"]["PieceOut"][];
             /** Error */
             error?: string | null;
+            /**
+             * Stopped
+             * @default false
+             */
+            stopped: boolean;
         };
         /** RendersResponse */
         RendersResponse: {

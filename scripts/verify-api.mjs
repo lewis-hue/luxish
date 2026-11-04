@@ -84,6 +84,9 @@ const INTERCEPTED = (p) =>
     'one. It accepts requests and has no workers, so renders queue and',
     'never finish.',
     '',
+    'The giveaway is above: one address family serves this checkout and',
+    'the other does not. Two of them cannot be the same process.',
+    '',
     'Two ways out:',
     `  - use another port:  LUXISH_API_PORT=${p + 1} ./scripts/review.sh`,
     '  - or reboot, which releases the orphaned socket',
@@ -92,6 +95,32 @@ const INTERCEPTED = (p) =>
     `  Get-NetTCPConnection -LocalPort ${p} | Format-Table LocalAddress,State,OwningProcess`,
     'A PID with no process is the leak.',
   ].join('\n');
+
+/**
+ * **The same drift on every address family is a stale file, not a
+ * stranger on the port.**
+ *
+ * One process cannot answer two ways, so when IPv4 and IPv6 disagree
+ * with the contract *identically*, the process is fine and
+ * `packages/contracts/openapi.json` is behind the code. Reporting that
+ * as an intercepted port sends somebody hunting a leaked socket over a
+ * file they have not regenerated - which is exactly what it did the
+ * first time this fired.
+ */
+const STALE_CONTRACT = [
+  '',
+  'The API is answering, and it is not what the committed contract says.',
+  '',
+  'Every address family reports the same difference, so this is one',
+  'process serving code that is newer than',
+  '`packages/contracts/openapi.json` - the file the mobile types are',
+  'generated from. Nothing is intercepting the port.',
+  '',
+  'Regenerate it, from packages/contracts:',
+  '  npm run fetch-spec && npm run generate',
+  '',
+  'Then commit both openapi.json and src/schema.d.ts.',
+].join('\n');
 
 async function main() {
   const committed = JSON.parse(await readFile(CONTRACT, 'utf8'));
@@ -108,7 +137,9 @@ async function main() {
     return 1;
   }
 
-  let intercepted = false;
+  // Each answering family's drift, so the two can be compared: that
+  // comparison is what separates a stale file from a stranger.
+  const drifts = new Map();
   for (const [family, r] of results) {
     if (!r.spec) {
       // One family answering is normal: Docker publishes to whichever
@@ -118,11 +149,11 @@ async function main() {
       continue;
     }
     const stale = drift(r.spec, committed);
+    drifts.set(family, stale);
     if (stale.length === 0) {
       console.log(`  ${family.padEnd(4)} serving this checkout`);
       continue;
     }
-    intercepted = true;
     console.error(
       `  ${family.padEnd(4)} serving a DIFFERENT build: ` +
         `${stale.length} schema(s) differ (${stale.slice(0, 4).join(', ')}` +
@@ -130,11 +161,35 @@ async function main() {
     );
   }
 
-  if (intercepted) {
-    console.error(INTERCEPTED(port));
-    return 1;
+  const answered = [...drifts.values()];
+  if (answered.every((stale) => stale.length === 0)) return 0;
+
+  // **Two families agreeing is evidence; one family is not.**
+  //
+  // In the incident this was written for, both answered and they
+  // disagreed - IPv4 from the dead listener, IPv6 from the container -
+  // and two different answers cannot come from one process. Identical
+  // drift on both is the opposite: one process, newer than the file.
+  //
+  // With only one family answering there is nothing to compare, so the
+  // honest report names both causes rather than picking the likelier
+  // and sending somebody down it.
+  const shapes = new Set(answered.map((stale) => JSON.stringify(stale)));
+  if (answered.length < 2) {
+    console.error(STALE_CONTRACT);
+    console.error(
+      [
+        '',
+        'Only one address family answered, so this cannot be told apart',
+        'from a leaked socket holding the port. If regenerating does not',
+        'settle it, read the note in INTERCEPTED below.',
+        INTERCEPTED(port),
+      ].join('\n'),
+    );
+  } else {
+    console.error(shapes.size === 1 ? STALE_CONTRACT : INTERCEPTED(port));
   }
-  return 0;
+  return 1;
 }
 
 // `exitCode` rather than `exit`, so pending handles unwind on their own.

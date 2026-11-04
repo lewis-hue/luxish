@@ -341,7 +341,67 @@ async def test_the_reason_shown_for_a_stopped_render_is_the_cancellation(client,
     body = stopped.json()
 
     shown = body.get("error_text") or body.get("error") or ""
-    assert shown == renders.CANCELLED_NOTE, (
-        f"a cancellation was dressed up as a failure: {shown!r}"
-    )
+    assert shown == renders.CANCELLED_NOTE, f"a cancellation was dressed up as a failure: {shown!r}"
     assert renders.UNLUCKY not in shown
+
+
+async def test_a_stopped_render_is_flagged_as_stopped_not_merely_failed(client, auth) -> None:
+    """The flag the screen needs, because both are `failed`.
+
+    The avatar screen retries the newest failure when somebody pulls
+    down, which is the gesture people reach for first. Without a way
+    to tell a cancellation from a fault, that gesture bought the render
+    again the moment anybody stopped one.
+
+    A field rather than matching on the sentence: the copy belongs to
+    the server and will be reworded, and a screen whose behaviour
+    depends on its exact wording breaks silently when it is.
+    """
+    who = {"headers": auth(sub="kc-avatar-cancel-6")}
+    await client.post("/v1/auth/session", **who)
+    asked = await client.post("/v1/avatar", **who)
+
+    stopped = await client.post(f"/v1/avatar/renders/{asked.json()['id']}/cancel", **who)
+    body = stopped.json()
+
+    assert body["state"] == "failed"
+    assert body["stopped"] is True
+
+
+async def test_a_render_that_actually_failed_is_not_flagged_as_stopped(
+    db: AsyncSession,
+) -> None:
+    """Otherwise pull-to-refresh would stop retrying real failures."""
+    from app.routers.avatar import _render_out
+
+    user_id = await make_user(db)
+    row = await _render(db, user_id=user_id, state="running")
+    await renders.mark_failed(db, render=row, reason="the model refused")
+
+    out = _render_out(row)
+    assert out.state == "failed"
+    assert out.stopped is False
+
+
+async def test_a_render_still_drawing_is_not_flagged_as_stopped(
+    db: AsyncSession,
+) -> None:
+    from app.routers.avatar import _render_out
+
+    user_id = await make_user(db)
+    row = await _render(db, user_id=user_id)
+
+    assert _render_out(row).stopped is False
+
+
+def test_an_object_without_the_fields_is_not_treated_as_cancelled() -> None:
+    """`_render_out` is typed on `object` and reads every field defensively.
+
+    The safe answer for anything unrecognisable is "not cancelled":
+    that keeps a picture. The other default throws one away.
+    """
+
+    class Bare:
+        pass
+
+    assert renders.was_cancelled(Bare()) is False

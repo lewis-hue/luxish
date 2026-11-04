@@ -369,13 +369,23 @@ async def mark_failed(session: AsyncSession, *, render: AvatarRender, reason: st
 CANCELLED_NOTE = "You stopped this one. Ask for it again whenever you like."
 
 
-def was_cancelled(render: AvatarRender) -> bool:
+def was_cancelled(render: object) -> bool:
     """Whether this row was stopped by its owner rather than by a fault.
 
     Read by the worker after drawing, so a picture nobody is waiting for
-    is thrown away instead of replacing the avatar they still have.
+    is thrown away instead of replacing the avatar they still have, and
+    by the router to set `RenderOut.stopped`.
+
+    `getattr` rather than attribute access, and `object` rather than
+    `AvatarRender`, to match `_render_out`, which is typed on `object`
+    and reads every other field defensively. Anything without the two
+    attributes was not cancelled, which is the safe answer: it means a
+    picture is kept, never that one is thrown away.
     """
-    return render.state == "failed" and render.error == CANCELLED_NOTE
+    return (
+        getattr(render, "state", None) == "failed"
+        and getattr(render, "error", None) == CANCELLED_NOTE
+    )
 
 
 async def cancel(

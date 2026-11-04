@@ -223,7 +223,20 @@ export default function AvatarScreen() {
   // this person actually asked for - and that is the only attempt a
   // retry would be retrying.
   const latest = (renders.data ?? [])[0];
-  const failed = latest?.state === 'failed';
+  // **A render somebody stopped is not a render to retry.**
+  //
+  // A cancellation is stored as `failed` on the server, deliberately:
+  // it is finished, it is not a picture, and asking again should draw.
+  // But the gesture above retries the newest failure, so pulling down
+  // after tapping Stop bought the render again - a billed call for the
+  // picture they had just called off, started by the gesture people
+  // reach for first.
+  //
+  // `stopped` comes from the server rather than from matching the
+  // sentence shown, because that copy will be reworded and a screen
+  // whose behaviour depends on its exact wording breaks silently when
+  // it is.
+  const failed = latest?.state === 'failed' && !latest.stopped;
 
   // Unsaved answers only, laid over whatever the server holds. Copying the
   // server value into state would need an effect to seed it, and that effect

@@ -11142,6 +11142,11 @@
               }
             ],
             "title": "Error"
+          },
+          "stopped": {
+            "type": "boolean",
+            "title": "Stopped",
+            "default": false
           }
         },
         "type": "object",

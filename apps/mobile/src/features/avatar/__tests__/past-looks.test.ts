@@ -10,6 +10,7 @@ function render(over: Partial<Render> = {}): Render {
     outfit: 'white shirt, indigo jeans',
     pieces: [],
     error: null,
+    stopped: false,
     uri: 'file://look.png',
     ...over,
   };

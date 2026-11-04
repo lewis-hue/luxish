@@ -136,6 +136,21 @@ class RenderOut(BaseModel):
     pieces: list[PieceOut] = Field(default_factory=list)
     #: Why it failed, in the words the failure used. Null unless `failed`.
     error: str | None = None
+    #: Whether its owner stopped it, as against something going wrong.
+    #:
+    #: **Both are `failed`, and the client has to tell them apart.** A
+    #: cancellation is stored as a failure on purpose - it is finished,
+    #: it is not a picture, and the next request should draw - but the
+    #: avatar screen retries the newest failure when somebody pulls
+    #: down, which is the gesture people already try. Without this
+    #: flag, pulling down right after tapping Stop bought the render
+    #: again: a billed call for the picture they had just called off.
+    #:
+    #: A field rather than the client matching on the sentence. The
+    #: copy belongs to the server and will be reworded; a screen whose
+    #: behaviour depends on the exact wording breaks silently when it
+    #: is.
+    stopped: bool = False
 
 
 class RendersResponse(BaseModel):

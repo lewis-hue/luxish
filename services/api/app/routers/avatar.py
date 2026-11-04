@@ -135,6 +135,7 @@ def _render_out(render: object) -> RenderOut:
         # what crosses the wire is a sentence this app wrote and a
         # reader can act on. See `avatar_renders.public_reason`.
         error=renders.public_reason(getattr(render, "error", None)),
+        stopped=renders.was_cancelled(render),
     )
 
 
