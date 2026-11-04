@@ -215,25 +215,54 @@ def test_a_no_goes_shopping_and_pays_for_no_picture() -> None:
     assert not plan.renders, "a no must not pay for a render"
 
 
-def test_pieces_that_would_carry_the_look_are_worn_not_shopped() -> None:
+def test_pieces_that_would_carry_the_look_are_worn() -> None:
     """**The middle answer.**
 
     Not an exact match, but the model named things of theirs that
-    would do it. That is worth drawing - there is something to
-    actually put on - and it is not worth sending them shopping for
-    what they have been told they can already wear.
+    would do it. That is worth drawing: there is something to
+    actually put on.
+
+    The substitute case leaves `missing` empty, which is what the
+    prompt asks for - there is no sense sending somebody shopping
+    for what they have just been told they can already wear - so
+    nothing is shopped here because nothing was named.
     """
     plan = plan_from(
         Verdict(
             answer="Not exactly, but your charcoal trousers would carry it.",
             has_match=False,
             using=(MINE[0],),
-            missing=("cream trousers",),
+            missing=(),
         )
     )
     assert plan.wear == (MINE[0],)
     assert plan.renders
-    assert plan.look_for == (), "do not shop for what they can already wear"
+    assert plan.look_for == ()
+
+
+def test_an_addition_travels_with_their_own_pieces() -> None:
+    """**`missing` beside `using` means "and also this".**
+
+    It used to be dropped whenever `using` was filled, which is
+    exactly why "show me that fit with a necklace" never produced a
+    necklace: the model filled both halves and the second was thrown
+    away before anything could draw or shop it. Reported twice.
+
+    Each phrase in `missing` is drawn onto the figure and searched
+    for somewhere to buy, so carrying it is the difference between
+    doing what was asked and describing it.
+    """
+    plan = plan_from(
+        Verdict(
+            answer="Kept your dress and added a fine gold chain.",
+            has_match=False,
+            using=(MINE[0],),
+            missing=("a fine gold chain necklace",),
+        )
+    )
+    assert plan.wear == (MINE[0],), "their own pieces are still worn"
+    assert plan.look_for == ("a fine gold chain necklace",)
+    assert plan.renders
 
 
 def test_a_no_with_nothing_to_suggest_renders_nothing() -> None:

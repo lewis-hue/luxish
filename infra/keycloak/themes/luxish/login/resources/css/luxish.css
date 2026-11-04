@@ -152,7 +152,27 @@ body.login-pf {
  * and optical size match the welcome masthead (wght 900, opsz 6); the low
  * opsz is what keeps the thin strokes of the U and the X actually present.
  */
+/*
+ * **Freed from the brand box.** `keycloak.v2` gives this element the
+ * `pf-v5-c-brand` class, which is PatternFly's component for a
+ * *logo image*: it sizes itself from `--pf-v5-c-brand--Height` and
+ * `--Width` and clips what does not fit. A wordmark set at up to
+ * 4rem of Bodoni inside an image box is a wordmark with its top and
+ * tail cut off, which is how it was reported - covered, and not
+ * sitting right.
+ *
+ * So the box is told to size itself from its text instead.
+ */
 #kc-header-wrapper {
+  height: auto;
+  width: auto;
+  max-height: none;
+  overflow: visible;
+  /* PatternFly centres the brand as a flex child; this keeps the
+     wordmark on its own line at full width rather than shrinking to
+     fit beside nothing. */
+  display: block;
+  padding: 0.25em 0 0.1em;
   font-family: 'Bodoni Moda', Georgia, serif;
   font-variation-settings: 'opsz' 6, 'wght' 900;
   font-weight: 900;
@@ -171,6 +191,36 @@ body.login-pf {
   /* Air between the wordmark and the card. The parent gives it none, which
      left the name sitting on the card's top edge. */
   padding-bottom: 0.5rem;
+  /* And nothing here may clip the name, whatever the parent sets on
+     the brand component inside it. */
+  overflow: visible;
+}
+
+/*
+ * **One column, so the wordmark stays a masthead.**
+ *
+ * PatternFly's login container is a grid, and at 1200px and above it
+ * switches to
+ *
+ *     grid-template-areas: "main header" "main footer" "main .";
+ *
+ * which moves the name out of the space above the card and into a
+ * second column beside it. That is a sensible layout for the product
+ * PatternFly was drawn for, where the header is a small logo and a
+ * language picker. Here the header *is* the wordmark, set in Bodoni
+ * at up to 4rem, and a narrow second column makes it wrap and collide
+ * with the card: reported as covered, and not sitting right.
+ *
+ * Everything else in this sheet - the masthead sizing, the air under
+ * it, the card's lift - assumes the name is above the card. This is
+ * the declaration that makes that true at every width rather than
+ * only below 1200px, where it happened to be true by accident.
+ */
+.pf-v5-c-login__container {
+  display: grid;
+  grid-template-areas: 'header' 'main' 'footer';
+  grid-template-columns: minmax(0, 1fr);
+  justify-content: stretch;
 }
 
 /*
@@ -199,6 +249,33 @@ label,
 
 /* --- fields ------------------------------------------------------------ */
 
+/*
+ * **The fields were wearing two borders, and it read as glass.**
+ *
+ * PatternFly does not draw a form control's edge with `border`. It
+ * draws two absolutely positioned pseudo-elements over the whole
+ * field:
+ *
+ *     .pf-v5-c-form-control:after,
+ *     .pf-v5-c-form-control:before { content: ""; inset: 0;
+ *                                    position: absolute }
+ *
+ * `:before` carries a full border, `:after` a heavy bottom rule. The
+ * previous version of this block set
+ * `--pf-v5-c-form-control--BorderBottomColor`, which nothing reads:
+ * the pseudo-elements take `--before--BorderStyle` and
+ * `--after--Border*`. So our hairline box was painted, PatternFly's
+ * overlay was painted on top of it, and the two edges sat a pixel
+ * apart with the field colour between them. Reported as a glass
+ * effect, which is a fair description of a bordered plate floating
+ * over a bordered box.
+ *
+ * Turned off through PatternFly's own variables rather than
+ * `display: none` on the pseudo-elements: the component is built to
+ * be flattened this way - its read-only plain modifier does exactly
+ * this - so it survives a PatternFly upgrade that moves the drawing
+ * around.
+ */
 input.pf-v5-c-form-control,
 .pf-v5-c-form-control,
 .pf-v5-c-form-control > input {
@@ -207,11 +284,25 @@ input.pf-v5-c-form-control,
   border-radius: var(--luxish-radius);
   color: var(--luxish-ink);
   font-family: 'Archivo', system-ui, sans-serif;
-  /* PatternFly draws a thick bottom rule under inputs; the app uses a
-     hairline box, so the rule is flattened rather than recoloured. */
   box-shadow: none;
-  --pf-v5-c-form-control--BorderBottomColor: var(--luxish-rule);
-  --pf-v5-c-form-control--BorderBottomWidth: 1px;
+  /* The overlays, off. These are the names the component reads. */
+  --pf-v5-c-form-control--before--BorderStyle: none;
+  --pf-v5-c-form-control--after--BorderStyle: none;
+  --pf-v5-c-form-control--after--BorderBottomWidth: 0;
+  --pf-v5-c-form-control--focus--after--BorderBottomWidth: 0;
+  --pf-v5-c-form-control--hover--after--BorderBottomColor: transparent;
+  --pf-v5-c-form-control--after--BorderBottomColor: transparent;
+  /* No inner fill of its own, or the wrapper and the input paint two
+     slightly different papers. */
+  --pf-v5-c-form-control--BackgroundColor: var(--luxish-paper);
+}
+
+/* Belt and braces: if a future PatternFly draws the edge somewhere
+   other than those variables, the overlay still must not appear. */
+.pf-v5-c-form-control::before,
+.pf-v5-c-form-control::after {
+  border: 0 !important;
+  box-shadow: none !important;
 }
 
 input.pf-v5-c-form-control:focus,

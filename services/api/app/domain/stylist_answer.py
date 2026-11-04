@@ -583,12 +583,25 @@ def plan_from(verdict: Verdict) -> Plan:
     when they own none of it teaches them nothing the sentence did
     not, and costs a paid render to say it.
     """
-    if verdict.has_match:
-        return Plan(verdict=verdict, wear=verdict.using)
-    # The middle case. `using` can be non-empty under a "no": the
-    # model names pieces that are close without claiming they match.
-    if verdict.using:
-        return Plan(verdict=verdict, wear=verdict.using)
+    # **`missing` travels with `wear`, not instead of it.**
+    #
+    # It used to be dropped whenever `using` was filled, on the
+    # reasoning that you should not send somebody shopping for what
+    # you have just told them they can wear. That was right while
+    # `missing` only ever meant "a substitute for the look you
+    # cannot make".
+    #
+    # It means more than that now: it is also how an addition is
+    # asked for. "Show me that fit with a necklace" fills `using`
+    # with their own pieces and `missing` with the necklace, and
+    # dropping the second half is exactly why the necklace never
+    # appeared, reported twice. The prompt tells the model to leave
+    # `missing` empty in the substitute case, which is where that
+    # original concern belongs.
+    if verdict.has_match or verdict.using:
+        return Plan(
+            verdict=verdict, wear=verdict.using, look_for=verdict.missing
+        )
     return Plan(verdict=verdict, look_for=verdict.missing)
 
 

@@ -476,7 +476,7 @@ async def _draw(
     if not plan.renders:
         return None
 
-    outfit = _outfit_words(plan)
+    outfit = await _outfit_words(db, user_id=user_id, plan=plan)
     if not outfit:
         return None
     try:
@@ -498,14 +498,86 @@ async def _draw(
     return getattr(render, "id", None)
 
 
-def _outfit_words(plan: Any) -> str:
-    """What to draw, as the sentence the renderer wants."""
-    if plan.verdict.has_match:
-        # The ids are resolved to names by the worker, which already
-        # holds the wardrobe; sending names from here would be a
-        # second source of truth about what a garment is called.
-        return ", ".join(str(g) for g in plan.wear)
-    return ", ".join(plan.look_for)
+def _plainly(garment: Any) -> str:
+    """One garment, as somebody would say it out loud.
+
+    **Not `stylist.describe`.** That builds the catalogue line the
+    language model reads - "shirt seeded white colour business
+    formality all_year seasons cotton material" - which is the right
+    shape for a wardrobe listing and nonsense in an image prompt.
+    The name is what a person typed or what categorisation wrote,
+    and it is already a noun phrase: "cream wide-leg trousers".
+    """
+    name = (getattr(garment, "name", None) or "").strip()
+    if name:
+        return name.lower()
+    # No name yet. Build the shortest honest phrase from what
+    # categorisation found, rather than drawing nothing.
+    found = getattr(garment, "effective_attributes", None) or {}
+    colour = str(found.get("colour") or "").strip()
+    kind = str(
+        found.get("category") or getattr(garment, "category", "") or ""
+    ).strip()
+    return " ".join(word for word in (colour, kind) if word)
+
+
+async def _outfit_words(db: Any, *, user_id: uuid.UUID, plan: Any) -> str:
+    """What to draw, in the words the renderer actually needs.
+
+    **Two bugs lived here and both produced the same symptom: a
+    rendered figure wearing something the answer never mentioned.**
+    Reported with a screenshot of one reply containing an olive
+    quilted jacket and chinos above a composite of a black dress, a
+    tote and loafers.
+
+    *It branched on the wrong thing.* `plan.wear` is filled in both
+    the yes branch and the close branch - "you own this" and "not
+    this, but these of yours would carry it" - and this function
+    only read it when `has_match` was true. The close branch is the
+    common one, so most renders drew `look_for`, which is the list
+    of things to go and *buy*: a different outfit from the one the
+    reply recommended and the one the composite beside it drew.
+
+    *And it sent uuids into an image prompt.* The comment here
+    claimed the worker resolved them against the wardrobe. It does
+    not - `avatar_jobs` passes `render.outfit` through as words - so
+    the prompt contained thirty-six character identifiers and the
+    model drew whatever it liked around them.
+
+    So the ids are resolved here, where the session is, and the
+    pieces they were told to buy are appended rather than
+    substituted. The render and the composite now describe the same
+    outfit, because they are built from the same two lists.
+    """
+    from app.models.garment import Garment
+
+    said: list[str] = []
+    if plan.wear:
+        import sqlalchemy as sa
+
+        owned = {
+            garment.id: garment
+            for garment in await db.scalars(
+                sa.select(Garment).where(
+                    Garment.id.in_(list(plan.wear)),
+                    Garment.user_id == user_id,
+                    Garment.deleted_at.is_(None),
+                )
+            )
+        }
+        # In the order the stylist named them, which is the order the
+        # sentence reads in.
+        for one in plan.wear:
+            garment = owned.get(one)
+            if garment is None:
+                continue
+            words = _plainly(garment)
+            if words:
+                said.append(words)
+
+    # The additions, named in plain words already.
+    said.extend(phrase.strip() for phrase in plan.look_for if phrase.strip())
+    return ", ".join(said)
 
 __all__ = [
     "MOST_GARMENTS",
