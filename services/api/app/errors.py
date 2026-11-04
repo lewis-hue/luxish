@@ -88,6 +88,37 @@ class CapabilityUnavailable(ApiError):
     default_message = "That capability is not available in this build."
 
 
+def _why(exc: RequestValidationError) -> str:
+    """The first validation failure, as a sentence naming the field.
+
+    **"Request validation failed." was the whole message.** The
+    details were in the body all along, under `errors`, and the
+    client shows the message - so a rejected save read as an
+    unexplained refusal. A real one: the taste screen offered "Pick
+    any" occasions against a schema that stopped at six, and the
+    only thing on screen was the framework's own string.
+
+    One error, not all of them: the first is the one to fix, and a
+    list of five is a wall nobody reads. The full set stays in
+    `errors` for whoever is debugging.
+    """
+    problems = exc.errors() or []
+    if not problems:
+        return "Request validation failed."
+    first = problems[0]
+    # `loc` is ("body", "occasions", 3); the field is the part after
+    # the source, and the index is noise in a sentence.
+    where = [
+        str(part)
+        for part in (first.get("loc") or ())
+        if isinstance(part, str) and part not in ("body", "query", "path")
+    ]
+    said = str(first.get("msg") or "is not valid").strip()
+    if not where:
+        return f"{said[:1].upper()}{said[1:]}."
+    return f"{'.'.join(where)}: {said}."
+
+
 def _error_body(code: str, message: str, detail: dict[str, Any] | None = None) -> dict[str, Any]:
     body: dict[str, Any] = {"code": code, "message": message}
     if detail:
@@ -123,7 +154,7 @@ def install_error_handlers(app: FastAPI) -> None:
             content=jsonable_encoder(
                 _error_body(
                     "invalid_request",
-                    "Request validation failed.",
+                    _why(exc),
                     {"errors": exc.errors()},
                 )
             ),

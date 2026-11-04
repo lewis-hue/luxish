@@ -105,13 +105,28 @@ DRESS_CODES = ("none", "smart_casual", "business", "formal", "unspecified")
 #: which order to put them in.
 GOALS = ("more_from_what_i_own", "what_to_wear_to", "find_my_look")
 
-#: The most answers accepted per multiple-choice question.
+#: The most aesthetics accepted.
 #:
 #: Somebody who picks every aesthetic has expressed no preference, and storing
 #: it as one would make their shelf identical to the default while looking
 #: personalised. The cap is a bound on the request, not a judgement: six of
 #: twelve is already a wide taste.
+#:
+#: **Aesthetics only.** It applied to occasions too, and that was wrong in a
+#: way that cost somebody their answers: "where you actually need outfits" is
+#: a factual question, not a preference, and a person who needs outfits for
+#: work, weekends, the gym, travel, evenings and a wedding has given six
+#: honest answers before running out. The screen says "Pick any" and meant
+#: it; the server rejected the eleventh with a framework validation error.
 MAX_CHOICES = 6
+
+#: How many occasions may be stored.
+#:
+#: There is still a bound, because a request is still a request and an
+#: unbounded list is a way to write arbitrary data into a profile. It is the
+#: length of the vocabulary: picking every occasion offered is a legitimate
+#: answer, and nothing longer than that can be one.
+MAX_OCCASIONS = len(OCCASIONS)
 
 
 class UnknownTaste(ApiError):
@@ -130,9 +145,9 @@ class Taste:
     goal: str | None = None
 
     def __post_init__(self) -> None:
-        for name, values, allowed in (
-            ("aesthetics", self.aesthetics, AESTHETICS),
-            ("occasions", self.occasions, OCCASIONS),
+        for name, values, allowed, most in (
+            ("aesthetics", self.aesthetics, AESTHETICS, MAX_CHOICES),
+            ("occasions", self.occasions, OCCASIONS, MAX_OCCASIONS),
         ):
             unknown = [value for value in values if value not in allowed]
             if unknown:
@@ -140,9 +155,9 @@ class Taste:
                     f"{name} contains {', '.join(sorted(unknown))}, which this "
                     "service does not record."
                 )
-            if len(values) > MAX_CHOICES:
+            if len(values) > most:
                 raise UnknownTaste(
-                    f"{name} may carry at most {MAX_CHOICES} answers, got "
+                    f"{name} may carry at most {most} answers, got "
                     f"{len(values)}."
                 )
             if len(set(values)) != len(values):
@@ -179,7 +194,9 @@ class Taste:
         if not isinstance(value, dict):
             return cls()
 
-        def listed(key: str, allowed: tuple[str, ...]) -> tuple[str, ...]:
+        def listed(
+            key: str, allowed: tuple[str, ...], most: int
+        ) -> tuple[str, ...]:
             raw = value.get(key)
             if not isinstance(raw, list):
                 return ()
@@ -190,13 +207,13 @@ class Taste:
             for item in raw:
                 if item in allowed and item not in seen:
                     seen.append(str(item))
-            return tuple(seen[:MAX_CHOICES])
+            return tuple(seen[:most])
 
         dress_code = value.get("dress_code")
         goal = value.get("goal")
         return cls(
-            aesthetics=listed("aesthetics", AESTHETICS),
-            occasions=listed("occasions", OCCASIONS),
+            aesthetics=listed("aesthetics", AESTHETICS, MAX_CHOICES),
+            occasions=listed("occasions", OCCASIONS, MAX_OCCASIONS),
             dress_code=dress_code if dress_code in DRESS_CODES else "unspecified",
             goal=goal if goal in GOALS else None,
         )
@@ -277,6 +294,7 @@ __all__ = [
     "GOALS",
     "GOAL_TO_LENS",
     "MAX_CHOICES",
+    "MAX_OCCASIONS",
     "OCCASIONS",
     "TASTE_KEY",
     "Taste",

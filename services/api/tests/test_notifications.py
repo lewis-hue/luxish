@@ -441,3 +441,27 @@ async def test_both_new_kinds_can_be_muted(db: AsyncSession) -> None:
     )
     items, _unread = await domain.inbox(db, user_id=me)
     assert not [i for i in items if i.kind in ("render_ready", "studio_ready")]
+
+
+def test_every_kind_the_inbox_produces_can_be_serialised() -> None:
+    """**A hand-copied literal drifted, and the inbox 500'd.**
+
+    `studio_ready` and `render_ready` were added to `KINDS` when
+    background work started telling people it had finished. The
+    schema's `Kind` literal was not touched, so the moment either
+    reached a real inbox the response failed to serialise:
+
+        ValidationError: 1 validation error for NotificationOut
+        kind: Input should be 'wardrobe_sorted', 'stylist_ready' or
+        'fit_reactions' [input_value='render_ready']
+
+    The feature that tells somebody their picture is ready took
+    their inbox down instead. `Kind` is derived from `KINDS` now;
+    this is the test that says why it must stay that way.
+    """
+    import typing
+
+    from app.domain.notifications import KINDS
+    from app.schemas.notifications import Kind
+
+    assert set(typing.get_args(Kind)) == set(KINDS)

@@ -92,15 +92,35 @@ def fit_link(post_id: uuid.UUID) -> str:
 
 
 async def _liked_groups(db: SessionDep, user_id) -> set[str]:
-    """Groups this person said they like, mapped from their taste tags."""
+    """Groups this person said they like, from everything they said.
+
+    **Occasions count now, and they did not before.** This read
+    `aesthetics` only, so the most specific question in onboarding -
+    "where you actually need outfits" - was asked, stored, and
+    consulted by nothing. Somebody who said they dress for the
+    office and the gym saw exactly what they would have seen if they
+    had skipped the screen.
+
+    **And it bridges through a map rather than a string edit.** It
+    used to strip the hyphen and hope the result was a tag the board
+    knew: `quiet-luxury` happened to land on `quietluxury`, and
+    `downtown-romantic`, `dark-academia` and `blokecore` happened to
+    land on nothing. A third of the aesthetics led to an empty
+    shelf, silently, because the bridge was a coincidence of
+    spelling. `taste_bridge` states every mapping and has a test
+    that fails when one is missing.
+    """
     from app.domain.taste import read_taste
+    from app.domain.taste_bridge import groups_for
 
     try:
         taste = await read_taste(db, user_id=user_id)
     except Exception:
         return set()
-    aesthetics = list(getattr(taste, "aesthetics", []) or [])
-    return set(domain.categorise([a.replace("-", "") for a in aesthetics]))
+    return groups_for(
+        aesthetics=tuple(getattr(taste, "aesthetics", ()) or ()),
+        occasions=tuple(getattr(taste, "occasions", ()) or ()),
+    )
 
 
 def _ratio(size: tuple[int | None, int | None] | None) -> float | None:

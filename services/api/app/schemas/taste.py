@@ -9,6 +9,7 @@ from app.domain.taste import (
     DRESS_CODES,
     GOALS,
     MAX_CHOICES,
+    MAX_OCCASIONS,
     OCCASIONS,
 )
 
@@ -21,7 +22,13 @@ class TasteIn(BaseModel):
     """
 
     aesthetics: list[str] = Field(default_factory=list, max_length=MAX_CHOICES)
-    occasions: list[str] = Field(default_factory=list, max_length=MAX_CHOICES)
+    #: **Not `MAX_CHOICES`.** This is where the 422 came from: the screen
+    #: says "Pick any" and eleven honest answers were rejected by FastAPI
+    #: before the handler ran, so the reply was "Request validation
+    #: failed" with nothing naming the field. See `MAX_OCCASIONS`.
+    occasions: list[str] = Field(
+        default_factory=list, max_length=MAX_OCCASIONS
+    )
     dress_code: str = "unspecified"
     goal: str | None = None
 
@@ -48,3 +55,10 @@ class TasteOptions(BaseModel):
     dress_codes: list[str] = list(DRESS_CODES)
     goals: list[str] = list(GOALS)
     max_choices: int = MAX_CHOICES
+    #: How many occasions may be sent. The length of the vocabulary:
+    #: needing outfits for everything on the list is a real answer.
+    #:
+    #: Served for the same reason the vocabularies are - a bound the
+    #: app guesses is a bound the app gets wrong, and it did: the
+    #: screen offered "Pick any" against a server that stopped at six.
+    max_occasions: int = MAX_OCCASIONS

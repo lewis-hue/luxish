@@ -4338,7 +4338,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "wardrobe_sorted" | "stylist_ready" | "fit_reactions";
+            kind: "wardrobe_sorted" | "stylist_ready" | "fit_reactions" | "studio_ready" | "render_ready";
             /**
              * Occurred At
              * Format: date-time
@@ -5670,6 +5670,11 @@ export interface components {
              * @default 6
              */
             max_choices: number;
+            /**
+             * Max Occasions
+             * @default 22
+             */
+            max_occasions: number;
         };
         /** TasteOut */
         TasteOut: {

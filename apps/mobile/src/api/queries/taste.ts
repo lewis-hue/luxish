@@ -40,6 +40,15 @@ export interface TasteOptions {
   dressCodes: readonly string[];
   goals: readonly string[];
   maxChoices: number;
+  /**
+   * How many occasions may be sent.
+   *
+   * Separate from `maxChoices` because the two questions are not
+   * the same kind of question. "Where you actually need outfits" is
+   * factual, and a save of eleven honest answers was rejected by a
+   * server that capped it at six while the screen said "Pick any".
+   */
+  maxOccasions: number;
 }
 
 export const DEFAULT_LENS_ORDER: readonly Lens[] = ['occasion', 'aesthetic', 'formula'];
@@ -79,6 +88,7 @@ export function useTasteOptions() {
         dressCodes: data?.dress_codes ?? [],
         goals: data?.goals ?? [],
         maxChoices: data?.max_choices ?? 6,
+        maxOccasions: data?.max_occasions ?? 22,
       };
     },
   });

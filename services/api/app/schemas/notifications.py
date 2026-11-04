@@ -7,7 +7,25 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-Kind = Literal["wardrobe_sorted", "stylist_ready", "fit_reactions"]
+from app.domain.notifications import KINDS
+
+#: Every kind the inbox can produce, taken from the one place that
+#: decides it.
+#:
+#: **It was a hand-copied literal and it drifted, with a 500 at the
+#: end of it.** `studio_ready` and `render_ready` were added to
+#: `domain.notifications.KINDS` when background work started telling
+#: people it had finished; this list was not touched, so the moment
+#: either kind reached a real inbox the response failed to serialise:
+#:
+#:     ValidationError: 1 validation error for NotificationOut
+#:     kind: Input should be 'wardrobe_sorted', 'stylist_ready' or
+#:     'fit_reactions' [input_value='render_ready']
+#:
+#: Which is to say the feature that tells somebody their picture is
+#: ready took their inbox down instead. Derived now, so adding a kind
+#: in one place cannot leave the other behind.
+Kind = Literal[KINDS]  # type: ignore[valid-type]
 
 
 class NotificationOut(BaseModel):

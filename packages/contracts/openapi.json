@@ -9128,7 +9128,9 @@
             "enum": [
               "wardrobe_sorted",
               "stylist_ready",
-              "fit_reactions"
+              "fit_reactions",
+              "studio_ready",
+              "render_ready"
             ],
             "title": "Kind"
           },
@@ -12579,7 +12581,7 @@
               "type": "string"
             },
             "type": "array",
-            "maxItems": 6,
+            "maxItems": 22,
             "title": "Occasions"
           },
           "dress_code": {
@@ -12687,6 +12689,11 @@
             "type": "integer",
             "title": "Max Choices",
             "default": 6
+          },
+          "max_occasions": {
+            "type": "integer",
+            "title": "Max Occasions",
+            "default": 22
           }
         },
         "type": "object",
@@ -12708,7 +12715,7 @@
               "type": "string"
             },
             "type": "array",
-            "maxItems": 6,
+            "maxItems": 22,
             "title": "Occasions"
           },
           "dress_code": {
