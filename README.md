@@ -207,3 +207,14 @@ unavailable rather than failing silently — everything else works.
 **What is not finished** is listed in `docs/ROADMAP.md`, and the
 capacity model in `docs/performance/capacity.md` says plainly which
 of its numbers are measured and which are arithmetic.
+
+---
+
+## Licence
+
+Copyright 2026 Lewis Muguna. All rights reserved.
+
+This repository is public so it can be read, cloned and run for
+evaluation. That is not a licence to reuse it. See [LICENSE](LICENSE).
+
+Dependencies keep their own licences.
