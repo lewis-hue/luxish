@@ -51,6 +51,7 @@ import { useWardrobe, type WardrobeEntry } from '@/features/wardrobe/store';
 import {
   OutfitFigure,
   type Presentation,
+  type WornPiece,
 } from '@/features/avatar/figure';
 import { useScheme } from '@/hooks/use-theme';
 
@@ -358,6 +359,10 @@ export default function AvatarScreen() {
           busy={busy}
           onStop={stopDrawing}
           stopping={stop.isPending}
+          presentation={
+            (avatar.data?.appearance.presentation ?? 'unspecified') as Presentation
+          }
+          wearing={wearingCut}
         />
       ) : (
         <OutfitFigure
@@ -640,7 +645,11 @@ export default function AvatarScreen() {
             <View style={{ gap: Spacing.two }}>
         <MotionPressable
           accessibilityRole="button"
-          accessibilityLabel={avatar.data?.assetId ? 'Draw it again' : 'Draw my avatar'}
+          accessibilityLabel={
+            avatar.data?.assetId
+              ? 'Draw my likeness again'
+              : 'Draw a photorealistic me'
+          }
           accessibilityState={{ busy: create.isPending, disabled: busy }}
           disabled={busy}
           animateEntrance={false}
@@ -677,8 +686,8 @@ export default function AvatarScreen() {
             {create.isPending
               ? 'Drawing'
               : avatar.data?.assetId
-                ? 'Draw it again'
-                : 'Draw my avatar'}
+                ? 'Draw my likeness again'
+                : 'Draw a photorealistic me'}
           </ThemedText>
         </MotionPressable>
 
@@ -686,7 +695,9 @@ export default function AvatarScreen() {
               type="small"
               themeColor="textSecondary"
               style={{ fontSize: FontSize.meta, textAlign: 'center' }}>
-              A drawing, not a photograph. Private to your account.
+              A drawing, not a photograph. Private to your account. The
+              figure above is free; this one is generated, takes about
+              half a minute, and is only made when you ask.
             </ThemedText>
 
             {/* The way back to the mannequin.
@@ -744,6 +755,8 @@ function Figure({
   busy,
   onStop,
   stopping,
+  presentation,
+  wearing,
 }: {
   uri: string | null;
   label: string | null;
@@ -751,6 +764,10 @@ function Figure({
   /** `null` while a request is in flight but no render exists yet. */
   onStop: (() => void) | null;
   stopping: boolean;
+  /** Which bundled figure to stand in, when there is no likeness. */
+  presentation: Presentation;
+  /** Cut-outs to lay on that figure. Free, and the real clothes. */
+  wearing: readonly WornPiece[];
 }) {
   const colors = Colors[useScheme()];
   const timing = useMotiTiming();
@@ -799,12 +816,33 @@ function Figure({
         ) : null}
       </AnimatePresence>
 
+      {/* **The mannequin is what "your avatar" means by default.**
+
+          This said "Nothing drawn yet" and offered a button that
+          spent a paid generation, so the only avatar anybody could
+          have was the expensive one - on a screen whose whole job is
+          to answer "what would this look like on me".
+
+          The figures ship inside this app and `OutfitFigure` already
+          composites cut-outs onto them for the stylist, so there is
+          nothing to generate and nothing to wait for: the avatar is
+          simply there, in their stated proportions, the moment the
+          screen opens. A photorealistic likeness stays one explicit,
+          clearly-priced tap away.
+
+          The server has always agreed with this - `AvatarOut`
+          documents that the client shows the mannequin unless a
+          likeness is switched on. The client just never drew one. */}
       {!uri && !busy ? (
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-          <ThemedText type="small" themeColor="textSecondary">
-            Nothing drawn yet
-          </ThemedText>
-        </View>
+        <OutfitFigure
+          pieces={wearing}
+          presentation={presentation}
+          label={
+            wearing.length
+              ? 'Your figure, wearing the pieces'
+              : 'Your figure. Put something on it to see a look.'
+          }
+        />
       ) : null}
 
       {busy ? <Drawing onStop={onStop} stopping={stopping} /> : null}
