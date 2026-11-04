@@ -130,7 +130,7 @@ describe('the row does not move when the counts arrive', () => {
     await renderWithProviders(
       <FitAction label="React" icon={HEART} onPress={() => {}} />,
     );
-    expect(tree()).toContain(`"minWidth":${COUNT_SLOT}`);
+    expect(tree()).toContain(`"width":${COUNT_SLOT}`);
   });
 
   it('holds it open at zero, which is drawn as nothing', async () => {
@@ -139,7 +139,7 @@ describe('the row does not move when the counts arrive', () => {
     await renderWithProviders(
       <FitAction label="React" icon={HEART} count={0} onPress={() => {}} />,
     );
-    expect(tree()).toContain(`"minWidth":${COUNT_SLOT}`);
+    expect(tree()).toContain(`"width":${COUNT_SLOT}`);
     expect(tree()).not.toContain('>0<');
   });
 
@@ -147,7 +147,7 @@ describe('the row does not move when the counts arrive', () => {
     await renderWithProviders(
       <FitAction label="React" icon={HEART} count={4} onPress={() => {}} />,
     );
-    expect(tree()).toContain(`"minWidth":${COUNT_SLOT}`);
+    expect(tree()).toContain(`"width":${COUNT_SLOT}`);
   });
 
   it('still reads the tally out', async () => {
@@ -181,7 +181,7 @@ describe('the row does not move when the counts arrive', () => {
         <FitAction label="React" icon={HEART} count={count} onPress={() => {}} />,
       );
       expect(JSON.stringify(view.toJSON())).toContain(
-        `"minWidth":${COUNT_SLOT}`,
+        `"width":${COUNT_SLOT}`,
       );
     }
   });
@@ -189,6 +189,45 @@ describe('the row does not move when the counts arrive', () => {
   it('tells the skeleton the width to draw', () => {
     // The loading row is drawn from this, so it cannot drift from
     // what replaces it.
+    expect(ACTION_WIDTH).toBe(ActionIcon.size + 8 + COUNT_SLOT);
+  });
+});
+
+describe('reacting does not move the row', () => {
+  it('gives the glyph a fixed box, whether it is a symbol or an emoji', async () => {
+    // **The tally slot was not the whole story.** It was reserved
+    // from the start and things still shifted when somebody reacted,
+    // because reacting swaps the symbol for an emoji and an emoji's
+    // advance width is not the symbol's. The row was laid out from
+    // whatever was currently in it, so a like nudged the count, then
+    // the comment control, then everything after.
+    // Both renders in one test, and neither unmounted: RNTL 14
+    // makes every later render in a file return an empty tree once
+    // anything has been unmounted explicitly (AGENTS.md).
+    const symbol = await renderWithProviders(
+      <FitAction label="React" icon={HEART} count={4} onPress={() => {}} />,
+    );
+    const asSymbol = symbol.toJSON();
+
+    const withEmoji = await renderWithProviders(
+      <FitAction
+        label="Reacted"
+        icon={HEART}
+        emoji="🔥"
+        count={4}
+        onPress={() => {}}
+      />,
+    );
+    const asEmoji = withEmoji.toJSON();
+
+    const box = `"width":${ActionIcon.size},"height":${ActionIcon.size}`;
+    expect(JSON.stringify(asSymbol)).toContain(box);
+    expect(JSON.stringify(asEmoji)).toContain(box);
+  });
+
+  it('keeps the whole control one width across that swap', () => {
+    // The property the two boxes exist to produce: react or not, the
+    // control occupies exactly ACTION_WIDTH.
     expect(ACTION_WIDTH).toBe(ActionIcon.size + 8 + COUNT_SLOT);
   });
 });

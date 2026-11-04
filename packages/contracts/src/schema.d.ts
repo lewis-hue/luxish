@@ -996,6 +996,51 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/feed/{post_id}/cut-outs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cut Outs
+         * @description Make sure this fit's garments have been cut out, and say where it got to.
+         *
+         *     **This is what makes try-on fast and cheap.** Dressing a figure
+         *     has two possible mechanics. A photorealistic render describes the
+         *     outfit to an image model and pays it to draw somebody wearing that
+         *     description: fifteen to thirty seconds, a billed call every time,
+         *     and what comes back is a picture of clothes *like* the ones in the
+         *     fit. Compositing cuts each garment out of the fit's own photograph
+         *     and lays it on the mannequin: the clothes are the actual clothes,
+         *     the compositing happens on the phone for nothing, and it is
+         *     instant.
+         *
+         *     Compositing needs cut-outs, and none existed - the describe pass
+         *     that produces them had never run against the current board, so
+         *     every try-on fell through to the billed path. Cutting the whole
+         *     board up front would be hundreds of segmentation calls for pins
+         *     nobody has opened. Cutting the one pin somebody actually tapped
+         *     is a handful, it happens once, and every later viewer of that pin
+         *     gets it free.
+         *
+         *     Idempotent twice over: the job is keyed on the post, so twenty
+         *     people opening the same fit in the same minute queue one cut, and
+         *     a fit already cut returns its pieces without queueing anything.
+         *
+         *     POST because it can start work. It is still safe to call
+         *     repeatedly, which is what a polling client does.
+         */
+        post: operations["cut_outs_v1_feed__post_id__cut_outs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/feed/groups": {
         parameters: {
             query?: never;
@@ -3373,6 +3418,19 @@ export interface components {
             name: string;
             /** Handle */
             handle?: string | null;
+        };
+        /**
+         * CutOutsOut
+         * @description The garments cut from a fit, and whether more are coming.
+         */
+        CutOutsOut: {
+            /** Pieces */
+            pieces?: components["schemas"]["FitPieceOut"][];
+            /**
+             * Working
+             * @default false
+             */
+            working: boolean;
         };
         /**
          * DeviceIn
@@ -7274,6 +7332,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FeedOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cut_outs_v1_feed__post_id__cut_outs_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                post_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CutOutsOut"];
                 };
             };
             /** @description Validation Error */

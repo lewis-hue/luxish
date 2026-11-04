@@ -20,7 +20,7 @@ import {
   type Piece,
   type Render,
 } from '@/api/queries/avatar';
-import { useFitDetail } from '@/api/queries/discover-feed';
+import { useCutOuts, useFitDetail } from '@/api/queries/discover-feed';
 import { usePostImages } from '@/api/queries/post-media';
 import { ThemedText } from '@/components/themed-text';
 import { usePullToRefresh } from '@/components/ui/pull-to-refresh';
@@ -160,11 +160,31 @@ export default function AvatarScreen() {
    * what it offered for everything before this.
    */
   const carried = useFitDetail(fitParam ?? '', signedIn && Boolean(fitParam));
+
+  // **Cut the garments out if nobody has yet, and wait for them.**
+  //
+  // This is the fast half of try-on. Compositing cut-outs onto the
+  // mannequin is free and instant and the clothes are the real ones;
+  // the photorealistic render is fifteen to thirty billed seconds for
+  // clothes merely *like* them. Compositing needs cut-outs, and a pin
+  // nobody has opened has none - so arriving here starts the cut, once,
+  // after which every later viewer of that pin gets it free.
+  //
+  // Most of this never runs in production: a garment is cut when it is
+  // added to a wardrobe, so somebody trying on their own clothes
+  // already has the pieces.
+  const cutting = useCutOuts(fitParam ?? '', signedIn && Boolean(fitParam));
+
   // Memoised because the `?? []` makes a new array every render,
-  // which would re-dress the figure on each one.
+  // which would re-dress the figure on each one. The freshly cut
+  // pieces win: they arrive while the detail in cache still says
+  // there are none.
   const cut = useMemo(
-    () => carried.data?.cutPieces ?? [],
-    [carried.data?.cutPieces],
+    () =>
+      cutting.data?.pieces.length
+        ? cutting.data.pieces
+        : (carried.data?.cutPieces ?? []),
+    [cutting.data, carried.data],
   );
   const cutImages = usePostImages(cut.map((piece) => piece.mediaAssetId));
   const wearingCut = useMemo(

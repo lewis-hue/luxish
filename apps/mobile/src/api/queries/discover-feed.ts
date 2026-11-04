@@ -509,6 +509,73 @@ export function useMoreUnder(id: string, enabled: boolean, seed: FeedFit[]) {
   };
 }
 
+/** A garment cut out of a fit's photograph. */
+export interface CutPiece {
+  mediaAssetId: string;
+  position: number;
+  name: string | null;
+  colour: string | null;
+  category: string | null;
+}
+
+/**
+ * Make sure a fit's garments are cut out, and watch them arrive.
+ *
+ * **This is the fast half of try-on.** Dressing a figure can be done
+ * two ways. A photorealistic render describes the outfit to an image
+ * model and pays it to draw somebody wearing that description -
+ * fifteen to thirty seconds, billed every time, and what comes back
+ * is clothes *like* the ones in the fit. Compositing lays each
+ * garment, cut from the fit's own photograph, onto the mannequin:
+ * the clothes are the actual clothes, it happens on the phone for
+ * nothing, and it is instant.
+ *
+ * Compositing needs cut-outs. A pin nobody has opened has none, so
+ * opening one starts the cut - a handful of segmentation calls,
+ * once, after which every viewer of that pin gets it free. In
+ * production most of this never runs: a garment is cut when it is
+ * added to a wardrobe, so somebody trying on their own clothes
+ * already has the pieces.
+ *
+ * Polls while the server says it is working and stops the moment the
+ * pieces land, so an idle screen makes no requests.
+ */
+export function useCutOuts(id: string, enabled: boolean) {
+  return useQuery<{ pieces: CutPiece[]; working: boolean }>({
+    queryKey: ['feed', 'cut-outs', id],
+    enabled: enabled && id.length > 0,
+    // POST because it can start work, and safe to repeat - which is
+    // exactly what polling does.
+    queryFn: async () => {
+      const { data } = await api.POST('/v1/feed/{post_id}/cut-outs', {
+        params: { path: { post_id: id } },
+      });
+      const rows = (data?.pieces ?? []) as {
+        media_asset_id: string;
+        position: number;
+        name: string | null;
+        colour: string | null;
+        category: string | null;
+      }[];
+      return {
+        pieces: rows.map((row) => ({
+          mediaAssetId: row.media_asset_id,
+          position: row.position,
+          name: row.name,
+          colour: row.colour,
+          category: row.category,
+        })),
+        working: Boolean((data as { working?: boolean } | undefined)?.working),
+      };
+    },
+    // Four seconds: a cut is a handful of segmentation calls and
+    // takes tens of seconds, so a tighter interval is requests
+    // nobody reads.
+    refetchInterval: (query) =>
+      query.state.data?.working ? 4000 : false,
+  });
+}
+
 export function useFitDetail(id: string, enabled: boolean) {
   return useQuery<FitDetail | null>({
     queryKey: fitDetailKey(id),

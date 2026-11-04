@@ -1,4 +1,5 @@
 import { SymbolView, type SymbolViewProps } from 'expo-symbols';
+import { View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { MotionPressable, tapFeedback } from '@/components/ui/motion';
@@ -111,18 +112,41 @@ export function FitAction({
           : undefined
       }
       style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.two }}>
-      {emoji ? (
-        <ThemedText style={{ fontSize: ActionIcon.size - 6 }}>{emoji}</ThemedText>
-      ) : (
-        <SymbolView
-          name={icon}
-          size={ActionIcon.size}
-          weight={ActionIcon.weight}
-          tintColor={tint ?? colors.text}
-        />
-      )}
-      {/* Always rendered, never conditional. An empty slot of the
-          same width is what keeps the glyph beside it still. */}
+      {/* **The glyph gets its own box, the tally gets its own box.**
+
+          The tally already had a reserved slot, and things still
+          moved when somebody reacted - because reacting swaps the
+          symbol for an emoji, and an emoji's advance width is not
+          the symbol's. The row was laid out from whatever was
+          currently in it, so liking a pin nudged the count, then the
+          comment control, then everything after it.
+
+          A fixed square holds both states at the same size, so the
+          swap happens inside the box and nothing outside it is
+          affected. Two shells, each a known width: that is what
+          makes the row still. */}
+      <View
+        style={{
+          width: ActionIcon.size,
+          height: ActionIcon.size,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}>
+        {emoji ? (
+          <ThemedText style={{ fontSize: ActionIcon.size - 6 }}>
+            {emoji}
+          </ThemedText>
+        ) : (
+          <SymbolView
+            name={icon}
+            size={ActionIcon.size}
+            weight={ActionIcon.weight}
+            tintColor={tint ?? colors.text}
+          />
+        )}
+      </View>
+      {/* Always rendered, never conditional, and a fixed width
+          whether it holds a number or nothing. */}
       <ThemedText
         style={{
           // **Small, beside the glyph rather than competing with
@@ -133,7 +157,10 @@ export function FitAction({
           // control, not a headline.
           ...labelType(FontSize.footnote, 400),
           fontVariant: ['tabular-nums'],
-          minWidth: COUNT_SLOT,
+          // A fixed width, not a minimum: `minWidth` still grows past
+          // 26 for a five-digit tally, and a pin that crosses ten
+          // thousand would start nudging the row again.
+          width: COUNT_SLOT,
         }}>
         {shown ?? ''}
       </ThemedText>

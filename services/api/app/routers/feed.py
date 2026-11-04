@@ -23,6 +23,7 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Query, Response, status
+from pydantic import BaseModel, Field
 
 from app.deps import AuthDep, SessionDep
 from app.domain import comments as comments_domain
@@ -304,6 +305,72 @@ async def more_under_a_pin(
         # Only an empty slice ends it, which on a board of hundreds
         # means the reader can see almost none of it.
         more=bool(entries),
+    )
+
+
+class CutOutsOut(BaseModel):
+    """The garments cut from a fit, and whether more are coming."""
+
+    pieces: list[FitPieceOut] = Field(default_factory=list)
+    #: True while the cut is queued or running, so the client knows to
+    #: poll rather than concluding the fit has nothing in it.
+    working: bool = False
+
+
+@router.post("/{post_id}/cut-outs", response_model=CutOutsOut)
+async def cut_outs(post_id: uuid.UUID, db: SessionDep, ctx: AuthDep) -> CutOutsOut:
+    """Make sure this fit's garments have been cut out, and say where it got to.
+
+    **This is what makes try-on fast and cheap.** Dressing a figure
+    has two possible mechanics. A photorealistic render describes the
+    outfit to an image model and pays it to draw somebody wearing that
+    description: fifteen to thirty seconds, a billed call every time,
+    and what comes back is a picture of clothes *like* the ones in the
+    fit. Compositing cuts each garment out of the fit's own photograph
+    and lays it on the mannequin: the clothes are the actual clothes,
+    the compositing happens on the phone for nothing, and it is
+    instant.
+
+    Compositing needs cut-outs, and none existed - the describe pass
+    that produces them had never run against the current board, so
+    every try-on fell through to the billed path. Cutting the whole
+    board up front would be hundreds of segmentation calls for pins
+    nobody has opened. Cutting the one pin somebody actually tapped
+    is a handful, it happens once, and every later viewer of that pin
+    gets it free.
+
+    Idempotent twice over: the job is keyed on the post, so twenty
+    people opening the same fit in the same minute queue one cut, and
+    a fit already cut returns its pieces without queueing anything.
+
+    POST because it can start work. It is still safe to call
+    repeatedly, which is what a polling client does.
+    """
+    entry = await domain.one(db, user_id=ctx.user_id, post_id=post_id)
+    if entry is None:
+        raise ApiError(
+            "No such fit.",
+            status_code=status.HTTP_404_NOT_FOUND,
+            code="not_found",
+        )
+
+    cut = await fit_descriptions.pieces_of(db, post_id=post_id)
+    if cut:
+        return CutOutsOut(pieces=[_piece(row) for row in cut], working=False)
+
+    # Nothing yet. Queue the reading that produces them - unless one
+    # is already queued, which `request_description` decides.
+    await fit_descriptions.request_description(db, post_id=post_id)
+    return CutOutsOut(pieces=[], working=True)
+
+
+def _piece(row) -> FitPieceOut:
+    return FitPieceOut(
+        media_asset_id=row.media_asset_id,
+        position=row.position,
+        name=row.name,
+        colour=row.colour,
+        category=row.category,
     )
 
 
@@ -689,16 +756,7 @@ async def detail(post_id: uuid.UUID, db: SessionDep, ctx: AuthDep) -> FitDetailO
         link=fit_link(post_id),
         fit=rendered[0],
         mine=mine,
-        pieces=[
-            FitPieceOut(
-                media_asset_id=row.media_asset_id,
-                position=row.position,
-                name=row.name,
-                colour=row.colour,
-                category=row.category,
-            )
-            for row in cut
-        ],
+        pieces=[_piece(row) for row in cut],
         items=[
             PostItemOut(
                 kind=piece.kind,  # type: ignore[arg-type]

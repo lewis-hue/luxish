@@ -1789,6 +1789,50 @@
         }
       }
     },
+    "/v1/feed/{post_id}/cut-outs": {
+      "post": {
+        "tags": [
+          "feed"
+        ],
+        "summary": "Cut Outs",
+        "description": "Make sure this fit's garments have been cut out, and say where it got to.\n\n**This is what makes try-on fast and cheap.** Dressing a figure\nhas two possible mechanics. A photorealistic render describes the\noutfit to an image model and pays it to draw somebody wearing that\ndescription: fifteen to thirty seconds, a billed call every time,\nand what comes back is a picture of clothes *like* the ones in the\nfit. Compositing cuts each garment out of the fit's own photograph\nand lays it on the mannequin: the clothes are the actual clothes,\nthe compositing happens on the phone for nothing, and it is\ninstant.\n\nCompositing needs cut-outs, and none existed - the describe pass\nthat produces them had never run against the current board, so\nevery try-on fell through to the billed path. Cutting the whole\nboard up front would be hundreds of segmentation calls for pins\nnobody has opened. Cutting the one pin somebody actually tapped\nis a handful, it happens once, and every later viewer of that pin\ngets it free.\n\nIdempotent twice over: the job is keyed on the post, so twenty\npeople opening the same fit in the same minute queue one cut, and\na fit already cut returns its pieces without queueing anything.\n\nPOST because it can start work. It is still safe to call\nrepeatedly, which is what a polling client does.",
+        "operationId": "cut_outs_v1_feed__post_id__cut_outs_post",
+        "parameters": [
+          {
+            "name": "post_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Post Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CutOutsOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/feed/groups": {
       "get": {
         "tags": [
@@ -6959,6 +7003,25 @@
           "name"
         ],
         "title": "ContactOut"
+      },
+      "CutOutsOut": {
+        "properties": {
+          "pieces": {
+            "items": {
+              "$ref": "#/components/schemas/FitPieceOut"
+            },
+            "type": "array",
+            "title": "Pieces"
+          },
+          "working": {
+            "type": "boolean",
+            "title": "Working",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "CutOutsOut",
+        "description": "The garments cut from a fit, and whether more are coming."
       },
       "DeviceIn": {
         "properties": {
