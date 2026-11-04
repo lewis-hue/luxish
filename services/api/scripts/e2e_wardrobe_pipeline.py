@@ -24,6 +24,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from _assets import repo_root
+
 import sqlalchemy as sa  # noqa: E402
 
 if key := os.environ.get("MODEL_API_KEY"):
@@ -39,7 +41,7 @@ from app.models.job import Job  # noqa: E402
 from app.models.media_asset import MediaAsset  # noqa: E402
 from app.workers.runner import all_handlers  # noqa: E402
 
-REPO = Path(__file__).resolve().parents[3]
+REPO = repo_root()
 IMAGES = REPO / "apps" / "mobile" / "assets" / "images" / os.environ.get("E2E_DIR", "wardrobe")
 
 #: One garment is enough to prove the path, and each costs money.

@@ -55,9 +55,7 @@ from app.config import get_settings  # noqa: E402
 
 async def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--dry-run", action="store_true", help="count, change nothing"
-    )
+    parser.add_argument("--dry-run", action="store_true", help="count, change nothing")
     parser.add_argument("--user", help="one account's email, instead of all")
     parser.add_argument(
         "--redo",
@@ -67,9 +65,7 @@ async def main() -> int:
             "rather than from the photograph. Costs a generation each."
         ),
     )
-    parser.add_argument(
-        "--limit", type=int, default=500, help="most garments to queue"
-    )
+    parser.add_argument("--limit", type=int, default=500, help="most garments to queue")
     args = parser.parse_args()
 
     from app.domain.jobs import enqueue
@@ -108,9 +104,7 @@ async def main() -> int:
                 .limit(args.limit)
             )
             if args.user:
-                owner = await db.scalar(
-                    sa.select(User.id).where(User.email == args.user)
-                )
+                owner = await db.scalar(sa.select(User.id).where(User.email == args.user))
                 if owner is None:
                     print(f"no account for {args.user}")
                     return 2
@@ -163,9 +157,7 @@ async def main() -> int:
                     if g.background_removed_asset_id is None:
                         still_wanting.append(g)
                         continue
-                    have = await db.get(
-                        MediaAsset, g.background_removed_asset_id
-                    )
+                    have = await db.get(MediaAsset, g.background_removed_asset_id)
                     if have is None or have.kind not in ALREADY_A_PACKSHOT:
                         still_wanting.append(g)
                 garments = still_wanting

@@ -212,7 +212,11 @@ PYEOF
   join_reviewer
 }
 
-# Give the reviewer a populated Community tab.
+# Put the reviewer in the follow graph.
+#
+# Followers and following live on the profile, behind the counts;
+# the Community tab they used to live in was removed because it was
+# a second feed of the fits Discover already ranks better.
 #
 # **Only works after they have signed in once, and that is not a
 # bug.** The API keys an account on `(provider, subject)` from the
@@ -229,7 +233,7 @@ PYEOF
 join_reviewer() {
   if ( api_py scripts/seed_demo_world.py --join "$REVIEWER" >"$LOGS/join.log" 2>&1 ); then
     if grep -q "no account for" "$LOGS/join.log" 2>/dev/null; then
-      note "sign in once, then run this again to fill the Community tab"
+      note "sign in once, then run this again to put yourself in the follow graph"
     else
       ok "$REVIEWER follows a spread of the demo world"
     fi
@@ -262,12 +266,63 @@ repair_pins() {
   fi
 }
 
+# Stop Metro, however it was started.
+#
+# By port and by command line, because this script may not be what
+# started it: a reviewer who ran `npx expo start` by hand still needs
+# `review.sh stop` to stop it, and a bundle built against an old API
+# address has to be replaced rather than left running.
+#: One line on purpose: a `\` continuation inside this string has been
+#: eaten twice by the tooling that edits this file, and a half-written
+#: kill command fails silently.
+_KILL_8081='Get-NetTCPConnection -LocalPort 8081 -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }'
+
+stop_metro() {
+  # By port first, because that is what `expo start` actually holds
+  # and what the next start will collide with.
+  powershell.exe -NoProfile -Command "$_KILL_8081" >/dev/null 2>&1 || true
+  pkill -f "expo start" 2>/dev/null || true
+  taskkill //F //IM node.exe //FI "WINDOWTITLE eq expo*" >/dev/null 2>&1 || true
+}
+
+# What the running bundle was built against, if anything is running.
+#
+# **A running Metro is not the same as a correct one.** `EXPO_PUBLIC_*`
+# values are inlined when the bundle is built, so a Metro started
+# before the API address changed keeps serving the old one - and this
+# function used to see a live Metro, say "already running" and leave
+# it there. The reviewer then scanned a perfectly good QR code and the
+# app talked to an address nothing was listening on, which reads as a
+# broken app rather than a stale bundle.
+#
+# Recorded beside the log so the check survives this script exiting.
+metro_target_file() { printf '%s' "$LOGS/metro-api-url"; }
+
+metro_is_current() {
+  local want="$1" had
+  [ -f "$(metro_target_file)" ] || return 1
+  had="$(cat "$(metro_target_file)" 2>/dev/null)"
+  [ "$had" = "$want" ]
+}
+
 start_metro() {
+  local want
+  want="$(grep -E '^EXPO_PUBLIC_API_BASE_URL=' "$MOBILE/.env" 2>/dev/null | head -1 | cut -d= -f2-)"
+
   if curl -s --max-time 3 "http://127.0.0.1:8081/status" >/dev/null 2>&1; then
-    ok "Metro already running on :8081"
-    return 0
+    if metro_is_current "$want"; then
+      ok "Metro already running on :8081"
+      return 0
+    fi
+    note "the API address changed; restarting Metro so the bundle picks it up"
+    # `expo start` holds the port, so the old one has to go first.
+    # Killed by port rather than by pid, because this script may not
+    # be the thing that started it.
+    stop_metro
+    sleep 2
   fi
   mkdir -p "$LOGS"
+  printf '%s' "$want" > "$(metro_target_file)"
   # From apps/mobile, never the repo root: the root has no router
   # entry, so a Metro started there serves a bundle that dies on
   # "Unable to resolve module ../../App" and looks like a broken app.
@@ -427,8 +482,7 @@ up() {
 
 down() {
   bash "$REPO/scripts/dev-stack.sh" stop || true
-  pkill -f "expo start" 2>/dev/null || true
-  taskkill //F //IM node.exe //FI "WINDOWTITLE eq expo*" >/dev/null 2>&1 || true
+  stop_metro
   say "stopped"
 }
 

@@ -102,17 +102,56 @@ def test_a_missing_mannequin_directory_does_not_break_the_import() -> None:
         importlib.reload(mannequin)
 
 
-def test_the_seed_scripts_use_the_shared_resolver() -> None:
-    """Six of them had the same line. One place to be wrong."""
-    for name in (
-        "seed_demo_world.py",
-        "import_generated_pins.py",
-        "generate_seed_pins.py",
-        "import_seed_photos.py",
-    ):
-        text = (API / "scripts" / name).read_text(encoding="utf-8")
-        assert "parents[3]" not in text, f"{name} still counts to the repo root"
-        assert "seed_photos()" in text, f"{name} does not use the resolver"
+def test_no_script_counts_its_way_to_the_repository_root() -> None:
+    """**Every script, not a list of four.**
+
+    This named the four seeders that had been fixed, so the fifth,
+    sixth and seventh went unnoticed - and the seventh was
+    `seed_demo.py`, which is what gives a reviewer a wardrobe. In a
+    container it died before doing anything:
+
+        IndexError: 3
+          REPO = Path(__file__).resolve().parents[3]
+
+    A guard that lists its subjects only ever guards the bugs already
+    found. This one scans the directory, so a new script arrives
+    already covered.
+
+    `_assets.py` is exempt because the quoted lines in its docstring
+    are the explanation, and `_code_only` cannot strip a docstring
+    that is the module's own.
+    """
+    offenders: list[str] = []
+    for path in sorted((API / "scripts").glob("*.py")):
+        if path.name == "_assets.py":
+            continue
+        for match in re.finditer(r"parents\s*\[\s*(\d+)\s*\]", _code_only(path)):
+            if int(match.group(1)) >= 2:
+                offenders.append(f"scripts/{path.name}: parents[{match.group(1)}]")
+
+    assert not offenders, (
+        "these break the moment the tree is not a full checkout, which is "
+        "every container: use `from _assets import repo_root, seed_photos`. " + ", ".join(offenders)
+    )
+
+
+def test_the_shared_resolver_offers_both_roots() -> None:
+    """`assets_dir` was not enough on its own.
+
+    It covers the seeders that read photographs. The scripts that
+    reach for the wardrobe pictures or the figures under the mobile
+    app need the repository itself, and without somewhere to get it
+    they each counted.
+    """
+    import sys
+
+    sys.path.insert(0, str(API / "scripts"))
+    import _assets
+
+    assert hasattr(_assets, "repo_root"), "nowhere to get the repository root"
+    assert hasattr(_assets, "assets_dir")
+    assert _assets.REPO_ENV_VAR == "LUXISH_REPO_DIR"
+    assert _assets.repo_root().is_dir()
 
 
 def test_no_test_counts_its_way_to_the_repository_root() -> None:

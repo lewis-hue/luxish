@@ -84,11 +84,7 @@ async def not_fashion(session) -> list[tuple[str, str]]:
             )
         )
     ).all()
-    return [
-        (str(r[0]), str(r[1]))
-        for r in rows
-        if str(r[1]) not in FASHION_SUBJECTS
-    ]
+    return [(str(r[0]), str(r[1])) for r in rows if str(r[1]) not in FASHION_SUBJECTS]
 
 
 async def main() -> int:
@@ -107,10 +103,7 @@ async def main() -> int:
             broken = await unrenderable(session)
             offtopic = await not_fashion(session)
             if not broken and not offtopic:
-                print(
-                    "Every published pin has a photograph and is about "
-                    "clothes. Nothing to do."
-                )
+                print("Every published pin has a photograph and is about clothes. Nothing to do.")
                 return 0
 
             if broken:
@@ -123,12 +116,8 @@ async def main() -> int:
                 counts: dict[str, int] = {}
                 for _post_id, subject in offtopic:
                     counts[subject] = counts.get(subject, 0) + 1
-                summary = ", ".join(
-                    f"{n} {subject}" for subject, n in sorted(counts.items())
-                )
-                print(
-                    f"{len(offtopic)} published pin(s) are not fashion: {summary}"
-                )
+                summary = ", ".join(f"{n} {subject}" for subject, n in sorted(counts.items()))
+                print(f"{len(offtopic)} published pin(s) are not fashion: {summary}")
 
             if not args.fix:
                 print("\nRe-run with --fix to take them down.")
@@ -139,8 +128,7 @@ async def main() -> int:
             # anything already referencing it still resolves.
             await session.execute(
                 sa.text(
-                    "update posts set deleted_at = :now, updated_at = :now "
-                    "where id in :ids"
+                    "update posts set deleted_at = :now, updated_at = :now where id in :ids"
                 ).bindparams(sa.bindparam("ids", expanding=True)),
                 {
                     "now": datetime.now(UTC),

@@ -94,19 +94,11 @@ async def main() -> int:
             await db.commit()
             print(f"removed {removed.rowcount} seeded comments")
 
-        people = list(
-            (
-                await db.scalars(
-                    sa.select(User.id).where(User.deleted_at.is_(None))
-                )
-            ).all()
-        )
+        people = list((await db.scalars(sa.select(User.id).where(User.deleted_at.is_(None)))).all())
         posts = list(
             (
                 await db.scalars(
-                    sa.select(Post).where(
-                        Post.state == "published", Post.deleted_at.is_(None)
-                    )
+                    sa.select(Post).where(Post.state == "published", Post.deleted_at.is_(None))
                 )
             ).all()
         )
@@ -115,8 +107,7 @@ async def main() -> int:
         reactions = dict(
             (
                 await db.execute(
-                    sa.select(PostReaction.post_id, sa.func.count())
-                    .group_by(PostReaction.post_id)
+                    sa.select(PostReaction.post_id, sa.func.count()).group_by(PostReaction.post_id)
                 )
             ).all()
         )

@@ -216,11 +216,13 @@ trending has a baseline to measure against rather than a flat line.
 Discover, Search and the boards are populated from the first
 launch.
 
-**The Community tab starts empty until you sign in.** The API keys
-an account on the identity provider's subject and deliberately
-refuses to adopt an existing row by email, so your account cannot be
-created before you first sign in. Run `./scripts/review.sh` again
-afterwards and it will wire you into the follow graph.
+**Your follow graph is empty until you sign in.** Followers and
+following live on your profile, behind the counts. The API keys an
+account on the identity provider's subject and deliberately refuses
+to adopt an existing row by email, so your account does not exist
+until you first sign in and nothing can be wired to it before then.
+Run `./scripts/review.sh` again afterwards and it will put you in
+the graph.
 
 **AI features need a key.** `LUXISH_META_API_KEY` in
 `services/api/.env` enables the stylist, try-on, packshots and

@@ -39,6 +39,7 @@ if key := os.environ.get("MODEL_API_KEY"):
 import sqlalchemy as sa  # noqa: E402,F401
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine  # noqa: E402
 
+from _assets import repo_root  # noqa: E402
 from app.db.base import Base  # noqa: E402
 from app.models import *  # noqa: E402,F401,F403  — registers every table
 from app.providers.base import AIRunRecorder  # noqa: E402
@@ -48,9 +49,7 @@ from app.workers.outfit import (  # noqa: E402
     MetaOutfitDetector,
 )
 
-IMAGES = (
-    Path(__file__).resolve().parents[3] / "apps" / "mobile" / "assets" / "images"
-)
+IMAGES = repo_root() / "apps" / "mobile" / "assets" / "images"
 
 
 def samples() -> list[Path]:

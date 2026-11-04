@@ -25,9 +25,7 @@ if key := os.environ.get("MODEL_API_KEY"):
     os.environ.setdefault("LUXISH_META_API_KEY", key)
 
 API = os.environ.get("TRACE_API", "http://192.168.100.2:8010")
-ISSUER = os.environ.get(
-    "TRACE_ISSUER", "https://luxish-kc.loca.lt/realms/luxish"
-)
+ISSUER = os.environ.get("TRACE_ISSUER", "https://luxish-kc.loca.lt/realms/luxish")
 
 #: Tokens are minted against Keycloak directly, not through the public tunnel.
 #:
@@ -129,9 +127,7 @@ async def main() -> int:
                     print(f"  {job.kind} FAILED: {type(exc).__name__}: {exc}")
                     await session.rollback()
                     async with session_scope() as recovery:
-                        stuck = await claim_job_by_id(
-                            recovery, job_id, worker="trace"
-                        )
+                        stuck = await claim_job_by_id(recovery, job_id, worker="trace")
                         if stuck is not None:
                             await fail_job(recovery, stuck, error=str(exc))
 
@@ -141,19 +137,21 @@ async def main() -> int:
 
     async with session_scope() as session:
         rows = (
-            await session.execute(
-                sa.select(Garment)
-                .where(Garment.user_id == (await _user_id(session, username)))
-                .where(Garment.deleted_at.is_(None))
-                .order_by(Garment.created_at)
+            (
+                await session.execute(
+                    sa.select(Garment)
+                    .where(Garment.user_id == (await _user_id(session, username)))
+                    .where(Garment.deleted_at.is_(None))
+                    .order_by(Garment.created_at)
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         print(f"\nWARDROBE ({len(rows)} garments)")
         for row in rows:
             inferred = row.inferred_attributes or {}
-            bits = ", ".join(
-                f"{k}={v}" for k, v in inferred.items() if k != "slot" and v
-            )
+            bits = ", ".join(f"{k}={v}" for k, v in inferred.items() if k != "slot" and v)
             print(f"  {row.name[:38]:<38} {str(row.category):<22} {bits[:70]}")
     return 0
 

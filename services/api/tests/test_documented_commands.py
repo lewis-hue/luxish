@@ -120,3 +120,69 @@ def test_the_readme_tells_windows_reviewers_which_shell_to_use() -> None:
         "the README never says which shell to use on Windows, where "
         "`./scripts/review.sh` fails in PowerShell"
     )
+
+
+# --------------------------------------------------------------------------
+# Reviewer-facing text must describe the app that exists.
+# --------------------------------------------------------------------------
+
+#: The tab files, mapped to the words a person would use for them.
+TAB_WORDS = {
+    "index": {"discover", "home", "feed"},
+    "search": {"search", "explore"},
+    "studio": {"studio"},
+    "wardrobe": {"wardrobe", "closet"},
+    "profile": {"profile", "you"},
+}
+
+#: Uses of the word that do not name one of the app's own tabs.
+NOT_A_TAB = {
+    "two-tab",  # the followers/following list inside the profile
+    "created/saved",  # the grid on somebody's page
+    "browser",
+    "new",
+}
+
+
+def _tabs_that_exist() -> set[str]:
+    tabs = (REPO / "apps" / "mobile" / "src" / "app" / "(tabs)").glob("*.tsx")
+    return {p.stem for p in tabs if not p.stem.startswith("_")}
+
+
+def test_the_tab_vocabulary_matches_the_app() -> None:
+    """Guards the test below from drifting away from the real tabs."""
+    assert _tabs_that_exist() == set(TAB_WORDS), (
+        "the app's tabs changed; update TAB_WORDS so the check below still "
+        f"means something: {sorted(_tabs_that_exist())}"
+    )
+
+
+def test_no_reviewer_facing_text_names_a_tab_that_was_removed() -> None:
+    """**The Community tab was removed and the README still sent people to it.**
+
+    A reviewer reads "the Community tab starts empty until you sign
+    in", goes looking, and finds five tabs none of which is called
+    that. Followers and following moved onto the profile when that
+    tab was deleted for being a second feed of what Discover already
+    ranks better.
+
+    Documentation that describes a different app is worse than none:
+    it costs the reader the time to find out it is wrong, and it is
+    the first thing a judge reads.
+    """
+    allowed = {word for words in TAB_WORDS.values() for word in words} | NOT_A_TAB
+
+    offenders: list[str] = []
+    for path in [REPO / "README.md", *sorted((REPO / "scripts").glob("*.sh"))]:
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+            # A line explaining that a tab was removed is not a line
+            # sending somebody to it.
+            if "removed" in line.lower() or "was deleted" in line.lower():
+                continue
+            for match in re.finditer(r"\b([A-Za-z/-]+) tabs?\b", line):
+                word = match.group(1).lower()
+                if word in allowed or word in {"the", "a", "this", "that", "each"}:
+                    continue
+                offenders.append(f"{path.name}:{number}: {match.group(0)!r}")
+
+    assert not offenders, "these name a tab the app does not have: " + "; ".join(offenders)

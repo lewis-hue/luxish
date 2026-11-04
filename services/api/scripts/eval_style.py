@@ -33,8 +33,13 @@ from pathlib import Path
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-REPO = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[0]))
+
+from _assets import repo_root  # noqa: E402
+
+REPO = repo_root()
+
 
 CORPUS = REPO / "datasets" / "style"
 
@@ -57,6 +62,7 @@ def record(row: dict) -> None:
 
     _results_handle.write(json.dumps(row) + chr(10))
     _results_handle.flush()
+
 
 #: Folder name to style. The identity prefixes a labeller used are dropped on
 #: purpose; see the module docstring.

@@ -50,6 +50,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from _assets import repo_root
+
 import sqlalchemy as sa  # noqa: E402
 
 import app.models  # noqa: E402, F401  (registers every table on Base.metadata)
@@ -73,7 +75,7 @@ from app.models.stylist import (  # noqa: E402
 from app.models.user import User  # noqa: E402
 from app.storage.local import build_local_store  # noqa: E402
 
-REPO = Path(__file__).resolve().parents[3]
+REPO = repo_root()
 WARDROBE_IMAGES = REPO / "apps" / "mobile" / "assets" / "images" / "wardrobe"
 
 #: Where the list of everything this wrote is kept, so `--remove` is exact.
@@ -91,15 +93,47 @@ SEED = 20261030
 #: (file stem, name, category, colour, formality, seasons, material)
 GARMENTS: list[tuple[str, str, str, str, str, tuple[str, ...], str | None]] = [
     ("white-shirt", "White poplin shirt", "shirt", "white", "business", ("all_year",), "cotton"),
-    ("navy-blazer", "Navy wool blazer", "blazer", "navy", "business", ("cool", "transitional"), "wool"),
-    ("cream-trousers", "Cream wide-leg trousers", "trousers", "cream", "smart_casual", ("warm", "transitional"), None),
+    (
+        "navy-blazer",
+        "Navy wool blazer",
+        "blazer",
+        "navy",
+        "business",
+        ("cool", "transitional"),
+        "wool",
+    ),
+    (
+        "cream-trousers",
+        "Cream wide-leg trousers",
+        "trousers",
+        "cream",
+        "smart_casual",
+        ("warm", "transitional"),
+        None,
+    ),
     ("indigo-jeans", "Indigo straight jeans", "jeans", "indigo", "casual", ("all_year",), "denim"),
     ("black-midi-dress", "Black crepe midi dress", "dress", "black", "formal", ("all_year",), None),
-    ("brown-loafers", "Brown penny loafers", "shoes", "brown", "smart_casual", ("all_year",), "leather"),
+    (
+        "brown-loafers",
+        "Brown penny loafers",
+        "shoes",
+        "brown",
+        "smart_casual",
+        ("all_year",),
+        "leather",
+    ),
     ("white-trainers", "White leather trainers", "shoes", "white", "casual", ("all_year",), None),
     ("camel-coat", "Camel wool overcoat", "coat", "camel", "smart_casual", ("cool",), "wool"),
     ("linen-shirt", "Sand linen shirt", "shirt", "sand", "casual", ("warm",), "linen"),
-    ("striped-knit", "Striped fine knit", "knitwear", "navy", "casual", ("cool", "transitional"), None),
+    (
+        "striped-knit",
+        "Striped fine knit",
+        "knitwear",
+        "navy",
+        "casual",
+        ("cool", "transitional"),
+        None,
+    ),
     ("leather-tote", "Tan leather tote", "bag", "tan", "business", ("all_year",), "leather"),
     ("silk-scarf", "Ochre silk scarf", "accessory", "ochre", "smart_casual", ("all_year",), "silk"),
 ]
@@ -144,20 +178,17 @@ PLANS: list[tuple[int, str | None]] = [
     (6, "Flight at six"),
 ]
 
+
 def _args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--email", required=True, help="the account to fill")
-    parser.add_argument(
-        "--remove", action="store_true", help="take back everything this wrote"
-    )
+    parser.add_argument("--remove", action="store_true", help="take back everything this wrote")
     return parser.parse_args()
 
 
 async def _manifest(db, user_id: uuid.UUID) -> Preference | None:
     return await db.scalar(
-        sa.select(Preference).where(
-            Preference.user_id == user_id, Preference.key == MANIFEST_KEY
-        )
+        sa.select(Preference).where(Preference.user_id == user_id, Preference.key == MANIFEST_KEY)
     )
 
 
@@ -169,43 +200,71 @@ async def _remove(db, user: User) -> int:
         return 0
 
     kept = row.value or {}
-    ids = {name: [uuid.UUID(i) for i in kept.get(name, [])] for name in (
-        "garments", "assets", "collections", "boards", "plans",
-        "conversations", "outfits",
-    )}
+    ids = {
+        name: [uuid.UUID(i) for i in kept.get(name, [])]
+        for name in (
+            "garments",
+            "assets",
+            "collections",
+            "boards",
+            "plans",
+            "conversations",
+            "outfits",
+        )
+    }
     removed = sum(len(v) for v in ids.values())
 
     # Children first: outfit items and pins reference rows about to go, and
     # a garment cannot be deleted while an outfit item still points at it
     # with `SET NULL` deferred to the database.
-    await db.execute(sa.delete(OutfitItem).where(OutfitItem.outfit_id.in_(ids["outfits"] or [uuid.uuid4()])))
+    await db.execute(
+        sa.delete(OutfitItem).where(OutfitItem.outfit_id.in_(ids["outfits"] or [uuid.uuid4()]))
+    )
     await db.execute(sa.delete(Outfit).where(Outfit.id.in_(ids["outfits"] or [uuid.uuid4()])))
-    await db.execute(sa.delete(Message).where(Message.conversation_id.in_(ids["conversations"] or [uuid.uuid4()])))
-    await db.execute(sa.delete(StylistRun).where(StylistRun.conversation_id.in_(ids["conversations"] or [uuid.uuid4()])))
-    await db.execute(sa.delete(Conversation).where(Conversation.id.in_(ids["conversations"] or [uuid.uuid4()])))
-    await db.execute(sa.delete(MoodboardPin).where(MoodboardPin.moodboard_id.in_(ids["boards"] or [uuid.uuid4()])))
+    await db.execute(
+        sa.delete(Message).where(
+            Message.conversation_id.in_(ids["conversations"] or [uuid.uuid4()])
+        )
+    )
+    await db.execute(
+        sa.delete(StylistRun).where(
+            StylistRun.conversation_id.in_(ids["conversations"] or [uuid.uuid4()])
+        )
+    )
+    await db.execute(
+        sa.delete(Conversation).where(Conversation.id.in_(ids["conversations"] or [uuid.uuid4()]))
+    )
+    await db.execute(
+        sa.delete(MoodboardPin).where(
+            MoodboardPin.moodboard_id.in_(ids["boards"] or [uuid.uuid4()])
+        )
+    )
     await db.execute(sa.delete(Moodboard).where(Moodboard.id.in_(ids["boards"] or [uuid.uuid4()])))
-    await db.execute(sa.delete(CollectionGarment).where(CollectionGarment.collection_id.in_(ids["collections"] or [uuid.uuid4()])))
-    await db.execute(sa.delete(Collection).where(Collection.id.in_(ids["collections"] or [uuid.uuid4()])))
+    await db.execute(
+        sa.delete(CollectionGarment).where(
+            CollectionGarment.collection_id.in_(ids["collections"] or [uuid.uuid4()])
+        )
+    )
+    await db.execute(
+        sa.delete(Collection).where(Collection.id.in_(ids["collections"] or [uuid.uuid4()]))
+    )
     await db.execute(sa.delete(OutfitPlan).where(OutfitPlan.id.in_(ids["plans"] or [uuid.uuid4()])))
     # Keeps are a pair, not a row with an id, so they are undone by
     # naming this account rather than by remembering ids.
     await db.execute(sa.delete(PostSave).where(PostSave.user_id == user.id))
     await db.execute(
-        sa.delete(OutfitPlanItem).where(
-            OutfitPlanItem.plan_id.in_(ids["plans"] or [uuid.uuid4()])
-        )
+        sa.delete(OutfitPlanItem).where(OutfitPlanItem.plan_id.in_(ids["plans"] or [uuid.uuid4()]))
     )
     await db.execute(sa.delete(Garment).where(Garment.id.in_(ids["garments"] or [uuid.uuid4()])))
-    await db.execute(sa.delete(MediaAsset).where(MediaAsset.id.in_(ids["assets"] or [uuid.uuid4()])))
+    await db.execute(
+        sa.delete(MediaAsset).where(MediaAsset.id.in_(ids["assets"] or [uuid.uuid4()]))
+    )
 
     # The follow edges this created, and only those: the sample accounts are
     # identified by their reserved domain, so a real person you followed is
     # never touched.
     sample_ids = list(
-        await db.scalars(
-            sa.select(User.id).where(User.email.like("%@sample.luxish.invalid"))
-        )
+        await db.scalars(sa.select(User.id).where(User.email.like("%@sample.luxish.invalid")))
     )
     if sample_ids:
         await db.execute(
@@ -302,8 +361,13 @@ async def _seed(db, store, user: User) -> int:
     kept: dict[str, list[str]] = {
         name: []
         for name in (
-            "garments", "assets", "collections", "boards", "plans",
-            "conversations", "outfits",
+            "garments",
+            "assets",
+            "collections",
+            "boards",
+            "plans",
+            "conversations",
+            "outfits",
         )
     }
 
@@ -321,8 +385,12 @@ async def _seed(db, store, user: User) -> int:
     # A capsule, built from the pieces that actually go together rather than
     # from the first six in the list.
     capsule_names = {
-        "Navy wool blazer", "White poplin shirt", "Cream wide-leg trousers",
-        "Brown penny loafers", "Camel wool overcoat", "Tan leather tote",
+        "Navy wool blazer",
+        "White poplin shirt",
+        "Cream wide-leg trousers",
+        "Brown penny loafers",
+        "Camel wool overcoat",
+        "Tan leather tote",
     }
     capsule = Collection(
         user_id=user.id,
@@ -334,9 +402,7 @@ async def _seed(db, store, user: User) -> int:
     kept["collections"].append(str(capsule.id))
     for position, garment in enumerate(g for g in garments if g.name in capsule_names):
         db.add(
-            CollectionGarment(
-                collection_id=capsule.id, garment_id=garment.id, position=position
-            )
+            CollectionGarment(collection_id=capsule.id, garment_id=garment.id, position=position)
         )
     print(f"  collection: {capsule.name}")
 
@@ -383,11 +449,7 @@ async def _seed(db, store, user: User) -> int:
         await db.flush()
         kept["boards"].append(str(board.id))
         for position in range(min(5, max(0, len(deck) - at))):
-            db.add(
-                MoodboardPin(
-                    moodboard_id=board.id, post_id=deck[at], position=position
-                )
-            )
+            db.add(MoodboardPin(moodboard_id=board.id, post_id=deck[at], position=position))
             at += 1
     print(f"  boards: {len(BOARDS)}" + ("" if deck else " (empty - nothing to pin)"))
 
@@ -411,11 +473,7 @@ async def _seed(db, store, user: User) -> int:
             if not wearable:
                 break
             garment = wearable[(index * 3 + position) % len(wearable)]
-            db.add(
-                OutfitPlanItem(
-                    plan_id=plan.id, garment_id=garment.id, position=position
-                )
-            )
+            db.add(OutfitPlanItem(plan_id=plan.id, garment_id=garment.id, position=position))
     print(f"  plans: {len(PLANS)} days, three pieces each")
 
     # One finished stylist turn, so the tab opens on a conversation rather
@@ -511,9 +569,7 @@ async def _seed(db, store, user: User) -> int:
     # to read. Consent is written as `seed` so its provenance is visible in
     # the row rather than inferred from the date.
     consent = await db.scalar(
-        sa.select(Consent).where(
-            Consent.user_id == user.id, Consent.kind == "community_sharing"
-        )
+        sa.select(Consent).where(Consent.user_id == user.id, Consent.kind == "community_sharing")
     )
     if consent is None:
         db.add(
@@ -529,25 +585,19 @@ async def _seed(db, store, user: User) -> int:
         consent.revoked_at = None
 
     samples = list(
-        await db.scalars(
-            sa.select(User.id).where(User.email.like("%@sample.luxish.invalid"))
-        )
+        await db.scalars(sa.select(User.id).where(User.email.like("%@sample.luxish.invalid")))
     )
     if not samples:
         print("  community: no sample accounts — run seed_community.py for a feed")
     else:
         existing = set(
-            await db.scalars(
-                sa.select(Follow.followee_id).where(Follow.follower_id == user.id)
-            )
+            await db.scalars(sa.select(Follow.followee_id).where(Follow.follower_id == user.id))
         )
         following = [i for i in rng.sample(samples, min(6, len(samples))) if i not in existing]
         for target in following:
             db.add(Follow(follower_id=user.id, followee_id=target))
         back = set(
-            await db.scalars(
-                sa.select(Follow.follower_id).where(Follow.followee_id == user.id)
-            )
+            await db.scalars(sa.select(Follow.follower_id).where(Follow.followee_id == user.id))
         )
         followers = [i for i in rng.sample(samples, min(8, len(samples))) if i not in back]
         for source_id in followers:
@@ -559,8 +609,7 @@ async def _seed(db, store, user: User) -> int:
 
     print()
     print("Done. Sign in on the device and every tab has something on it.")
-    print("Undo with:  python scripts/seed_demo.py --email "
-          f"{user.email} --remove")
+    print(f"Undo with:  python scripts/seed_demo.py --email {user.email} --remove")
     return 0
 
 
@@ -570,9 +619,7 @@ async def main() -> int:
 
     # Refuses outside the local environment, which is the guard that keeps
     # this script from ever touching a deployment.
-    store = build_local_store(
-        environment=settings.environment, root=settings.local_media_root
-    )
+    store = build_local_store(environment=settings.environment, root=settings.local_media_root)
 
     engine = build_engine(settings.database_url)
     maker = session_factory(engine)

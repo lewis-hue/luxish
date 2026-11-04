@@ -165,6 +165,15 @@ services:
       # The mannequin figures live under the mobile app, outside this
       # service's build context, so they are mounted rather than copied.
       LUXISH_MANNEQUIN_DIR: /srv/mannequins
+      # Where the repository is, for the scripts that read files no
+      # service owns: the wardrobe photographs under the mobile app,
+      # the style corpus, the base figures.
+      #
+      # **Seven scripts counted their way there instead**, and the
+      # seventh was `seed_demo.py` - the one that gives a reviewer a
+      # wardrobe. In a container it died on `IndexError: 3` before
+      # doing anything at all.
+      LUXISH_REPO_DIR: /repo
       # **`localhost` means this container, not the host.**
       #
       # The API fetches Keycloak's signing keys to verify every token.
@@ -188,6 +197,10 @@ services:
       # container has no business writing there.
       - ../assets:/srv/assets:ro
       - ../apps/mobile/assets/images/mannequins:/srv/mannequins:ro
+      # The repository itself, read-only, for `LUXISH_REPO_DIR` above.
+      # Read-only because a seeder reads from it and has no business
+      # writing to a developer's checkout.
+      - ..:/repo:ro
     ports:
       # **Configurable, because a port can be taken by nothing at all.**
       #

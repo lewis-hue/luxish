@@ -31,7 +31,11 @@ import asyncio
 import sys
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(Path(__file__).resolve().parents[0]))
+
+from _assets import repo_root  # noqa: E402
+
+REPO = repo_root()
 FIGURES = REPO / "apps" / "mobile" / "assets" / "images" / "figures"
 
 #: What the figure wears, so a cut-out laid over it has something

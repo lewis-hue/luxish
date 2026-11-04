@@ -47,9 +47,7 @@ from app.workers.runner import build_media_store  # noqa: E402
 async def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--limit", type=int, default=0, help="stop after N")
-    parser.add_argument(
-        "--force", action="store_true", help="re-read fits already described"
-    )
+    parser.add_argument("--force", action="store_true", help="re-read fits already described")
     args = parser.parse_args()
 
     cfg = get_settings()
@@ -69,9 +67,7 @@ async def main() -> int:
             .order_by(Post.published_at.asc())
         )
         if not args.force:
-            query = query.where(
-                ~sa.exists().where(FitDescriptionRow.post_id == Post.id)
-            )
+            query = query.where(~sa.exists().where(FitDescriptionRow.post_id == Post.id))
         posts = list((await db.scalars(query)).all())
 
     if args.limit:
@@ -109,9 +105,7 @@ async def main() -> int:
             read += 1
             print(f"  [{index}/{len(posts)}] {row.caption or row.outfit[:60]}")
 
-    print(
-        f"\nRead {read}. Skipped {skipped} with no photograph. {failed} failed."
-    )
+    print(f"\nRead {read}. Skipped {skipped} with no photograph. {failed} failed.")
     return 0 if failed == 0 else 1
 
 

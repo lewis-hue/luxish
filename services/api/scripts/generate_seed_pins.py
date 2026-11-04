@@ -116,9 +116,7 @@ class Spec:
 #: constraint is about the garments listed beside it, not about who
 #: is allowed to wear what: a look whose description is a skirt and
 #: ballet flats describes womenswear, so that is what it is tagged.
-LOOKS: tuple[
-    tuple[str, str, tuple[str, ...], tuple[str, ...], tuple[str, ...]], ...
-] = (
+LOOKS: tuple[tuple[str, str, tuple[str, ...], tuple[str, ...], tuple[str, ...]], ...] = (
     (
         "streetwear",
         "an oversized hoodie, wide cargo trousers and chunky trainers",
@@ -349,9 +347,7 @@ def specs(count: int) -> list[Spec]:
             )
             continue
 
-        look, garments, tags, settings, wearable_as = LOOKS[
-            rng.randrange(len(LOOKS))
-        ]
+        look, garments, tags, settings, wearable_as = LOOKS[rng.randrange(len(LOOKS))]
         # Only a presentation this look actually describes. See the note
         # on LOOKS: picking the two independently produced a man in a
         # midi skirt and ballet flats.
@@ -416,9 +412,7 @@ def shrink(raw: bytes) -> bytes:
             raise NotUpright(f"{width}x{height}")
         scale = LONG_EDGE / max(width, height)
         if scale < 1:
-            im = im.resize(
-                (round(width * scale), round(height * scale)), Image.LANCZOS
-            )
+            im = im.resize((round(width * scale), round(height * scale)), Image.LANCZOS)
         buf = io.BytesIO()
         im.save(buf, format="WEBP", quality=QUALITY, method=6)
         return buf.getvalue()
@@ -528,9 +522,7 @@ async def main() -> int:
                 failed += 1
             print(f"  [{at}/{len(wanted)}] {spec.slug:34} {note}", flush=True)
 
-        await asyncio.gather(
-            *(one(spec, i + 1) for i, spec in enumerate(wanted))
-        )
+        await asyncio.gather(*(one(spec, i + 1) for i, spec in enumerate(wanted)))
 
         manifest = OUT / "pins.json"
         manifest.write_text(

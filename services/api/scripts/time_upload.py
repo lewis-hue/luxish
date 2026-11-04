@@ -7,6 +7,7 @@ replaces the photograph.
 
     python scripts/time_upload.py <image> <username> <password>
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -37,24 +38,48 @@ async def main() -> int:
     data = image.read_bytes()
 
     async with httpx.AsyncClient(timeout=120) as http:
-        token = (await http.post(
-            f"{MINT_URL}/protocol/openid-connect/token",
-            data={"client_id": "luxish-mobile", "grant_type": "password",
-                  "scope": "openid profile email",
-                  "username": username, "password": password},
-        )).json()["access_token"]
+        token = (
+            await http.post(
+                f"{MINT_URL}/protocol/openid-connect/token",
+                data={
+                    "client_id": "luxish-mobile",
+                    "grant_type": "password",
+                    "scope": "openid profile email",
+                    "username": username,
+                    "password": password,
+                },
+            )
+        ).json()["access_token"]
         auth = {"Authorization": f"Bearer {token}"}
 
         started = time.monotonic()
-        issued = (await http.post(f"{API}/v1/uploads/authorize", headers=auth, json={
-            "kind": "garment_photo", "content_type": "image/webp",
-            "content_length": len(data)})).json()
-        await http.put(issued["upload_url"],
-                       headers={**auth, **issued.get("required_headers", {})},
-                       content=data)
-        created = (await http.post(f"{API}/v1/wardrobe/garments", headers=auth, json={
-            "name": image.stem, "media_asset_id": issued["asset_id"],
-            "availability": "available"})).json()
+        issued = (
+            await http.post(
+                f"{API}/v1/uploads/authorize",
+                headers=auth,
+                json={
+                    "kind": "garment_photo",
+                    "content_type": "image/webp",
+                    "content_length": len(data),
+                },
+            )
+        ).json()
+        await http.put(
+            issued["upload_url"],
+            headers={**auth, **issued.get("required_headers", {})},
+            content=data,
+        )
+        created = (
+            await http.post(
+                f"{API}/v1/wardrobe/garments",
+                headers=auth,
+                json={
+                    "name": image.stem,
+                    "media_asset_id": issued["asset_id"],
+                    "availability": "available",
+                },
+            )
+        ).json()
         gid = created["id"]
         print(f"upload accepted in {time.monotonic() - started:.1f}s  ({gid})")
 

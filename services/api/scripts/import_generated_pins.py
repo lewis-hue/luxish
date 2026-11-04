@@ -55,9 +55,7 @@ from sqlalchemy.ext.asyncio import (  # noqa: E402
 
 from app.config import get_settings  # noqa: E402
 
-PINS = (
-    seed_photos() / "generated" / "pins.json"
-)
+PINS = seed_photos() / "generated" / "pins.json"
 
 #: Who posts them. First name, handle, the scene they mostly post in.
 #:
@@ -118,9 +116,7 @@ async def main() -> int:
     if args.dry_run:
         by_scene: dict[str, int] = {}
         for spec in here:
-            by_scene[scene_of(spec["slug"])] = (
-                by_scene.get(scene_of(spec["slug"]), 0) + 1
-            )
+            by_scene[scene_of(spec["slug"])] = by_scene.get(scene_of(spec["slug"]), 0) + 1
         for scene, n in sorted(by_scene.items(), key=lambda kv: -kv[1]):
             print(f"  {scene:14} {n}")
         print(f"\n{len(POSTERS)} people would be created. Nothing written.")
@@ -136,9 +132,7 @@ async def main() -> int:
     settings = get_settings()
     engine = create_async_engine(settings.database_url)
     maker = async_sessionmaker(engine, expire_on_commit=False)
-    store = build_local_store(
-        environment=settings.environment, root=settings.local_media_root
-    )
+    store = build_local_store(environment=settings.environment, root=settings.local_media_root)
     rng = random.Random(20261103)
     now = datetime.now(UTC)
 
@@ -148,9 +142,7 @@ async def main() -> int:
             # The people. Matched on handle, so re-running adds nobody.
             people: dict[str, uuid.UUID] = {}
             for first, handle, scene in POSTERS:
-                found = await db.scalar(
-                    sa.select(Profile).where(Profile.handle == handle)
-                )
+                found = await db.scalar(sa.select(Profile).where(Profile.handle == handle))
                 if found is not None:
                     people[handle] = found.user_id
                     continue
@@ -193,9 +185,7 @@ async def main() -> int:
                 # silently skipped 190 of 300 on the first run. The
                 # file is the thing that is actually unique.
                 taken = await db.scalar(
-                    sa.select(MediaAsset.id).where(
-                        MediaAsset.checksum_sha256 == digest
-                    )
+                    sa.select(MediaAsset.id).where(MediaAsset.checksum_sha256 == digest)
                 )
                 if taken is not None:
                     skipped += 1
@@ -249,9 +239,7 @@ async def main() -> int:
                 )
                 db.add(post)
                 await db.flush()
-                db.add(
-                    PostMedia(post_id=post.id, media_asset_id=asset.id, position=0)
-                )
+                db.add(PostMedia(post_id=post.id, media_asset_id=asset.id, position=0))
                 for tag in spec["tags"]:
                     db.add(PostTag(post_id=post.id, tag=tag))
 

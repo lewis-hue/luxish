@@ -58,4 +58,46 @@ def seed_photos() -> Path:
     return assets_dir() / "seed-photos"
 
 
-__all__ = ["ENV_VAR", "assets_dir", "seed_photos"]
+__all__ = ["ENV_VAR", "REPO_ENV_VAR", "assets_dir", "repo_root", "seed_photos"]
+
+
+#: Set by docker-compose, which mounts the repository read-only for
+#: the scripts that need files outside this service.
+REPO_ENV_VAR = "LUXISH_REPO_DIR"
+
+
+def repo_root() -> Path:
+    """The repository root, found rather than counted.
+
+    **The seventh script with the same bug found this.**
+    `seed_demo.py` is what gives a reviewer a wardrobe, and in a
+    container it died before doing anything:
+
+        IndexError: 3
+          REPO = Path(__file__).resolve().parents[3]
+
+    `assets_dir` already fixed this for the seeders that read
+    photographs. This is for the ones that reach for files outside
+    `assets` - the wardrobe pictures under the mobile app, the
+    mannequin figures - and it is here rather than in each of them
+    for the same reason: one place to be wrong.
+    """
+    named = os.environ.get(REPO_ENV_VAR)
+    if named:
+        candidate = Path(named)
+        if (candidate / "package.json").is_file():
+            return candidate
+
+    here = Path(__file__).resolve()
+    tried: list[Path] = []
+    for parent in here.parents:
+        tried.append(parent)
+        if (parent / "package.json").is_file() and (parent / "infra").is_dir():
+            return parent
+
+    raise FileNotFoundError(
+        "No repository root above "
+        + str(here)
+        + f" and no ${REPO_ENV_VAR}. In a container, mount the repository "
+        "and set that variable."
+    )

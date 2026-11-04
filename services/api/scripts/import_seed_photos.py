@@ -105,11 +105,7 @@ def looks_misfiled(name: str) -> bool:
 
 
 def pictures_in(folder: Path) -> list[Path]:
-    return sorted(
-        p
-        for p in folder.iterdir()
-        if p.is_file() and p.suffix.lower() in PICTURES
-    )
+    return sorted(p for p in folder.iterdir() if p.is_file() and p.suffix.lower() in PICTURES)
 
 
 def main() -> int:

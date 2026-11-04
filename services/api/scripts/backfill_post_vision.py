@@ -61,9 +61,7 @@ async def main() -> int:
             self.payload = {"post_id": str(post_id)}
 
     async with Session() as db:
-        query = sa.select(Post.id).where(
-            Post.deleted_at.is_(None), Post.state == "published"
-        )
+        query = sa.select(Post.id).where(Post.deleted_at.is_(None), Post.state == "published")
         if not args.force:
             read_already = sa.select(PostVisionRow.post_id).where(
                 PostVisionRow.prompt_version == POST_VISION_PROMPT_VERSION
@@ -89,13 +87,13 @@ async def main() -> int:
             provider = MetaProvider(recorder=AIRunRecorder(db))
             reader = MetaPostVisionReader(provider)
             try:
-                outcome = await read_post_vision(
-                    db, Job(post_id), reader=reader, store=store
-                )
+                outcome = await read_post_vision(db, Job(post_id), reader=reader, store=store)
             except Exception as caught:  # noqa: BLE001 - reported, not swallowed
                 failed += 1
-                print(f"  [{at}/{len(todo)}] FAILED {post_id}: "
-                      f"{type(caught).__name__}: {str(caught)[:90]}")
+                print(
+                    f"  [{at}/{len(todo)}] FAILED {post_id}: "
+                    f"{type(caught).__name__}: {str(caught)[:90]}"
+                )
                 continue
             await db.commit()
 

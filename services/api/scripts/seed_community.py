@@ -92,8 +92,16 @@ PEOPLE: list[tuple[str, str, str, str]] = [
 #: which is not a group. Chosen as the aesthetics this audience actually
 #: shares rather than at random.
 TAGS = [
-    "streetwear", "y2k", "clean-girl", "dark-academia", "smart-casual",
-    "balletcore", "elevated-basics", "monochrome", "denim", "skater",
+    "streetwear",
+    "y2k",
+    "clean-girl",
+    "dark-academia",
+    "smart-casual",
+    "balletcore",
+    "elevated-basics",
+    "monochrome",
+    "denim",
+    "skater",
 ]
 
 
@@ -123,9 +131,7 @@ async def main() -> int:
     root = photo_root()
     library = photos_by_folder(root) if root and root.exists() else {}
     store = (
-        build_local_store(
-            environment=settings.environment, root=settings.local_media_root
-        )
+        build_local_store(environment=settings.environment, root=settings.local_media_root)
         if library
         else None
     )
@@ -133,9 +139,7 @@ async def main() -> int:
     async with maker() as db:
         if remove:
             emails = [f"{name.lower()}@{DOMAIN}" for name, *_ in PEOPLE]
-            ids = list(
-                await db.scalars(sa.select(User.id).where(User.email.in_(emails)))
-            )
+            ids = list(await db.scalars(sa.select(User.id).where(User.email.in_(emails))))
             if not ids:
                 print("No sample accounts to remove.")
                 return 0
@@ -169,9 +173,7 @@ async def main() -> int:
                 user.display_name = name
             created.append(user)
 
-            cohort = await db.scalar(
-                sa.select(UserCohort).where(UserCohort.user_id == user.id)
-            )
+            cohort = await db.scalar(sa.select(UserCohort).where(UserCohort.user_id == user.id))
             key = _cohort_key(owns, dress, size)
             if cohort is None:
                 db.add(
@@ -260,13 +262,9 @@ async def main() -> int:
         post_ids = [user.id for user in created]
         # The old assets go with the old posts, or every re-run leaves
         # another dozen orphaned rows in the media table.
-        old_posts = list(
-            await db.scalars(sa.select(Post.id).where(Post.user_id.in_(post_ids)))
-        )
+        old_posts = list(await db.scalars(sa.select(Post.id).where(Post.user_id.in_(post_ids))))
         if old_posts:
-            await db.execute(
-                sa.delete(PostMedia).where(PostMedia.post_id.in_(old_posts))
-            )
+            await db.execute(sa.delete(PostMedia).where(PostMedia.post_id.in_(old_posts)))
         await db.execute(sa.delete(Post).where(Post.user_id.in_(post_ids)))
         await db.execute(
             sa.delete(MediaAsset).where(
@@ -295,9 +293,7 @@ async def main() -> int:
             for _ in range(each):
                 if dealt >= len(deck):
                     break
-                asset = await store_photo(
-                    db, store, user_id=user.id, path=deck[dealt]
-                )
+                asset = await store_photo(db, store, user_id=user.id, path=deck[dealt])
                 dealt += 1
                 if asset is None:
                     continue
@@ -311,9 +307,7 @@ async def main() -> int:
                     # fit whose tags only exist in the index reads as
                     # tagged by somebody else.
                     caption=" ".join(
-                        part
-                        for part in (written, *(f"#{tag}" for tag in tags))
-                        if part
+                        part for part in (written, *(f"#{tag}" for tag in tags)) if part
                     ),
                     state="published",
                     screen_mode="seed",
@@ -321,11 +315,7 @@ async def main() -> int:
                 )
                 db.add(post)
                 await db.flush()
-                db.add(
-                    PostMedia(
-                        post_id=post.id, media_asset_id=asset.id, position=0
-                    )
-                )
+                db.add(PostMedia(post_id=post.id, media_asset_id=asset.id, position=0))
                 posts.append((post, tags, when))
 
         # The tags, once the posts have ids. Denormalised onto their own
@@ -337,9 +327,7 @@ async def main() -> int:
         # Saves between them, so the figure on a card rests on something.
         # Nobody keeps their own fit: a self-save would inflate every count
         # by one and mean nothing.
-        await db.execute(
-            sa.delete(PostSave).where(PostSave.user_id.in_(post_ids))
-        )
+        await db.execute(sa.delete(PostSave).where(PostSave.user_id.in_(post_ids)))
         for post, _tags, _when in posts:
             others = [uid for uid in post_ids if uid != post.user_id]
             for saver in rng.sample(others, rng.randint(0, min(6, len(others)))):
@@ -352,10 +340,7 @@ async def main() -> int:
                 "         seed_demo_world.py, then run this again."
             )
         else:
-            print(
-                f"  posts: {len(posts)} published with photographs, "
-                "with saves between them"
-            )
+            print(f"  posts: {len(posts)} published with photographs, with saves between them")
 
         # A follow graph among themselves, so follower counts are not all
         # zero before a real person touches anything.
@@ -385,9 +370,7 @@ async def main() -> int:
             if reader is not None:
                 kept = list(
                     await db.scalars(
-                        sa.select(PostSave.post_id).where(
-                            PostSave.user_id == reader.id
-                        )
+                        sa.select(PostSave.post_id).where(PostSave.user_id == reader.id)
                     )
                 )
                 if not kept:
@@ -402,9 +385,7 @@ async def main() -> int:
                         # rather than inserted twice.
                         already = set(
                             await db.scalars(
-                                sa.select(PostSave.user_id).where(
-                                    PostSave.post_id == post_id
-                                )
+                                sa.select(PostSave.user_id).where(PostSave.post_id == post_id)
                             )
                         )
                         for actor in rng.sample(ids, min(5, len(ids))):
@@ -414,8 +395,7 @@ async def main() -> int:
                                 PostSave(
                                     user_id=actor,
                                     post_id=post_id,
-                                    created_at=now
-                                    - timedelta(hours=rng.randint(1, 6 * 24)),
+                                    created_at=now - timedelta(hours=rng.randint(1, 6 * 24)),
                                 )
                             )
                     print(

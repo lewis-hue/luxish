@@ -398,9 +398,7 @@ MISFILED_MARKERS = (
 #: that to match on, which is the whole lesson of this list: a label
 #: is a claim, and when the claim is empty the only way to know what
 #: a picture is, is to look at it. These were looked at.
-MISFILED_BY_NAME: frozenset[str] = frozenset(
-    f"download ({n}).jpg" for n in range(5, 11)
-)
+MISFILED_BY_NAME: frozenset[str] = frozenset(f"download ({n}).jpg" for n in range(5, 11))
 
 
 def photos_by_folder(root: Path) -> dict[str, list[Path]]:
@@ -500,9 +498,7 @@ def _args() -> tuple[str | None, bool]:
 
 
 async def _remove(db) -> int:
-    ids = list(
-        await db.scalars(sa.select(User.id).where(User.email.like(f"%@{DOMAIN}")))
-    )
+    ids = list(await db.scalars(sa.select(User.id).where(User.email.like(f"%@{DOMAIN}"))))
     if not ids:
         print("Nothing seeded.")
         return 0
@@ -521,21 +517,15 @@ async def _remove(db) -> int:
         await db.execute(sa.delete(PostMedia).where(PostMedia.post_id.in_(posts)))
     # Boards first: a pin references a post, so deleting posts out
     # from under them leaves rows pointing at nothing.
-    boards = list(
-        await db.scalars(sa.select(Moodboard.id).where(Moodboard.user_id.in_(ids)))
-    )
+    boards = list(await db.scalars(sa.select(Moodboard.id).where(Moodboard.user_id.in_(ids))))
     if boards:
-        await db.execute(
-            sa.delete(MoodboardPin).where(MoodboardPin.moodboard_id.in_(boards))
-        )
+        await db.execute(sa.delete(MoodboardPin).where(MoodboardPin.moodboard_id.in_(boards)))
     await db.execute(sa.delete(Moodboard).where(Moodboard.user_id.in_(ids)))
     await db.execute(sa.delete(Post).where(Post.user_id.in_(ids)))
     await db.execute(sa.delete(MediaAsset).where(MediaAsset.user_id.in_(ids)))
     await db.execute(sa.delete(Profile).where(Profile.user_id.in_(ids)))
     await db.execute(
-        sa.delete(Follow).where(
-            sa.or_(Follow.follower_id.in_(ids), Follow.followee_id.in_(ids))
-        )
+        sa.delete(Follow).where(sa.or_(Follow.follower_id.in_(ids), Follow.followee_id.in_(ids)))
     )
     await db.execute(sa.delete(User).where(User.id.in_(ids)))
     await db.commit()
@@ -552,9 +542,7 @@ async def _seed(db, join: str | None) -> int:
     print(f"Seeding {len(PEOPLE)} people ...")
     users: dict[str, User] = {}
     for name, handle, scene in PEOPLE:
-        user = User(
-            email=f"{handle}@{DOMAIN}", email_verified=True, display_name=name
-        )
+        user = User(email=f"{handle}@{DOMAIN}", email_verified=True, display_name=name)
         db.add(user)
         await db.flush()
         db.add(
@@ -566,11 +554,7 @@ async def _seed(db, join: str | None) -> int:
                 # would show the demo an empty bio and nothing else.
                 bio_public=f"{scene} mostly. Nairobi.",
                 bio_state="published",
-                links=(
-                    {"tiktok": handle.replace(".", "")}
-                    if rng.random() < 0.6
-                    else {}
-                ),
+                links=({"tiktok": handle.replace(".", "")} if rng.random() < 0.6 else {}),
             )
         )
         users[handle] = user
@@ -614,18 +598,14 @@ async def _seed(db, join: str | None) -> int:
         # occasion wear.
         wanted: dict[str, list[str]] = {}
         for folder, tags in FOLDER_TAGS.items():
-            for group in set(
-                g for t in tags for g, ts in SCENES.items() if t in ts
-            ):
+            for group in set(g for t in tags for g, ts in SCENES.items() if t in ts):
                 wanted.setdefault(group, []).append(folder)
 
         cast = list(PEOPLE)
         at = 0
         for folder, path in deck:
             # Whose scene does this folder belong to? Anybody, if none.
-            owners = [
-                (n, h, sc) for n, h, sc in cast if folder in wanted.get(sc, [])
-            ] or cast
+            owners = [(n, h, sc) for n, h, sc in cast if folder in wanted.get(sc, [])] or cast
             name, handle, scene = owners[at % len(owners)]
             at += 1
             user = users[handle]
@@ -677,20 +657,14 @@ async def _seed(db, join: str | None) -> int:
     reactions = saves = 0
     for post, scene in posts:
         same = [u for u in by_scene[scene] if u.id != post.user_id]
-        others = [
-            users[h] for _, h, s in PEOPLE if s != scene and users[h].id != post.user_id
-        ]
+        others = [users[h] for _, h, s in PEOPLE if s != scene and users[h].id != post.user_id]
         # A long tail: most fits get a few, some get a crowd.
         appeal = rng.random()
         want = 0 if appeal < 0.15 else rng.randint(1, 4) if appeal < 0.8 else rng.randint(8, 16)
 
         pool = same + rng.sample(others, min(len(others), 8))
         for fan in rng.sample(pool, min(want, len(pool))):
-            db.add(
-                PostReaction(
-                    user_id=fan.id, post_id=post.id, kind=rng.choice(REACTIONS)
-                )
-            )
+            db.add(PostReaction(user_id=fan.id, post_id=post.id, kind=rng.choice(REACTIONS)))
             reactions += 1
             # Saving is rarer than reacting: it costs the person a place
             # in their own library, so it is a stronger signal.
@@ -730,10 +704,7 @@ async def _seed(db, join: str | None) -> int:
             home = [p for p in by_scene_posts.get(scene, []) if p.user_id != me.id]
             near_scenes = NEAR.get(scene, [])
             nearby = [
-                p
-                for sc in near_scenes
-                for p in by_scene_posts.get(sc, [])
-                if p.user_id != me.id
+                p for sc in near_scenes for p in by_scene_posts.get(sc, []) if p.user_id != me.id
             ]
             want_home = rng.randint(4, 9)
             want_near = rng.randint(1, 4)
@@ -778,18 +749,14 @@ async def _seed(db, join: str | None) -> int:
             # Follow a spread, and have a spread follow back, so the
             # Community tab is populated from the first screen.
             existing = set(
-                await db.scalars(
-                    sa.select(Follow.followee_id).where(Follow.follower_id == mine.id)
-                )
+                await db.scalars(sa.select(Follow.followee_id).where(Follow.follower_id == mine.id))
             )
             picked = rng.sample(ids, min(10, len(ids)))
             for target in picked:
                 if target not in existing:
                     db.add(Follow(follower_id=mine.id, followee_id=target))
             back = set(
-                await db.scalars(
-                    sa.select(Follow.follower_id).where(Follow.followee_id == mine.id)
-                )
+                await db.scalars(sa.select(Follow.follower_id).where(Follow.followee_id == mine.id))
             )
             for source in rng.sample(ids, min(14, len(ids))):
                 if source not in back:
