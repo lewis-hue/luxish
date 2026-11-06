@@ -7,15 +7,11 @@
     "base": {
       "node": "24.3.0"
     },
-
     "development": {
       "extends": "base",
       "developmentClient": true,
       "distribution": "internal",
       "channel": "development",
-      "env": {
-        "EXPO_PUBLIC_API_BASE_URL": "http://127.0.0.1:8010"
-      },
       "ios": {
         "simulator": true,
         "resourceClass": "m-medium"
@@ -25,15 +21,11 @@
         "gradleCommand": ":app:assembleDebug"
       }
     },
-
     "simulator": {
       "extends": "base",
       "developmentClient": true,
       "distribution": "internal",
       "channel": "development",
-      "env": {
-        "EXPO_PUBLIC_API_BASE_URL": "http://127.0.0.1:8010"
-      },
       "ios": {
         "simulator": true,
         "resourceClass": "m-medium"
@@ -42,7 +34,6 @@
         "buildType": "apk"
       }
     },
-
     "preview": {
       "extends": "base",
       "distribution": "internal",
@@ -57,7 +48,6 @@
         "simulator": false
       }
     },
-
     "production": {
       "extends": "base",
       "channel": "production",

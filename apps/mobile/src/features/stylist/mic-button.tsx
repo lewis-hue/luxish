@@ -51,12 +51,35 @@ export function MicButton({
   compact?: boolean;
 }) {
   const colors = Colors[useScheme()];
+  // **State is for drawing. Refs are for the gesture.**
+  //
+  // This is the bug that made the microphone inert across the app, and
+  // it showed nothing at all - no dialog, no log, a button that simply
+  // stopped responding.
+  //
+  // `recording` was React state, and both halves of the gesture read
+  // it. `onPressIn` runs `start`, which awaits the permission prompt
+  // before setting it; `onPressOut` runs the `stop` closure from
+  // whichever render was current when the handler was attached. Let go
+  // during that await - which is every first use, because the system
+  // dialog is up - and `stop` sees `recording === false`, returns
+  // immediately and stops nothing. `start` then finishes, sets
+  // `recording` true, and opens the microphone with nobody left to
+  // close it. The next press reads that same flag and returns.
+  // Permanently stuck, in one tap, silently.
+  //
+  // A ref is written synchronously and read without a closure, so the
+  // two halves of a gesture cannot disagree about whether it is
+  // happening. The state below exists only so the icon and the label
+  // change.
   const [recording, setRecording] = useState(false);
   const [working, setWorking] = useState(false);
+  /** The finger is down. The gesture's own truth. */
+  const held = useRef(false);
+  /** The open sequence, so a release can wait for it rather than race it. */
+  const opening = useRef<Promise<void> | null>(null);
   /** The file being written, so a release knows there is one to finish. */
   const writing = useRef(false);
-  /** Open in progress, so a second press-in does not race the first. */
-  const starting = useRef(false);
 
   // `int16` rather than the default `float32`: a 16-bit WAV is what the
   // vendor's ASR expects, and asking the platform for it avoids a
@@ -67,14 +90,11 @@ export function MicButton({
     encoding: 'int16',
   });
 
-  const start = async () => {
-    // A second press-in before the first has finished opening the
-    // stream is the other way two recordings end up asked for.
-    if (starting.current || recording) return;
-    starting.current = true;
+  const open = async () => {
     const { granted } = await requestRecordingPermissionsAsync();
     if (!granted) {
-      starting.current = false;
+      held.current = false;
+      setRecording(false);
       Alert.alert(
         'Microphone access needed',
         'Grant access in Settings to talk to the stylist. Typing keeps working.',
@@ -82,7 +102,6 @@ export function MicButton({
       return;
     }
     void tapFeedback();
-    setRecording(true);
     try {
       // Nothing is captured until the session allows it, and nothing
       // raises when it does not: `stream.start()` resolves and the
@@ -120,10 +139,9 @@ export function MicButton({
       // why that matters more than it sounds.
       await stream.startFileRecordingAsync({ format: 'wav' });
       writing.current = true;
-      starting.current = false;
     } catch (caught) {
+      held.current = false;
       setRecording(false);
-      starting.current = false;
       // **Say what actually went wrong.**
       //
       // This was a bare `catch {}` behind the words "Try again, or
@@ -154,9 +172,43 @@ export function MicButton({
     }
   };
 
+  /**
+   * Press-in. Synchronous on purpose.
+   *
+   * `opening` has to be set before this returns, because the release
+   * that follows awaits it. If the assignment happened after an
+   * `await`, a quick tap would find it still null and finish a
+   * recording that had not started.
+   */
+  const start = () => {
+    if (held.current) return;
+    held.current = true;
+    setRecording(true);
+    opening.current = open();
+  };
+
+  /**
+   * Press-out. Waits for the open rather than racing it.
+   *
+   * The release routinely lands while `open` is still awaiting the
+   * permission prompt or the audio session. Returning here, as this
+   * used to, left the microphone running with nothing to close it.
+   */
   const stop = async () => {
-    if (!recording) return;
+    if (!held.current) return;
+    held.current = false;
     setRecording(false);
+
+    // Let the open finish, however it finishes. Its own failure has
+    // already been reported by `open`; all that matters here is that
+    // it is no longer in flight before anything is torn down.
+    try {
+      await opening.current;
+    } catch {
+      // Reported where it happened.
+    }
+    opening.current = null;
+
     if (!writing.current) {
       stream.stop();
       // The brush-of-the-button path. It opened the session too, so
@@ -201,7 +253,7 @@ export function MicButton({
         disabled={working}
         animateEntrance={false}
         scale={0.9}
-        onPressIn={() => void start()}
+        onPressIn={start}
         onPressOut={() => void stop()}
         style={{
           width: TapTarget,
@@ -235,7 +287,7 @@ export function MicButton({
         disabled={working}
         animateEntrance={false}
         scale={0.96}
-        onPressIn={() => void start()}
+        onPressIn={start}
         onPressOut={() => void stop()}
         style={{
           minHeight: TapTarget,
